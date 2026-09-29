@@ -74,3 +74,25 @@ export function clearQuizAnswers(quizId: string, userId?: string | null) {
     // ignore
   }
 }
+
+/** Remove every in-progress quiz answer from this browser (call on logout). */
+export function clearAllQuizAnswers() {
+  const storage = store()
+  if (!storage) {
+    return
+  }
+  try {
+    const keys: string[] = []
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i)
+      if (key && key.startsWith(PREFIX)) {
+        keys.push(key)
+      }
+    }
+    for (const key of keys) {
+      storage.removeItem(key)
+    }
+  } catch {
+    // ignore
+  }
+}

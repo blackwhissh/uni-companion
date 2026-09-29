@@ -69,8 +69,9 @@ public class CourseService {
     @Transactional(readOnly = true)
     public CourseDetails getVisible(UUID courseId, UUID userId, boolean admin) {
         CourseEntity course = courses.findById(courseId).orElseThrow(CourseService::notFound);
-        if (!course.isPublished() && !admin) {
-            log.debug("Course {} hidden from non-admin user={}", courseId, userId);
+        boolean owner = course.getOwnerId().equals(userId);
+        if (!course.isPublished() && !admin && !owner) {
+            log.debug("Course {} hidden from non-owner user={}", courseId, userId);
             throw notFound();
         }
         return details(course, userId, enrollments.existsById(new EnrollmentKey(courseId, userId)));
@@ -126,7 +127,8 @@ public class CourseService {
     @Transactional
     public EnrollmentResult enroll(UUID courseId, UUID userId) {
         CourseEntity course = courses.findById(courseId).orElseThrow(CourseService::notFound);
-        if (!course.isPublished()) {
+        boolean owner = course.getOwnerId().equals(userId);
+        if (!course.isPublished() && !owner) {
             throw notFound();
         }
         EnrollmentKey key = new EnrollmentKey(courseId, userId);

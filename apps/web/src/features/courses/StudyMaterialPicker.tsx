@@ -101,18 +101,26 @@ export function StudyMaterialPicker({
           })}
         </ul>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            disabled={!someSelected || pending}
-            onClick={() => onConfirm([...selected])}
-          >
-            {pending ? 'Generating…' : confirmLabel}
-          </Button>
-          {onCancel ? (
-            <Button type="button" variant="ghost" disabled={pending} onClick={onCancel}>
-              Cancel
+        <div className="mt-5 flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              disabled={!someSelected || pending}
+              title={!someSelected ? 'Pick at least one material' : undefined}
+              onClick={() => onConfirm([...selected])}
+            >
+              {pending ? 'Generating…' : confirmLabel}
             </Button>
+            {onCancel ? (
+              <Button type="button" variant="ghost" disabled={pending} onClick={onCancel}>
+                Cancel
+              </Button>
+            ) : null}
+          </div>
+          {!someSelected ? (
+            <p className="text-sm text-muted" role="status">
+              Pick at least one material to continue.
+            </p>
           ) : null}
         </div>
       </Panel>

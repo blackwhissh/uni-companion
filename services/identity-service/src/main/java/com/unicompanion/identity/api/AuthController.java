@@ -82,8 +82,8 @@ public class AuthController {
                 throw IdentityException.unauthenticated();
             }
             AccountView account = accounts.get(UUID.fromString(jwt.getSubject()));
-            // Rotate: revoke the presented refresh token before issuing a new pair.
-            refreshDenylist.revoke(jwt);
+            // Re-issue access (+ refresh cookie) without revoking the presented refresh token.
+            // Revoking on every refresh breaks multi-tab sessions that refresh in parallel.
             return issueSession(account, httpRequest, httpResponse);
         } catch (JwtException | IllegalArgumentException ex) {
             RefreshCookies.clear(httpRequest, httpResponse);

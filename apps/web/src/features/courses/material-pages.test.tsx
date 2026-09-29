@@ -243,11 +243,18 @@ describe('material pages', () => {
         if (String(url).endsWith('/materials')) {
           return json([{ ...ready, visibility: 'PUBLISHED' }])
         }
-        return json({ ...course, enrolled })
+        return json({ ...course, enrolled, owned: false })
       }),
     )
 
-    renderAt('/courses/course-1', <CourseHomePage />)
+    renderAt('/courses/course-1', <CourseHomePage />, {
+      id: 'student-1',
+      email: 'student@uni-companion.test',
+      displayName: 'Student',
+      interests: null,
+      roles: ['STUDENT'],
+      createdAt: '2026-01-01T00:00:00Z',
+    })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Enroll' }))
     expect(await screen.findByText('Lecture 1')).toBeInTheDocument()
@@ -267,18 +274,25 @@ describe('material pages', () => {
           return matchStatus()
         }
         if (String(url).endsWith('/materials')) {
-          return json([{ ...ready, visibility: 'PUBLISHED' }])
+          return enrolled ? json([{ ...ready, visibility: 'PUBLISHED' }]) : json([], 403)
         }
-        return json({ ...course, enrolled })
+        return json({ ...course, enrolled, owned: false })
       }),
     )
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    renderAt('/courses/course-1', <CourseHomePage />)
+    renderAt('/courses/course-1', <CourseHomePage />, {
+      id: 'student-1',
+      email: 'student@uni-companion.test',
+      displayName: 'Student',
+      interests: null,
+      roles: ['STUDENT'],
+      createdAt: '2026-01-01T00:00:00Z',
+    })
 
     expect(await screen.findByText('Lecture 1')).toBeInTheDocument()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-    fireEvent.click(screen.getByRole('button', { name: 'Unenroll' }))
-    expect(await screen.findByRole('button', { name: 'Enroll' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Unenroll from course' }))
+    expect(await screen.findByText('You are not enrolled yet')).toBeInTheDocument()
     expect(screen.queryByText('Lecture 1')).not.toBeInTheDocument()
   })
 })

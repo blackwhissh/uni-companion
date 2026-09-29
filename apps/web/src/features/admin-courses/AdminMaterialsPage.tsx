@@ -126,12 +126,15 @@ export function AdminMaterialsPage() {
       return
     }
     if (publishing) {
+      const draftNote = looksLikeDraftTitle(material.title)
+        ? `\n\nThis title looks like a draft (“${material.title}”). Publish anyway?`
+        : ''
       const courseNote = courseUnpublished
         ? '\n\nNote: this course is still unpublished, so students cannot open the course yet even after you publish the PDF.'
         : ''
       if (
         !window.confirm(
-          `Publish “${material.title}” for enrolled students?${courseNote}`,
+          `Publish “${material.title}” for enrolled students?${draftNote}${courseNote}`,
         )
       ) {
         return
@@ -171,8 +174,10 @@ export function AdminMaterialsPage() {
           description="Upload lecture PDFs, wait until they are Indexed, then publish so enrolled students can study. Indexed means the PDF is searchable — it is not student-visible until Published."
           actions={
             <div className="flex flex-wrap gap-2">
-              {course.data?.visibility === 'PUBLISHED' ? (
-                <ButtonLinkish to={`/courses/${courseId}`}>Preview as student</ButtonLinkish>
+              {course.data?.visibility === 'PUBLISHED' || canManage ? (
+                <ButtonLinkish to={`/courses/${courseId}`}>
+                  {courseUnpublished ? 'Preview as student (course still unpublished)' : 'Preview as student'}
+                </ButtonLinkish>
               ) : null}
               {canManage && !formOpen ? (
                 <Button type="button" onClick={() => setFormOpen(true)}>
@@ -347,6 +352,10 @@ export function AdminMaterialsPage() {
       ) : null}
     </Page>
   )
+}
+
+function looksLikeDraftTitle(title: string) {
+  return /\b(entwurf|draft|untitled|wip|tmp|temp|test)\b/i.test(title.trim())
 }
 
 function ButtonLinkish({ to, children }: { to: string; children: string }) {

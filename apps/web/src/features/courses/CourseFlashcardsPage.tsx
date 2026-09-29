@@ -15,6 +15,7 @@ import {
 import { getCourse } from './course-api.ts'
 import { listMaterials } from './material-api.ts'
 import { clearStudyGeneration, loadStudyGeneration, saveStudyGeneration } from './study-generation-storage.ts'
+import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
 import { StudyMaterialPicker } from './StudyMaterialPicker.tsx'
 import { StudyVersionControls } from './StudyVersionControls.tsx'
 import { generateFlashcards, reportFlashcardVersion, selectFlashcardVersion } from './study-api.ts'
@@ -32,7 +33,9 @@ export function CourseFlashcardsPage() {
   })
 
   const [deck, setDeck] = useState<FlashcardDeck | null>(null)
-  const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([])
+  const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>(() =>
+    courseId ? loadMaterialSelection('flashcards', courseId) : [],
+  )
   const [index, setIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -137,6 +140,7 @@ export function CourseFlashcardsPage() {
     if (generating) {
       return
     }
+    saveMaterialSelection('flashcards', courseId, materialIds)
     generate.mutate({ materialIds, force })
   }
 

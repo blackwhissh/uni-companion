@@ -24,7 +24,7 @@ export function CourseHomePage() {
   const materials = useQuery({
     queryKey: ['materials', courseId],
     queryFn: () => listMaterials(courseId),
-    enabled: course.data?.enrolled === true,
+    enabled: course.data?.enrolled === true || course.data?.owned === true,
     retry: false,
   })
   const refresh = async () => {
@@ -100,25 +100,14 @@ export function CourseHomePage() {
           description={
             course.data?.enrolled
               ? 'Study from published materials. Peer matching will arrive later with an explicit consent step.'
-              : 'Enroll to unlock materials and study tools for this module.'
+              : course.data?.owned
+                ? 'Preview the student course page. Enroll yourself to walk through study modes before publishing.'
+                : 'Enroll to unlock materials and study tools for this module.'
           }
           actions={
             course.data && !course.data.enrolled ? (
               <Button type="button" variant="success" disabled={enroll.isPending} onClick={() => enroll.mutate()}>
-                {enroll.isPending ? 'Working…' : 'Enroll'}
-              </Button>
-            ) : course.data?.enrolled ? (
-              <Button
-                type="button"
-                variant="warn"
-                disabled={unenroll.isPending}
-                onClick={() => {
-                  if (window.confirm(`Unenroll from “${course.data?.title ?? 'this course'}”?`)) {
-                    unenroll.mutate()
-                  }
-                }}
-              >
-                {unenroll.isPending ? 'Working…' : 'Unenroll'}
+                {enroll.isPending ? 'Working…' : course.data.owned ? 'Enroll to preview' : 'Enroll'}
               </Button>
             ) : null
           }
@@ -254,6 +243,23 @@ export function CourseHomePage() {
               before anything about you is shared with classmates.
             </p>
           </Panel>
+
+          <div className="mt-10 border-t border-line/70 pt-6">
+            <p className="text-sm text-muted">Need to leave this course?</p>
+            <Button
+              type="button"
+              variant="ghost"
+              className="mt-2"
+              disabled={unenroll.isPending}
+              onClick={() => {
+                if (window.confirm(`Unenroll from “${course.data?.title ?? 'this course'}”?`)) {
+                  unenroll.mutate()
+                }
+              }}
+            >
+              {unenroll.isPending ? 'Working…' : 'Unenroll from course'}
+            </Button>
+          </div>
         </>
       ) : null}
 

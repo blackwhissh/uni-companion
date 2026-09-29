@@ -52,6 +52,7 @@ describe('course Q&A page', () => {
     cleanup()
     setAccessToken(null)
     vi.unstubAllGlobals()
+    localStorage.clear()
   })
 
   it('asks a grounded question and shows the answer with citations', async () => {

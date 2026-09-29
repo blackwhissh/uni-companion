@@ -17,6 +17,7 @@ import {
 import { getCourse } from './course-api.ts'
 import { listMaterials } from './material-api.ts'
 import { clearQuizAnswers, loadQuizAnswers, saveQuizAnswers } from './quiz-answer-storage.ts'
+import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
 import { clearStudyGeneration, loadStudyGeneration, saveStudyGeneration } from './study-generation-storage.ts'
 import { StudyMaterialPicker } from './StudyMaterialPicker.tsx'
 import { StudyVersionControls } from './StudyVersionControls.tsx'
@@ -37,7 +38,9 @@ export function CourseQuizPage() {
   })
 
   const [quiz, setQuiz] = useState<Quiz | null>(null)
-  const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([])
+  const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>(() =>
+    courseId ? loadMaterialSelection('quiz', courseId) : [],
+  )
   const [answers, setAnswers] = useState<Record<string, number>>({})
   const [attempt, setAttempt] = useState<QuizAttempt | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -73,7 +76,7 @@ export function CourseQuizPage() {
       setSelectedMaterialIds(variables.materialIds)
       setQuiz(next)
       setAttempt(null)
-      if (variables.force || next.delivery === 'CREATED') {
+      if (variables.force || next.delivery === 'CREATED' || next.delivery === 'NEXT_SHARED' || next.delivery === 'CYCLED') {
         clearQuizAnswers(next.id, userId)
         setAnswers({})
       } else {
@@ -104,12 +107,14 @@ export function CourseQuizPage() {
     if (generate.isPending) {
       return
     }
+    saveMaterialSelection('quiz', courseId, materialIds)
     generate.mutate({ materialIds, force })
   }
   const selectVersion = useMutation({
     mutationFn: (versionId: string) => selectQuizVersion(courseId, selectedMaterialIds, versionId),
     onSuccess: (next) => {
       setQuiz(next)
+      // Answers are per quiz version id — restore any saved for this version only.
       setAnswers(loadQuizAnswers(next.id, userId))
       setAttempt(null)
       setError(null)

@@ -43,7 +43,7 @@ class CitedSourcesTest {
     }
 
     @Test
-    void injectsGroundingChipWhenAnswerHasNoCitations() {
+    void returnsNoSourcesWhenAnswerHasNoValidCitations() {
         List<ChatModel.RetrievedChunk> retrieved = List.of(chunk("A", 1, "alpha"), chunk("B", 2, "beta"));
 
         CitedSources.Result result = CitedSources.select(
@@ -57,9 +57,9 @@ class CitedSourcesTest {
                 retrieved
         );
 
-        assertThat(result.chunks()).hasSize(2);
-        assertThat(result.answer()).contains("[1]");
-        assertThat(result.answer()).contains("Networks move packets between hosts. [1]");
+        assertThat(result.chunks()).isEmpty();
+        assertThat(result.answer()).doesNotContain("[1]");
+        assertThat(result.answer()).contains("Networks move packets between hosts.");
     }
 
     @Test
@@ -82,23 +82,23 @@ class CitedSourcesTest {
     }
 
     @Test
-    void recoversWhenOnlyPageNumberBracketsWereUsed() {
+    void doesNotFabricateChipsWhenOnlyPageNumberBracketsWereUsed() {
         List<ChatModel.RetrievedChunk> retrieved = List.of(chunk("Lecture 3", 12, "median of three"));
 
         CitedSources.Result result = CitedSources.select(
                 """
                         ## Direct answer
-                        Insertion sort is used when n < 17.
+                        Insertion sort is used when n < 17 [17].
 
                         ## Explanation
                         The notes mention median-of-three for Quicksort.
-                        """.replace("n < 17", "n < 17 [17]"),
+                        """,
                 retrieved
         );
 
-        assertThat(result.chunks()).isNotEmpty();
-        assertThat(result.answer()).contains("[1]");
+        assertThat(result.chunks()).isEmpty();
         assertThat(result.answer()).doesNotContain("[17]");
+        assertThat(result.answer()).doesNotContain("[1]");
     }
 
     private static ChatModel.RetrievedChunk chunk(String title, int page, String content) {

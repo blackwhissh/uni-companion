@@ -55,16 +55,16 @@ function deliveryMessage(delivery: StudyDelivery, noun: 'deck' | 'quiz') {
     case 'CREATED':
       return `A new shared ${noun} was created for this material selection.`
     case 'REUSED':
-      return `An existing shared ${noun} was reused, avoiding a new generation.`
+      return `Opening the shared ${noun} for this material selection.`
     case 'NEXT_SHARED':
-      return `The next existing shared ${noun} was loaded.`
+      return `Opening the next shared ${noun} for this material selection.`
     case 'CYCLED':
-      return `All shared versions were reviewed, so ${noun} 1 was loaded again.`
+      return `Back to shared ${noun} 1 for this material selection.`
     case 'SELECTED':
-      return `Your selected ${noun} version is open.`
+      return `Opening the ${noun} version you selected.`
     case 'RESUMED':
-      return `Your previous shared ${noun} is open again.`
+      return `Opening the shared ${noun} saved for this material selection.`
     default:
-      return `Your current shared ${noun} is open.`
+      return `Opening the shared ${noun} for this material selection.`
   }
 }

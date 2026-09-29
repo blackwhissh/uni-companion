@@ -1,5 +1,7 @@
 import { getAccessToken, setAccessToken } from '../../shared/api/access-token.ts'
 import { allowTokenRefresh, blockTokenRefresh, identityFetch, tryRefreshAccessToken } from '../../shared/api/identity-client.ts'
+import { clearAllMaterialSelections } from '../courses/material-selection-storage.ts'
+import { clearAllQuizAnswers } from '../courses/quiz-answer-storage.ts'
 import type { AuthResponse, User } from './types.ts'
 
 export function registerAccount(input: { email: string; password: string; displayName: string }) {
@@ -29,6 +31,8 @@ export async function logoutAccount() {
     // Still clear local session below — lab PCs must not keep the previous user.
   } finally {
     setAccessToken(null)
+    clearAllQuizAnswers()
+    clearAllMaterialSelections()
   }
 }
 

@@ -9,9 +9,10 @@ export function AppHeader() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const home = user ? homePathFor(user.roles) : '/'
+  const isStaff = user?.roles.includes('COURSE_ADMIN') || user?.roles.includes('ADMIN')
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `rounded-md px-2.5 py-1.5 text-sm font-medium transition ${
+    `shrink-0 rounded-md px-2 py-1.5 text-sm font-medium transition ${
       isActive ? 'bg-mist text-ink' : 'text-muted hover:bg-mist/70 hover:text-ink'
     }`
 
@@ -23,34 +24,37 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-line/80 bg-paper/80 backdrop-blur-md">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3.5">
-        <Link to={home} className="group flex items-center gap-2.5">
+      <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 sm:py-3.5">
+        <Link to={home} className="group flex min-w-0 shrink items-center gap-2 sm:gap-2.5">
           <span
             aria-hidden
-            className="grid h-8 w-8 place-items-center rounded-lg bg-ink text-sm font-semibold text-accent transition group-hover:scale-105"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-ink text-sm font-semibold text-accent transition group-hover:scale-105"
           >
             UC
           </span>
-          <span className="font-display text-lg font-semibold tracking-tight text-ink">Uni Companion</span>
+          <span className="hidden truncate font-display text-lg font-semibold tracking-tight text-ink sm:inline">
+            Uni Companion
+          </span>
         </Link>
-        <nav className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
+        <nav className="ml-auto flex max-w-full items-center justify-end gap-0.5 overflow-x-auto sm:gap-2">
           {user ? (
             <>
-              <span className="mr-1 max-w-[9rem] truncate text-sm text-muted" title={user.displayName}>
+              <span className="mr-1 hidden max-w-[8rem] truncate text-sm text-muted md:inline" title={user.displayName}>
                 {user.displayName}
               </span>
               <NavLink to="/courses" className={linkClass}>
                 Courses
               </NavLink>
-              {user.roles.includes('COURSE_ADMIN') || user.roles.includes('ADMIN') ? (
+              {isStaff ? (
                 <NavLink to="/admin/courses" className={linkClass}>
-                  Course console
+                  <span className="sm:hidden">Admin</span>
+                  <span className="hidden sm:inline">Course console</span>
                 </NavLink>
               ) : null}
               <NavLink to="/profile" className={linkClass}>
                 Profile
               </NavLink>
-              <Button type="button" variant="ghost" className="!px-2.5" onClick={() => void onLogout()}>
+              <Button type="button" variant="ghost" className="!shrink-0 !px-2.5" onClick={() => void onLogout()}>
                 Log out
               </Button>
             </>
@@ -61,7 +65,7 @@ export function AppHeader() {
               </NavLink>
               <Link
                 to="/register"
-                className="ml-1 inline-flex items-center justify-center rounded-lg bg-ink px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-ink-soft"
+                className="ml-1 inline-flex shrink-0 items-center justify-center rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-white transition hover:bg-ink-soft"
               >
                 Register
               </Link>

@@ -19,7 +19,7 @@ describe('study version controls', () => {
       />,
     )
 
-    expect(screen.getByText('Your previous shared deck is open again.')).toBeInTheDocument()
+    expect(screen.getByText('Opening the shared deck saved for this material selection.')).toBeInTheDocument()
   })
 
   it('asks before recording a quality report', () => {

@@ -16,6 +16,7 @@ import {
 import { StudyMarkdown } from '../../shared/ui/StudyMarkdown.tsx'
 import { getCourse } from './course-api.ts'
 import { listMaterials } from './material-api.ts'
+import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
 import { QaSources } from './QaSources.tsx'
 import { QA_SUGGESTED_PROMPTS } from './qa-prompts.ts'
 import { askCourseQuestion } from './rag-api.ts'
@@ -41,10 +42,22 @@ export function CourseQaPage() {
   const [result, setResult] = useState<RagAnswer | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [materialNotice, setMaterialNotice] = useState<string | null>(null)
-  const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([])
+  const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>(() =>
+    courseId ? loadMaterialSelection('qa', courseId) : [],
+  )
   const [pickingMaterials, setPickingMaterials] = useState(true)
   const selectedRef = useRef(selectedMaterialIds)
   selectedRef.current = selectedMaterialIds
+
+  useEffect(() => {
+    if (!courseId) {
+      return
+    }
+    const saved = loadMaterialSelection('qa', courseId)
+    if (saved.length > 0) {
+      setSelectedMaterialIds(saved)
+    }
+  }, [courseId])
 
   const ask = useMutation({
     mutationFn: ({ q, materialIds }: { q: string; materialIds: string[] }) =>
@@ -224,6 +237,7 @@ export function CourseQaPage() {
               onConfirm={(materialIds) => {
                 const recovering = materialNotice != null
                 setSelectedMaterialIds(materialIds)
+                saveMaterialSelection('qa', courseId, materialIds)
                 setPickingMaterials(false)
                 if (!recovering) {
                   setResult(null)
@@ -239,6 +253,11 @@ export function CourseQaPage() {
             <p className="mt-2 text-sm text-muted">
               Searching {selectedMaterialIds.length} selected {selectedMaterialIds.length === 1 ? 'material' : 'materials'}.
             </p>
+            {selectedMaterialIds.length === 0 ? (
+              <p className="mt-2 text-sm text-muted" role="status">
+                Pick at least one material to ask a question.
+              </p>
+            ) : null}
             <form className="mt-4 flex flex-col gap-4" onSubmit={onSubmit}>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="qa-question" className="text-sm font-medium text-ink-soft">
@@ -249,7 +268,7 @@ export function CourseQaPage() {
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
                   rows={4}
-                  maxLength={QUESTION_MAX + 200}
+                  maxLength={QUESTION_MAX}
                   className="rounded-lg border border-line bg-white/80 px-3 py-2.5 text-base font-normal text-ink shadow-[inset_0_1px_0_rgb(7_52_60_/_0.03)] outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
                   placeholder="What are the main ideas covered in these materials?"
                 />

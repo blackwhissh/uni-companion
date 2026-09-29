@@ -962,9 +962,17 @@ public class StudyService {
         return previous[right.length()];
     }
 
+    private static final int MIN_CARD_COUNT = 4;
+
     private static void validateFlashcards(List<ChatModel.FlashcardDraft> drafts) {
         if (drafts == null || drafts.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The model returned no usable flashcards.");
+        }
+        if (drafts.size() < MIN_CARD_COUNT) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "The model returned too few usable flashcards. Try again."
+            );
         }
         Set<String> fronts = drafts.stream()
                 .map(ChatModel.FlashcardDraft::front)
