@@ -93,7 +93,7 @@ mvn spring-boot:run -pl services/learning-service
 cd apps/web && npm install && npm run dev
 ```
 
-Copy [`.env.example`](.env.example) when you need to override defaults. Demo logins: `admin` / `admin` (platform admin + course admin) and `student` / `student`. The longer seed professor remains `admin@uni-companion.local` / `admin-pass-1` (course admin for courses they create).
+Copy [`.env.example`](.env.example) when you need to override defaults. Demo logins: `admin` / `admin` (platform admin + course admin), `professor` / `professor` (course admin), `student` / `student`, and `student1`–`student4` / same password (students). The longer seed professor remains `admin@uni-companion.local` / `admin-pass-1` (course admin for courses they create).
 
 ```text
 mvn test
