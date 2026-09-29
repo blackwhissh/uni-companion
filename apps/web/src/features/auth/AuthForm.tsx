@@ -3,6 +3,8 @@ import type { FormEvent, ReactNode } from 'react'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import { Alert, Button, Page } from '../../shared/ui/ui.tsx'
 
+export type AuthFormValues = Record<string, string>
+
 export function AuthForm({
   title,
   subtitle,
@@ -14,21 +16,36 @@ export function AuthForm({
   title: string
   subtitle?: string
   submitLabel: string
-  onSubmit: () => Promise<void>
+  onSubmit: (values: AuthFormValues) => Promise<void>
   children: ReactNode
   footer: ReactNode
 }) {
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
-  async function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (pending) {
+      return
+    }
     setError(null)
     setPending(true)
+    const form = event.currentTarget
+    const data = new FormData(form)
+    const values: AuthFormValues = {}
+    for (const [key, value] of data.entries()) {
+      if (typeof value === 'string') {
+        values[key] = value
+      }
+    }
     try {
-      await onSubmit()
+      await onSubmit(values)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong.')
+      if (err instanceof ApiError) {
+        setError(err.message)
+      } else {
+        setError('Something went wrong.')
+      }
     } finally {
       setPending(false)
     }
@@ -44,7 +61,7 @@ export function AuthForm({
           {children}
           {error ? <Alert>{error}</Alert> : null}
           <Button type="submit" disabled={pending} className="mt-1 w-full !py-2.5">
-            {submitLabel}
+            {pending ? 'Please wait…' : submitLabel}
           </Button>
         </form>
         <p className="mt-5 text-sm text-muted">{footer}</p>
@@ -55,6 +72,7 @@ export function AuthForm({
 
 export function Field({
   label,
+  name,
   type,
   value,
   onChange,
@@ -62,16 +80,23 @@ export function Field({
   hint,
 }: {
   label: string
+  name?: string
   type: string
   value: string
   onChange: (value: string) => void
   autoComplete: string
   hint?: string
 }) {
+  const fieldName = name ?? label.toLowerCase().replace(/\s+/g, '-')
+  const id = `field-${fieldName}`
   return (
-    <label className="flex flex-col gap-1.5 text-sm font-medium text-ink-soft">
-      {label}
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-medium text-ink-soft">
+        {label}
+      </label>
       <input
+        id={id}
+        name={fieldName}
         type={type}
         value={value}
         autoComplete={autoComplete}
@@ -79,7 +104,7 @@ export function Field({
         className="rounded-lg border border-line bg-white/80 px-3 py-2.5 text-base font-normal text-ink shadow-[inset_0_1px_0_rgb(7_52_60_/_0.03)] outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
       />
       {hint ? <span className="text-xs font-normal text-muted">{hint}</span> : null}
-    </label>
+    </div>
   )
 }
 

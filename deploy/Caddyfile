@@ -11,6 +11,8 @@
 
 	handle_path /identity/* {
 		reverse_proxy identity:8081 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
 			transport http {
 				read_timeout 60s
 			}
@@ -19,6 +21,8 @@
 
 	handle_path /learning/* {
 		reverse_proxy learning:8082 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
 			transport http {
 				read_timeout 180s
 				write_timeout 180s
@@ -26,6 +30,7 @@
 		}
 	}
 
+	# SPA fallback: any non-file path serves index.html so deep links like /courses work.
 	handle {
 		root * /usr/share/caddy
 		try_files {path} /index.html

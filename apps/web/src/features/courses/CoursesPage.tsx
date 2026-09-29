@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { useAuth } from '../auth/use-auth.ts'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import {
   Alert,
@@ -15,16 +16,26 @@ import { enrollInCourse, listCourses, unenrollFromCourse } from './course-api.ts
 import type { Course } from './course-api.ts'
 
 export function CoursesPage() {
+  const { user, ready } = useAuth()
   const queryClient = useQueryClient()
-  const courses = useQuery({ queryKey: ['courses'], queryFn: listCourses })
+  const courses = useQuery({
+    queryKey: ['courses'],
+    queryFn: listCourses,
+    enabled: ready && !!user,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+  })
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const enroll = useMutation({
     mutationFn: enrollInCourse,
     onSuccess: async () => {
       setError(null)
+      setNotice('Enrolled.')
       await queryClient.invalidateQueries({ queryKey: ['courses'] })
     },
     onError: (err) => {
+      setNotice(null)
       setError(err instanceof ApiError ? err.message : 'Could not enroll.')
     },
   })
@@ -32,9 +43,11 @@ export function CoursesPage() {
     mutationFn: unenrollFromCourse,
     onSuccess: async () => {
       setError(null)
+      setNotice('Unenrolled.')
       await queryClient.invalidateQueries({ queryKey: ['courses'] })
     },
     onError: (err) => {
+      setNotice(null)
       setError(err instanceof ApiError ? err.message : 'Could not unenroll.')
     },
   })
@@ -58,8 +71,13 @@ export function CoursesPage() {
           <Alert>{error}</Alert>
         </div>
       ) : null}
+      {notice ? (
+        <p className="mt-6 text-sm font-medium text-ok" role="status">
+          {notice}
+        </p>
+      ) : null}
 
-      {courses.data?.length === 0 ? (
+      {courses.isSuccess && courses.data?.length === 0 ? (
         <EmptyState
           title="No courses yet."
           description="When a course admin publishes a module, it will show up here so you can enroll and study."
@@ -75,9 +93,16 @@ export function CoursesPage() {
                 key={course.id}
                 course={course}
                 enrolled
-                pending={enroll.isPending || unenroll.isPending}
+                pending={
+                  (enroll.isPending && enroll.variables === course.id) ||
+                  (unenroll.isPending && unenroll.variables === course.id)
+                }
                 onEnroll={() => enroll.mutate(course.id)}
-                onUnenroll={() => unenroll.mutate(course.id)}
+                onUnenroll={() => {
+                  if (window.confirm(`Unenroll from “${course.title}”?`)) {
+                    unenroll.mutate(course.id)
+                  }
+                }}
               />
             ))}
           </ul>
@@ -93,9 +118,16 @@ export function CoursesPage() {
                 key={course.id}
                 course={course}
                 enrolled={false}
-                pending={enroll.isPending || unenroll.isPending}
+                pending={
+                  (enroll.isPending && enroll.variables === course.id) ||
+                  (unenroll.isPending && unenroll.variables === course.id)
+                }
                 onEnroll={() => enroll.mutate(course.id)}
-                onUnenroll={() => unenroll.mutate(course.id)}
+                onUnenroll={() => {
+                  if (window.confirm(`Unenroll from “${course.title}”?`)) {
+                    unenroll.mutate(course.id)
+                  }
+                }}
               />
             ))}
           </ul>
@@ -141,11 +173,11 @@ function CourseRow({
           </ButtonLink>
           {enrolled ? (
             <Button type="button" variant="warn" disabled={pending} onClick={onUnenroll}>
-              Unenroll
+              {pending ? 'Working…' : 'Unenroll'}
             </Button>
           ) : (
             <Button type="button" variant="success" disabled={pending} onClick={onEnroll}>
-              Enroll
+              {pending ? 'Working…' : 'Enroll'}
             </Button>
           )}
         </div>

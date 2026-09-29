@@ -92,7 +92,7 @@ describe('material pages', () => {
     renderAt('/courses/course-1', <CourseHomePage />)
 
     expect(await screen.findByText('0 other classmates matching')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Find study partners' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Find study partners' }))
     expect(await screen.findByText("You're matching — no other classmates yet")).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Stop matching' })).toBeInTheDocument()
   })
@@ -287,6 +287,7 @@ describe('material pages', () => {
     renderAt('/courses/course-1', <CourseHomePage />)
 
     expect(await screen.findByText('Lecture 1')).toBeInTheDocument()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     fireEvent.click(screen.getByRole('button', { name: 'Unenroll' }))
     expect(await screen.findByRole('button', { name: 'Enroll' })).toBeInTheDocument()
     expect(screen.queryByText('Lecture 1')).not.toBeInTheDocument()

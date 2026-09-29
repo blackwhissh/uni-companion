@@ -39,24 +39,31 @@ export function CourseHomePage() {
     await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
     await queryClient.invalidateQueries({ queryKey: ['match', courseId] })
   }
+  const [fileError, setFileError] = useState<string | null>(null)
+  const [actionNotice, setActionNotice] = useState<string | null>(null)
+  const [preview, setPreview] = useState<{ material: Material; url: string } | null>(null)
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null)
   const enroll = useMutation({
     mutationFn: () => enrollInCourse(courseId),
-    onSuccess: refresh,
+    onSuccess: async () => {
+      setActionNotice('Enrolled.')
+      await refresh()
+    },
   })
   const unenroll = useMutation({
     mutationFn: () => unenrollFromCourse(courseId),
-    onSuccess: refresh,
+    onSuccess: async () => {
+      setActionNotice('Unenrolled.')
+      await refresh()
+    },
   })
   const toggleMatch = useMutation({
     mutationFn: (optedIn: boolean) => setMatchOptIn(courseId, optedIn),
     onSuccess: (status) => {
       queryClient.setQueryData(['match', courseId], status)
+      setActionNotice(status.optedIn ? 'Matching is on.' : 'Matching stopped.')
     },
   })
-
-  const [fileError, setFileError] = useState<string | null>(null)
-  const [preview, setPreview] = useState<{ material: Material; url: string } | null>(null)
-  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null)
   const unavailable = course.error instanceof ApiError && course.error.status === 404
   const readyCount =
     materials.data?.filter((material) => material.visibility === 'PUBLISHED' && material.processingStatus === 'READY')
@@ -113,16 +120,31 @@ export function CourseHomePage() {
           actions={
             course.data && !course.data.enrolled ? (
               <Button type="button" variant="success" disabled={enroll.isPending} onClick={() => enroll.mutate()}>
-                Enroll
+                {enroll.isPending ? 'Working…' : 'Enroll'}
               </Button>
             ) : course.data?.enrolled ? (
-              <Button type="button" variant="warn" disabled={unenroll.isPending} onClick={() => unenroll.mutate()}>
-                Unenroll
+              <Button
+                type="button"
+                variant="warn"
+                disabled={unenroll.isPending}
+                onClick={() => {
+                  if (window.confirm(`Unenroll from “${course.data?.title ?? 'this course'}”?`)) {
+                    unenroll.mutate()
+                  }
+                }}
+              >
+                {unenroll.isPending ? 'Working…' : 'Unenroll'}
               </Button>
             ) : null
           }
         />
       </div>
+
+      {actionNotice ? (
+        <p className="mt-4 text-sm font-medium text-ok" role="status">
+          {actionNotice}
+        </p>
+      ) : null}
 
       {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
 
@@ -262,7 +284,13 @@ export function CourseHomePage() {
               variant={match.data?.optedIn ? 'warn' : 'success'}
               className="mt-4"
               disabled={match.isLoading || toggleMatch.isPending}
-              onClick={() => toggleMatch.mutate(!(match.data?.optedIn ?? false))}
+              onClick={() => {
+                const next = !(match.data?.optedIn ?? false)
+                if (!next && !window.confirm('Stop matching for this course?')) {
+                  return
+                }
+                toggleMatch.mutate(next)
+              }}
             >
               {toggleMatch.isPending
                 ? 'Updating…'

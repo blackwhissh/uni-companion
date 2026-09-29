@@ -16,8 +16,12 @@ export function RegisterPage() {
       title="Create an account"
       subtitle="Join your course cohort. Admins publish materials; you enroll and study."
       submitLabel="Create account"
-      onSubmit={async () => {
-        const user = await register(email, password, displayName)
+      onSubmit={async (values) => {
+        const user = await register(
+          values.email ?? email,
+          values.password ?? password,
+          values.displayName ?? displayName,
+        )
         navigate(homePathFor(user.roles))
       }}
       footer={
@@ -29,9 +33,23 @@ export function RegisterPage() {
         </>
       }
     >
-      <Field label="Display name" type="text" value={displayName} onChange={setDisplayName} autoComplete="name" />
-      <Field label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" />
-      <Field label="Password" type="password" value={password} onChange={setPassword} autoComplete="new-password" />
+      <Field
+        label="Display name"
+        name="displayName"
+        type="text"
+        value={displayName}
+        onChange={setDisplayName}
+        autoComplete="name"
+      />
+      <Field label="Email" name="email" type="email" value={email} onChange={setEmail} autoComplete="email" />
+      <Field
+        label="Password"
+        name="password"
+        type="password"
+        value={password}
+        onChange={setPassword}
+        autoComplete="new-password"
+      />
     </AuthForm>
   )
 }

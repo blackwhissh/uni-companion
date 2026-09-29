@@ -29,6 +29,15 @@ const professor: User = {
   createdAt: '2026-01-01T00:00:00Z',
 }
 
+const studentUser: User = {
+  id: 'student-1',
+  email: 'student',
+  displayName: 'Student',
+  interests: null,
+  roles: ['STUDENT'],
+  createdAt: '2026-01-01T00:00:00Z',
+}
+
 function renderWithQuery(ui: ReactNode, user: User | null = null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -59,7 +68,7 @@ describe('course pages', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    renderWithQuery(<CoursesPage />)
+    renderWithQuery(<CoursesPage />, studentUser)
 
     expect(await screen.findByText('Distributed Systems')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open Distributed Systems' })).toHaveAttribute(
@@ -78,7 +87,7 @@ describe('course pages', () => {
     setAccessToken('student-token')
     vi.stubGlobal('fetch', vi.fn(async () => json([{ ...published, enrolled: true }])))
 
-    renderWithQuery(<CoursesPage />)
+    renderWithQuery(<CoursesPage />, studentUser)
 
     expect(await screen.findByText('Enrolled')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Enroll' })).not.toBeInTheDocument()
@@ -86,6 +95,7 @@ describe('course pages', () => {
 
   it('lets a student unenroll and shows Enroll again', async () => {
     setAccessToken('student-token')
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     let joined = true
     vi.stubGlobal(
       'fetch',
@@ -98,9 +108,10 @@ describe('course pages', () => {
       }),
     )
 
-    renderWithQuery(<CoursesPage />)
+    renderWithQuery(<CoursesPage />, studentUser)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Unenroll' }))
+    expect(window.confirm).toHaveBeenCalled()
     expect(await screen.findByRole('button', { name: 'Enroll' })).toBeInTheDocument()
     expect(screen.queryByText('Enrolled')).not.toBeInTheDocument()
   })

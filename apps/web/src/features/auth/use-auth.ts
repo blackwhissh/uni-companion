@@ -3,9 +3,10 @@ import type { User } from './types.ts'
 
 export type AuthContextValue = {
   user: User | null
+  ready: boolean
   login: (email: string, password: string) => Promise<User>
   register: (email: string, password: string, displayName: string) => Promise<User>
-  logout: () => void
+  logout: () => void | Promise<void>
   setUser: (user: User) => void
 }
 

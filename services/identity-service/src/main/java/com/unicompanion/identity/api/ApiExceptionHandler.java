@@ -33,9 +33,30 @@ public class ApiExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ErrorResponse> validation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         Map<String, String> details = new LinkedHashMap<>();
-        ex.getBindingResult().getFieldErrors().forEach(error -> details.put(error.getField(), error.getDefaultMessage()));
-        log.warn("Validation failed on {} {}: {}", request.getMethod(), request.getRequestURI(), details.keySet());
-        return ResponseEntity.badRequest().body(body("VALIDATION_FAILED", "Request validation failed.", request, details));
+        ex.getBindingResult().getFieldErrors().forEach(error ->
+                details.put(error.getField(), error.getDefaultMessage() == null ? "invalid" : error.getDefaultMessage()));
+        log.warn(
+                "Validation failed on {} {} fields={} details={}",
+                request.getMethod(),
+                request.getRequestURI(),
+                details.keySet(),
+                details);
+        String message = details.isEmpty()
+                ? "Request validation failed."
+                : details.entrySet().stream()
+                        .map(entry -> humanField(entry.getKey()) + " " + entry.getValue())
+                        .reduce((left, right) -> left + "; " + right)
+                        .orElse("Request validation failed.");
+        return ResponseEntity.badRequest().body(body("VALIDATION_FAILED", message, request, details));
+    }
+
+    private static String humanField(String field) {
+        return switch (field) {
+            case "email" -> "Username";
+            case "password" -> "Password";
+            case "displayName" -> "Display name";
+            default -> field;
+        };
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

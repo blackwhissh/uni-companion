@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RequireRole } from '../../app/guards.tsx'
+import { setAccessToken } from '../../shared/api/access-token.ts'
 import { CoursesPage } from '../courses/CoursesPage.tsx'
 import { AuthProvider } from './AuthProvider.tsx'
 import { LoginPage } from './LoginPage.tsx'
@@ -24,7 +25,7 @@ function renderAuth(path: string, page: ReactNode) {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
-        <AuthProvider>
+        <AuthProvider initialReady>
           <Routes>
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -45,6 +46,7 @@ function fill(label: string, value: string) {
 describe('auth flow', () => {
   afterEach(() => {
     cleanup()
+    setAccessToken(null)
     vi.unstubAllGlobals()
   })
 
@@ -88,7 +90,7 @@ describe('auth flow', () => {
     )
 
     renderAuth('/login', <LoginPage />)
-    fill('Email', 'admin@uni-companion.local')
+    fill('Username', 'admin@uni-companion.local')
     fill('Password', 'admin-pass-1')
     fireEvent.click(screen.getByRole('button', { name: 'Log in' }))
 
@@ -114,6 +116,6 @@ describe('auth flow', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Not allowed' })).toBeInTheDocument()
   })
 })

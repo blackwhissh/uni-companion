@@ -1,18 +1,49 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { setAccessToken } from '../../shared/api/access-token.ts'
-import { loginAccount, registerAccount } from './auth-api.ts'
+import { getAccessToken, setAccessToken } from '../../shared/api/access-token.ts'
+import { loginAccount, logoutAccount, registerAccount, restoreSession } from './auth-api.ts'
 import { AuthContext } from './use-auth.ts'
 import type { User } from './types.ts'
 
 export function AuthProvider({
   children,
   initialUser = null,
+  initialReady = false,
 }: {
   children: ReactNode
   initialUser?: User | null
+  /** When true, skip async restore (tests). */
+  initialReady?: boolean
 }) {
   const [user, setUserState] = useState<User | null>(initialUser)
+  const [ready, setReady] = useState(initialReady || initialUser !== null)
+
+  useEffect(() => {
+    if (initialReady || initialUser !== null) {
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        getAccessToken()
+        const session = await restoreSession()
+        if (cancelled) {
+          return
+        }
+        if (session) {
+          setAccessToken(session.token)
+          setUserState(session.user)
+        }
+      } finally {
+        if (!cancelled) {
+          setReady(true)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [initialReady, initialUser])
 
   function applySession(token: string, next: User) {
     setAccessToken(token)
@@ -31,7 +62,8 @@ export function AuthProvider({
     return session.user
   }
 
-  function logout() {
+  async function logout() {
+    await logoutAccount()
     setAccessToken(null)
     setUserState(null)
   }
@@ -41,6 +73,8 @@ export function AuthProvider({
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, setUser }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, ready, login, register, logout, setUser }}>
+      {children}
+    </AuthContext.Provider>
   )
 }

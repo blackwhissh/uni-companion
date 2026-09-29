@@ -11,6 +11,8 @@ logging:
 unicompanion:
   jwt:
     secret: test-secret-test-secret-test-secret
+    ttl: 1h
+    refresh-ttl: 2d
   seed:
     admin-email: admin@uni-companion.test
     admin-password: admin-pass-1

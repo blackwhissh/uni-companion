@@ -85,8 +85,23 @@ export function AppRouter() {
               </RequireAuth>
             }
           />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
+  )
+}
+
+function NotFoundPage() {
+  return (
+    <main className="mx-auto w-full max-w-lg px-6 py-14">
+      <h1 className="font-display text-2xl font-semibold text-ink">Page not found</h1>
+      <p className="mt-2 text-sm text-muted">That link does not match a page in Uni Companion.</p>
+      <p className="mt-6">
+        <a href="/courses" className="font-medium text-ink underline decoration-accent/50 underline-offset-4">
+          Back to courses
+        </a>
+      </p>
+    </main>
   )
 }

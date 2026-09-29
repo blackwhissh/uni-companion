@@ -8,7 +8,12 @@ import java.util.List;
 @ConfigurationProperties(prefix = "unicompanion")
 public record IdentityProperties(Jwt jwt, Seed seed, List<String> corsAllowedOrigins) {
 
-    public record Jwt(String secret, Duration ttl) {
+    public record Jwt(String secret, Duration ttl, Duration refreshTtl) {
+        public Jwt {
+            if (refreshTtl == null) {
+                refreshTtl = Duration.ofDays(14);
+            }
+        }
     }
 
     public record Seed(String adminEmail, String adminPassword, String adminDisplayName) {
