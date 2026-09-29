@@ -44,33 +44,33 @@ jobs:
       - run: npm run build
 
   deploy:
-    name: Deploy to Oracle
+    name: Deploy to Google Cloud
     needs: [backend, frontend]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+      GCP_HOST: ${{ secrets.GCP_HOST }}
     steps:
-      - name: Skip when Oracle secrets are missing
-        if: env.ORACLE_HOST == ''
+      - name: Skip when GCP secrets are missing
+        if: env.GCP_HOST == ''
         run: |
-          echo "ORACLE_HOST is not set. After the first server install, add secrets"
-          echo "ORACLE_HOST, ORACLE_USER, and ORACLE_SSH_KEY so this job deploys on each push."
+          echo "GCP_HOST is not set. After the first server install, add secrets"
+          echo "GCP_HOST, GCP_USER, and GCP_SSH_KEY so this job deploys on each push."
 
       - name: Deploy over SSH
-        if: env.ORACLE_HOST != ''
+        if: env.GCP_HOST != ''
         uses: appleboy/ssh-action@v1.2.2
         with:
-          host: ${{ secrets.ORACLE_HOST }}
-          username: ${{ secrets.ORACLE_USER }}
-          key: ${{ secrets.ORACLE_SSH_KEY }}
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USER }}
+          key: ${{ secrets.GCP_SSH_KEY }}
           script_stop: true
           command_timeout: 30m
           script: |
             set -euo pipefail
             if [ ! -d /opt/uni-companion/.git ]; then
-              echo "App is not installed. Run deploy/oracle-bootstrap.sh on the server first."
+              echo "App is not installed. Run deploy/gcp-bootstrap.sh on the server first."
               exit 1
             fi
             bash /opt/uni-companion/deploy/remote-deploy.sh

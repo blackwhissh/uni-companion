@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One-time setup on the Oracle Cloud Ubuntu VM.
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/<org>/uni-companion/main/deploy/oracle-bootstrap.sh | sudo bash
-# or copy this file to the VM and:
-#   sudo REPO_URL=https://github.com/<org>/uni-companion.git bash oracle-bootstrap.sh
+# One-time setup on the Google Cloud Ubuntu VM.
+# Usage (after cloning the repo on the VM):
+#   sudo bash /opt/uni-companion/deploy/gcp-bootstrap.sh
 
 REPO_URL="${REPO_URL:-https://github.com/blackwhissh/uni-companion.git}"
 APP_DIR="${APP_DIR:-/opt/uni-companion}"
@@ -33,16 +31,6 @@ if ufw status | grep -q "Status: active"; then
   ufw allow 443/tcp
 fi
 
-if command -v iptables >/dev/null 2>&1; then
-  iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT || true
-  iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT || true
-  if command -v netfilter-persistent >/dev/null 2>&1; then
-    netfilter-persistent save || true
-  elif [[ -d /etc/iptables ]]; then
-    iptables-save >/etc/iptables/rules.v4 || true
-  fi
-fi
-
 mkdir -p "$APP_DIR" "$APP_DIR/secrets"
 if [[ ! -d "$APP_DIR/.git" ]]; then
   git clone "$REPO_URL" "$APP_DIR"
@@ -68,7 +56,7 @@ if [[ ! -f "$APP_DIR/.env.prod" ]]; then
 fi
 
 chown -R "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR"
-chmod +x "$APP_DIR/deploy/remote-deploy.sh" "$APP_DIR/deploy/oracle-bootstrap.sh"
+chmod +x "$APP_DIR/deploy/remote-deploy.sh" "$APP_DIR/deploy/gcp-bootstrap.sh"
 
 echo "Building and starting the stack (first Java image build can take 10–20 minutes)..."
 cd "$APP_DIR"
@@ -77,6 +65,6 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 echo
 echo "Uni Companion is starting."
 echo "Open: http://$(curl -fsS --max-time 5 https://ifconfig.me || echo YOUR_PUBLIC_IP)"
-echo "Also open TCP 80 and 443 in the Oracle Cloud VCN security list / NSG."
+echo "Confirm VPC firewall allows TCP 22, 80, and 443 (http-server / https-server tags)."
 echo "Logins: admin / value of SEED_ADMIN_PASSWORD in $APP_DIR/.env.prod"
 echo "Also seeded: admin/admin and student/student unless you changed identity seed data."

@@ -102,7 +102,7 @@ cd apps/web && npm test
 
 `mvn test` starts Postgres with Testcontainers, so Docker must be running.
 
-## Production (Oracle Ubuntu + GitHub Actions)
+## Production (Google Cloud Ubuntu + GitHub Actions)
 
 The stack is four containers: Postgres (pgvector), identity-service, learning-service, and a Caddy front door that serves the SPA and proxies `/identity` and `/learning`.
 
@@ -112,21 +112,21 @@ After the VM is bootstrapped, add these repository secrets so every push to `mai
 
 | Secret | Value |
 |---|---|
-| `ORACLE_HOST` | Public IP or DNS of the Ubuntu instance |
-| `ORACLE_USER` | Usually `ubuntu` |
-| `ORACLE_SSH_KEY` | Private key that can SSH to the instance |
+| `GCP_HOST` | External IP of the Compute Engine VM |
+| `GCP_USER` | Usually `ubuntu` (must match the SSH key username) |
+| `GCP_SSH_KEY` | Private key that can SSH to the instance |
 
 GitHub Actions runs `mvn test` and `npm test` on every pull request and push. Deploy runs only on `main` after tests pass.
 
-### 2. Oracle Cloud networking
+### 2. Google Cloud networking
 
-In the VCN **security list** (or NSG) attached to the instance, allow ingress:
+On the VM (or VPC firewall), allow:
 
-- TCP 22 from your IP  
-- TCP 80 from `0.0.0.0/0`  
-- TCP 443 from `0.0.0.0/0` if you use a domain  
+- TCP 22 (SSH; default VPC usually includes this)  
+- TCP 80 (`http-server` network tag)  
+- TCP 443 (`https-server` network tag)  
 
-Prefer at least **4 GB RAM**. The Always Free Ampere A1 shape is enough; a 1 GB micro is not.
+Prefer at least **4 GB RAM** (`e2-standard-2` / 8 GB is a good fit).
 
 ### 3. First install on the VM
 
@@ -135,12 +135,12 @@ SSH in, then:
 ```bash
 sudo apt-get update && sudo apt-get install -y git
 sudo git clone https://github.com/blackwhissh/uni-companion.git /opt/uni-companion
-sudo bash /opt/uni-companion/deploy/oracle-bootstrap.sh
+sudo bash /opt/uni-companion/deploy/gcp-bootstrap.sh
 ```
 
 The script installs Docker, generates `/opt/uni-companion/.env.prod`, and builds the images (first build can take 10–20 minutes).
 
-Open `http://<public-ip>`. Admin password is `SEED_ADMIN_PASSWORD` in `/opt/uni-companion/.env.prod`.
+Open `http://<external-ip>`. Admin password is `SEED_ADMIN_PASSWORD` in `/opt/uni-companion/.env.prod`.
 
 To use real Gemini later: put a Vertex service-account JSON at `/opt/uni-companion/secrets/gcp.json`, set `AI_PROFILE=vertex` and `GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp.json` in `.env.prod`, then re-run `deploy/remote-deploy.sh`. For HTTPS, set `CADDY_SITE=your.domain` and point DNS at the VM.
 
