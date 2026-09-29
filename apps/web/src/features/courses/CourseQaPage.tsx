@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
@@ -23,6 +23,10 @@ import { studyActionError } from './study-ui.ts'
 import { StudyMaterialPicker } from './StudyMaterialPicker.tsx'
 import type { RagAnswer } from './rag-api.ts'
 
+const QUESTION_MAX = 2000
+const MATERIALS_GONE =
+  'Every selected material must be ready, published, and part of this course.'
+
 export function CourseQaPage() {
   const { courseId = '' } = useParams()
   const course = useQuery({ queryKey: ['courses', courseId], queryFn: () => getCourse(courseId), retry: false })
@@ -36,28 +40,111 @@ export function CourseQaPage() {
   const [askedQuestion, setAskedQuestion] = useState<string | null>(null)
   const [result, setResult] = useState<RagAnswer | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [materialNotice, setMaterialNotice] = useState<string | null>(null)
   const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([])
   const [pickingMaterials, setPickingMaterials] = useState(true)
+  const selectedRef = useRef(selectedMaterialIds)
+  selectedRef.current = selectedMaterialIds
 
   const ask = useMutation({
     mutationFn: ({ q, materialIds }: { q: string; materialIds: string[] }) =>
       askCourseQuestion(courseId, q, materialIds),
     onSuccess: (answer, variables) => {
       setError(null)
+      setMaterialNotice(null)
       setAskedQuestion(variables.q)
       setResult(answer)
     },
-    onError: (err) => {
-      setResult(null)
-      setAskedQuestion(null)
-      setError(studyActionError(err, 'Could not answer that question.'))
+    onError: async (err) => {
+      // Keep the previous answer visible; only update the error banner.
+      const message = studyActionError(err, 'Could not answer that question.')
+      if (message.includes(MATERIALS_GONE) || (err instanceof ApiError && err.message.includes(MATERIALS_GONE))) {
+        const refreshed = await materials.refetch()
+        const readyIds = new Set(
+          (refreshed.data ?? [])
+            .filter((m) => m.visibility === 'PUBLISHED' && m.processingStatus === 'READY')
+            .map((m) => m.id),
+        )
+        const dropped = selectedRef.current.filter((id) => !readyIds.has(id))
+        const kept = selectedRef.current.filter((id) => readyIds.has(id))
+        setSelectedMaterialIds(kept)
+        if (dropped.length > 0) {
+          setMaterialNotice(
+            dropped.length === 1
+              ? 'One selected material is no longer available (unpublished or not ready). Choose materials again.'
+              : `${dropped.length} selected materials are no longer available (unpublished or not ready). Choose materials again.`,
+          )
+        } else {
+          setMaterialNotice('Selected materials are no longer available. Choose materials again.')
+        }
+        setPickingMaterials(true)
+        setError(null)
+        return
+      }
+      setError(readableAskError(err, message))
     },
   })
+
+  const readyMaterials =
+    materials.data?.filter((material) => material.visibility === 'PUBLISHED' && material.processingStatus === 'READY') ??
+    []
+  const readyIdsKey = readyMaterials.map((m) => m.id).sort().join(',')
+
+  useEffect(() => {
+    function refetchMaterials() {
+      if (course.data?.enrolled === true) {
+        void materials.refetch()
+      }
+    }
+    function onVisibility() {
+      if (document.visibilityState === 'visible') {
+        refetchMaterials()
+      }
+    }
+    window.addEventListener('focus', refetchMaterials)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', refetchMaterials)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [course.data?.enrolled, materials])
+
+  useEffect(() => {
+    if (!materials.data) {
+      return
+    }
+    const readyIds = new Set(readyMaterials.map((m) => m.id))
+    setSelectedMaterialIds((prev) => {
+      if (prev.length === 0) {
+        return prev
+      }
+      const kept = prev.filter((id) => readyIds.has(id))
+      const dropped = prev.length - kept.length
+      if (dropped === 0) {
+        return prev
+      }
+      setMaterialNotice(
+        dropped === 1
+          ? 'One selected material was unpublished or is no longer ready. It was removed from your selection.'
+          : `${dropped} selected materials were unpublished or are no longer ready. They were removed from your selection.`,
+      )
+      if (kept.length === 0) {
+        setPickingMaterials(true)
+      }
+      return kept
+    })
+    // readyMaterials identity changes every render; key on ids.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyIdsKey, materials.data])
 
   function submitQuestion(raw: string) {
     const trimmed = raw.trim()
     if (!trimmed) {
       setError('Ask a question about this course.')
+      return
+    }
+    if (trimmed.length > QUESTION_MAX) {
+      setError(`Keep your question to ${QUESTION_MAX.toLocaleString()} characters or fewer.`)
       return
     }
     setQuestion(trimmed)
@@ -75,16 +162,15 @@ export function CourseQaPage() {
 
   function useSuggestedPrompt(prompt: string) {
     setError(null)
-    setQuestion(prompt)
+    setQuestion(prompt.slice(0, QUESTION_MAX))
   }
 
   const unavailable = course.error instanceof ApiError && course.error.status === 404
-  const readyMaterials =
-    materials.data?.filter((material) => material.visibility === 'PUBLISHED' && material.processingStatus === 'READY') ??
-    []
   const readyCount = readyMaterials.length
   const enrolled = course.data?.enrolled === true
   const insufficient = result != null && result.citations.length === 0
+  const overLimit = question.length > QUESTION_MAX
+  const canAsk = !ask.isPending && question.trim().length > 0 && !overLimit
 
   return (
     <Page>
@@ -122,6 +208,12 @@ export function CourseQaPage() {
 
       {enrolled && readyCount > 0 ? (
         <>
+          {materialNotice ? (
+            <div className="mt-6">
+              <Alert>{materialNotice}</Alert>
+            </div>
+          ) : null}
+
           {pickingMaterials ? (
             <StudyMaterialPicker
               materials={readyMaterials}
@@ -135,6 +227,7 @@ export function CourseQaPage() {
                 setResult(null)
                 setAskedQuestion(null)
                 setError(null)
+                setMaterialNotice(null)
               }}
             />
           ) : (
@@ -144,16 +237,24 @@ export function CourseQaPage() {
               Searching {selectedMaterialIds.length} selected {selectedMaterialIds.length === 1 ? 'material' : 'materials'}.
             </p>
             <form className="mt-4 flex flex-col gap-4" onSubmit={onSubmit}>
-              <label className="flex flex-col gap-1.5 text-sm font-medium text-ink-soft">
-                Question
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="qa-question" className="text-sm font-medium text-ink-soft">
+                  Question
+                </label>
                 <textarea
+                  id="qa-question"
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
                   rows={4}
+                  maxLength={QUESTION_MAX + 200}
                   className="rounded-lg border border-line bg-white/80 px-3 py-2.5 text-base font-normal text-ink shadow-[inset_0_1px_0_rgb(7_52_60_/_0.03)] outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
-                  placeholder="What is consensus used for in this lecture?"
+                  placeholder="What are the main ideas covered in these materials?"
                 />
-              </label>
+                <span className={`text-xs font-normal ${overLimit ? 'text-danger' : 'text-muted'}`}>
+                  {question.length.toLocaleString()} / {QUESTION_MAX.toLocaleString()} characters
+                  {overLimit ? ' — shorten your question to ask' : ''}
+                </span>
+              </div>
 
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Try a prompt</p>
@@ -174,10 +275,10 @@ export function CourseQaPage() {
 
               {error ? <Alert>{error}</Alert> : null}
               <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={ask.isPending || !question.trim()}>
+                <Button type="submit" disabled={!canAsk}>
                   {ask.isPending ? 'Thinking…' : 'Ask'}
                 </Button>
-                {error && question.trim() ? (
+                {error && question.trim() && !overLimit ? (
                   <Button
                     type="button"
                     variant="secondary"
@@ -201,8 +302,8 @@ export function CourseQaPage() {
             </section>
           ) : null}
 
-          {!pickingMaterials && result && !ask.isPending ? (
-            <section className="mt-10 animate-rise-delay">
+          {!pickingMaterials && result ? (
+            <section className={`mt-10 ${ask.isPending ? 'opacity-60' : 'animate-rise-delay'}`}>
               {askedQuestion ? (
                 <div className="mb-6 rounded-2xl border border-line/80 bg-mist/60 px-5 py-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">You asked</p>
@@ -230,4 +331,21 @@ export function CourseQaPage() {
       ) : null}
     </Page>
   )
+}
+
+function readableAskError(err: unknown, fallback: string): string {
+  if (!(err instanceof ApiError)) {
+    return fallback
+  }
+  const questionDetail = err.details?.question
+  if (questionDetail) {
+    if (/size|2000|characters/i.test(questionDetail)) {
+      return `Keep your question to ${QUESTION_MAX.toLocaleString()} characters or fewer.`
+    }
+    return questionDetail
+  }
+  if (/validation failed/i.test(err.message)) {
+    return `Keep your question to ${QUESTION_MAX.toLocaleString()} characters or fewer.`
+  }
+  return fallback
 }

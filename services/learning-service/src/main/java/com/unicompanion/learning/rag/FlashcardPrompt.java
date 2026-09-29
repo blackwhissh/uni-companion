@@ -89,6 +89,11 @@ final class FlashcardPrompt {
                 - Do not repeat or closely paraphrase any card in the "Cards already used" list.
                 - Do not test the same fact with a differently worded question or a nearly identical answer.
 
+                Variety when prior decks exist
+                - If "Cards already used" is not empty, build a distinctly different deck.
+                - Prefer uncovered topics, alternate angles, worked examples, comparisons, edge cases, and applications.
+                - Avoid starting with the same fundamentals already covered by earlier decks.
+
                 Organize logically
                 - Follow the structure of the source material where practical.
                 - Group cards by topic or section.

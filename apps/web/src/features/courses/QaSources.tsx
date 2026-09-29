@@ -23,13 +23,18 @@ export function QaSources({
         return
       }
       const n = Number(match[1])
+      if (n < 1 || n > citations.length) {
+        return
+      }
       setActive(n)
+      const el = document.getElementById(`qa-source-${n}`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       window.setTimeout(() => setActive((current) => (current === n ? null : current)), 2200)
     }
     onHash()
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
-  }, [])
+  }, [citations.length])
 
   if (citations.length === 0) {
     return null

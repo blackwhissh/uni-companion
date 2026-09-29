@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Parses model JSON into flashcard drafts. Tolerates optional markdown fences.
- * Implemented without Jackson so learning-service stays compatible with Boot's JSON stack.
+ * Parses model JSON into flashcard drafts. Tolerates optional markdown fences,
+ * wrapper objects ({@code flashcards}/{@code cards}), and question/answer aliases.
  */
 final class FlashcardJsonParser {
 
@@ -19,8 +19,8 @@ final class FlashcardJsonParser {
             return List.of();
         }
         String json = stripFences(raw.trim());
-        int arrayStart = json.indexOf('[');
-        int arrayEnd = json.lastIndexOf(']');
+        int arrayStart = findCardsArrayStart(json);
+        int arrayEnd = arrayStart >= 0 ? findMatchingBracket(json, arrayStart) : -1;
         if (arrayStart < 0 || arrayEnd <= arrayStart) {
             return List.of();
         }
@@ -37,14 +37,74 @@ final class FlashcardJsonParser {
                 break;
             }
             String object = arrayBody.substring(objectStart, objectEnd + 1);
-            String front = readStringField(object, "front");
-            String back = readStringField(object, "back");
+            String front = firstNonBlank(
+                    readStringField(object, "front"),
+                    readStringField(object, "question"),
+                    readStringField(object, "prompt")
+            );
+            String back = firstNonBlank(
+                    readStringField(object, "back"),
+                    readStringField(object, "answer"),
+                    readStringField(object, "response")
+            );
             if (!front.isBlank() && !back.isBlank()) {
                 cards.add(new ChatModel.FlashcardDraft(truncate(front, FRONT_MAX), back.trim()));
             }
             cursor = objectEnd + 1;
         }
         return List.copyOf(cards);
+    }
+
+    private static int findCardsArrayStart(String json) {
+        for (String key : List.of("flashcards", "cards", "items")) {
+            String needle = "\"" + key + "\"";
+            int keyIndex = json.indexOf(needle);
+            if (keyIndex < 0) {
+                continue;
+            }
+            int colon = json.indexOf(':', keyIndex + needle.length());
+            if (colon < 0) {
+                continue;
+            }
+            int i = colon + 1;
+            while (i < json.length() && Character.isWhitespace(json.charAt(i))) {
+                i++;
+            }
+            if (i < json.length() && json.charAt(i) == '[') {
+                return i;
+            }
+        }
+        return json.indexOf('[');
+    }
+
+    private static int findMatchingBracket(String text, int openIndex) {
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = openIndex; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (ch == '\\') {
+                    escaped = true;
+                } else if (ch == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (ch == '"') {
+                inString = true;
+            } else if (ch == '[') {
+                depth++;
+            } else if (ch == ']') {
+                depth--;
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
     }
 
     private static int findMatchingBrace(String text, int openIndex) {
@@ -120,6 +180,15 @@ final class FlashcardJsonParser {
             i++;
         }
         return value.toString().trim();
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 
     private static String stripFences(String raw) {

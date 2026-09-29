@@ -44,6 +44,20 @@ class FlashcardJsonParserTest {
     }
 
     @Test
+    void parsesQuestionAnswerAliases() {
+        List<ChatModel.FlashcardDraft> cards = FlashcardJsonParser.parse(
+                """
+                        {"cards":[{"question":"What is X?","answer":"Y"}]}
+                        """,
+                4
+        );
+
+        assertThat(cards).hasSize(1);
+        assertThat(cards.getFirst().front()).isEqualTo("What is X?");
+        assertThat(cards.getFirst().back()).isEqualTo("Y");
+    }
+
+    @Test
     void returnsEmptyOnInvalidJson() {
         assertThat(FlashcardJsonParser.parse("not json", 4)).isEmpty();
     }

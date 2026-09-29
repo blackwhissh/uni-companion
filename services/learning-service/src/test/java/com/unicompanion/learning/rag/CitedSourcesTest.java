@@ -52,6 +52,35 @@ class CitedSourcesTest {
         assertThat(result.answer()).isEqualTo("No markers here.");
     }
 
+    @Test
+    void stripsOutOfRangeMarkersAndKeepsValidOnesRenumbered() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("A", 1, "alpha"),
+                chunk("B", 2, "beta"),
+                chunk("C", 3, "gamma"),
+                chunk("D", 4, "delta")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                "See [5] and also [2] for details.",
+                retrieved
+        );
+
+        assertThat(result.chunks()).hasSize(1);
+        assertThat(result.chunks().getFirst().title()).isEqualTo("B");
+        assertThat(result.answer()).isEqualTo("See and also [1] for details.");
+    }
+
+    @Test
+    void stripsInvalidMarkersWhenNoneAreInRange() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(chunk("A", 1, "alpha"));
+
+        CitedSources.Result result = CitedSources.select("Claim from [9] only.", retrieved);
+
+        assertThat(result.chunks()).hasSize(1);
+        assertThat(result.answer()).isEqualTo("Claim from only.");
+    }
+
     private static ChatModel.RetrievedChunk chunk(String title, int page, String content) {
         return new ChatModel.RetrievedChunk(UUID.randomUUID(), UUID.randomUUID(), title, page, content);
     }

@@ -43,8 +43,11 @@ public class RagService {
 
     public Answer query(UUID courseId, UUID userId, String question, List<UUID> materialIds) {
         String trimmed = question == null ? "" : question.trim();
-        if (trimmed.isBlank() || trimmed.length() > 2000) {
+        if (trimmed.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ask a question.");
+        }
+        if (trimmed.length() > 2000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Question must be at most 2000 characters.");
         }
         CourseEntity course = courses.findById(courseId).orElseThrow(RagService::notFound);
         if (!course.isPublished()) {

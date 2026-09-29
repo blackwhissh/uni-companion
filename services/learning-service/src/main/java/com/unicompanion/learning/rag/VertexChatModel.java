@@ -147,19 +147,32 @@ public class VertexChatModel implements ChatModel {
             String kind
     ) {
         IllegalStateException unusable = null;
+        String previousText = null;
         for (int attempt = 1; attempt <= 2; attempt++) {
+            String requestPrompt = attempt == 1 || previousText == null
+                    ? prompt
+                    : repairJsonPrompt(prompt, previousText, kind);
+            double temperature = attempt == 1 ? 0.35 : 0.55;
             String text;
             try {
-                text = generateJsonContent(prompt, 0.2, maxOutputTokens);
+                text = generateJsonContent(requestPrompt, temperature, maxOutputTokens);
             } catch (IllegalStateException ex) {
                 log.warn("Vertex {} empty response attempt={}", kind, attempt, ex);
                 unusable = ex;
                 continue;
             }
+            log.info(
+                    "Vertex {} raw attempt={} chars={} output={}",
+                    kind,
+                    attempt,
+                    text.length(),
+                    text.length() <= 4_000 ? text : text.substring(0, 4_000) + "…"
+            );
             List<T> parsed = parser.apply(text, count);
             if (!parsed.isEmpty()) {
                 return parsed;
             }
+            previousText = text;
             log.warn(
                     "Vertex {} JSON unusable attempt={} chars={} preview={}",
                     kind,
@@ -170,6 +183,22 @@ public class VertexChatModel implements ChatModel {
             unusable = new IllegalStateException("Vertex " + kind + " returned no usable JSON.");
         }
         throw unusable;
+    }
+
+    private static String repairJsonPrompt(String originalPrompt, String previousOutput, String kind) {
+        String preview = previousOutput.length() <= 2_500
+                ? previousOutput
+                : previousOutput.substring(0, 2_500) + "…";
+        return """
+                Your previous %s output was not usable JSON (empty parse or wrong shape).
+                Return ONLY a valid JSON array matching the required schema. No markdown fences, no commentary.
+
+                Previous output:
+                %s
+
+                Original instructions:
+                %s
+                """.formatted(kind, preview, originalPrompt);
     }
 
     private String generateContent(String prompt, double temperature, int maxOutputTokens) {

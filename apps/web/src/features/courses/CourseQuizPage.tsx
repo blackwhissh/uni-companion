@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import {
@@ -15,6 +15,7 @@ import {
 } from '../../shared/ui/ui.tsx'
 import { getCourse } from './course-api.ts'
 import { listMaterials } from './material-api.ts'
+import { clearQuizAnswers, loadQuizAnswers, saveQuizAnswers } from './quiz-answer-storage.ts'
 import { StudyMaterialPicker } from './StudyMaterialPicker.tsx'
 import { StudyVersionControls } from './StudyVersionControls.tsx'
 import { generateQuiz, reportQuizVersion, selectQuizVersion, submitQuiz } from './study-api.ts'
@@ -40,6 +41,13 @@ export function CourseQuizPage() {
   const [picking, setPicking] = useState(true)
   const [generateForce, setGenerateForce] = useState(false)
 
+  useEffect(() => {
+    if (!quiz || attempt) {
+      return
+    }
+    saveQuizAnswers(quiz.id, answers)
+  }, [quiz, answers, attempt])
+
   const generate = useMutation({
     mutationFn: ({ materialIds, force }: { materialIds: string[]; force: boolean }) => {
       setGenerateForce(force)
@@ -52,8 +60,13 @@ export function CourseQuizPage() {
       setPicking(false)
       setSelectedMaterialIds(variables.materialIds)
       setQuiz(next)
-      setAnswers({})
       setAttempt(null)
+      if (variables.force || next.delivery === 'CREATED') {
+        clearQuizAnswers(next.id)
+        setAnswers({})
+      } else {
+        setAnswers(loadQuizAnswers(next.id))
+      }
     },
     onError: (err) => {
       setError(studyActionError(err, 'Could not generate a quiz.'))
@@ -64,7 +77,7 @@ export function CourseQuizPage() {
     mutationFn: (versionId: string) => selectQuizVersion(courseId, selectedMaterialIds, versionId),
     onSuccess: (next) => {
       setQuiz(next)
-      setAnswers({})
+      setAnswers(loadQuizAnswers(next.id))
       setAttempt(null)
       setError(null)
       setNotice(null)
@@ -84,6 +97,9 @@ export function CourseQuizPage() {
     onSuccess: (result) => {
       setError(null)
       if (result.retired) {
+        if (quiz) {
+          clearQuizAnswers(quiz.id)
+        }
         setQuiz(null)
         setPicking(true)
         setNotice('That version was retired after repeated quality reports. Choose materials to continue.')
@@ -112,6 +128,9 @@ export function CourseQuizPage() {
     onSuccess: (result) => {
       setError(null)
       setAttempt(result)
+      if (quiz) {
+        clearQuizAnswers(quiz.id)
+      }
     },
     onError: (err) => {
       setError(err instanceof ApiError ? err.message : 'Could not submit the quiz.')
@@ -125,6 +144,8 @@ export function CourseQuizPage() {
   const readyCount = readyMaterials.length
   const enrolled = course.data?.enrolled === true
   const allAnswered = quiz?.questions?.every((question) => answers[question.id] !== undefined) ?? false
+  const unansweredCount =
+    quiz?.questions?.filter((question) => answers[question.id] === undefined).length ?? 0
   const reviewsByQuestion = new Map((attempt?.reviews ?? []).map((review) => [review.questionId, review]))
   const showPicker = picking || (!quiz && !generate.isPending)
 
@@ -277,36 +298,48 @@ export function CourseQuizPage() {
                   </p>
                 </Panel>
               ) : null}
-              <div className="mt-6 flex flex-wrap gap-2">
-                {!attempt ? (
-                  <Button
-                    type="button"
-                    disabled={!allAnswered || submit.isPending}
-                    onClick={() => submit.mutate()}
-                  >
-                    {submit.isPending ? 'Submitting…' : 'Submit answers'}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setAttempt(null)
-                      setAnswers({})
-                    }}
-                  >
-                    Try this quiz again
-                  </Button>
-                )}
-                {selectedMaterialIds.length > 0 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={generate.isPending}
-                    onClick={() => generate.mutate({ materialIds: selectedMaterialIds, force: true })}
-                  >
-                    {nextQuizLabel(quiz)}
-                  </Button>
+              <div className="mt-6 flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {!attempt ? (
+                    <Button
+                      type="button"
+                      disabled={!allAnswered || submit.isPending}
+                      title={!allAnswered ? 'Answer all questions to submit' : undefined}
+                      onClick={() => submit.mutate()}
+                    >
+                      {submit.isPending ? 'Submitting…' : 'Submit answers'}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setAttempt(null)
+                        setAnswers({})
+                        if (quiz) {
+                          clearQuizAnswers(quiz.id)
+                        }
+                      }}
+                    >
+                      Try this quiz again
+                    </Button>
+                  )}
+                  {selectedMaterialIds.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={generate.isPending}
+                      onClick={() => generate.mutate({ materialIds: selectedMaterialIds, force: true })}
+                    >
+                      {nextQuizLabel(quiz)}
+                    </Button>
+                  ) : null}
+                </div>
+                {!attempt && !allAnswered ? (
+                  <p className="text-sm text-muted" role="status">
+                    Answer all questions to submit
+                    {unansweredCount > 0 ? ` (${unansweredCount} remaining).` : '.'}
+                  </p>
                 ) : null}
               </div>
             </section>

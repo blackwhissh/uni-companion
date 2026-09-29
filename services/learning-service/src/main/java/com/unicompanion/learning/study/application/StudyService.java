@@ -134,13 +134,38 @@ public class StudyService {
                     List<ChatModel.RetrievedChunk> source = requirePublishedChunks(courseId, materialIds);
                     int requestedCards = Math.min(MAX_CARD_COUNT, Math.max(8, source.size() * 2));
                     List<ChatModel.FlashcardDraft> existingCards = existingFlashcards(courseId, materialsKey);
-                    List<ChatModel.FlashcardDraft> drafts;
+                    List<String> avoided = avoidedFlashcardSummaries(existingCards);
+                    final List<ChatModel.FlashcardDraft> drafts;
                     try {
-                        drafts = filterNovelFlashcards(
-                                chat.generateFlashcards(source, requestedCards, avoidedFlashcardSummaries(existingCards)),
-                                existingCards
+                        List<ChatModel.FlashcardDraft> candidates = chat.generateFlashcards(
+                                source,
+                                requestedCards,
+                                avoided
                         );
+                        List<ChatModel.FlashcardDraft> novel = filterNovelFlashcards(candidates, existingCards);
+                        if (novel.isEmpty() && !existingCards.isEmpty()) {
+                            log.warn(
+                                    "Flashcard novelty filter removed all {} candidates; regenerating with stronger variety",
+                                    candidates.size()
+                            );
+                            List<String> strongerAvoid = new ArrayList<>(avoided);
+                            strongerAvoid.add(
+                                    "CRITICAL: Prior shared decks already cover these. Produce entirely different facts, angles, and examples."
+                            );
+                            candidates = chat.generateFlashcards(source, requestedCards, strongerAvoid);
+                            novel = filterNovelFlashcards(candidates, existingCards);
+                            if (novel.isEmpty() && !candidates.isEmpty()) {
+                                novel = filterExactFrontDuplicates(candidates, existingCards);
+                                log.warn(
+                                        "Flashcard soft filter kept {} of {} after novelty wipe",
+                                        novel.size(),
+                                        candidates.size()
+                                );
+                            }
+                        }
+                        drafts = novel;
                     } catch (IllegalStateException ex) {
+                        log.error("Flashcard model returned unusable output course={} materials={}", courseId, materialsKey, ex);
                         throw new ResponseStatusException(
                                 HttpStatus.BAD_GATEWAY,
                                 "The model returned no usable flashcards.",
@@ -824,6 +849,32 @@ public class StudyService {
         int removed = candidates.size() - accepted.size();
         if (removed > 0) {
             log.info("Removed {} similar flashcards before saving shared version", removed);
+        }
+        return List.copyOf(accepted);
+    }
+
+    private List<ChatModel.FlashcardDraft> filterExactFrontDuplicates(
+            List<ChatModel.FlashcardDraft> candidates,
+            List<ChatModel.FlashcardDraft> existingCards
+    ) {
+        if (candidates == null || candidates.isEmpty()) {
+            return List.of();
+        }
+        Set<String> usedFronts = existingCards.stream()
+                .map(card -> normalizeQuestion(card.front()))
+                .filter(front -> !front.isBlank())
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        List<ChatModel.FlashcardDraft> accepted = new ArrayList<>();
+        for (ChatModel.FlashcardDraft candidate : candidates) {
+            if (candidate == null || candidate.front() == null || candidate.front().isBlank()) {
+                continue;
+            }
+            String normalized = normalizeQuestion(candidate.front());
+            if (usedFronts.contains(normalized)) {
+                continue;
+            }
+            usedFronts.add(normalized);
+            accepted.add(candidate);
         }
         return List.copyOf(accepted);
     }

@@ -42,7 +42,7 @@ public class RagController {
 
     public record QueryRequest(
             @NotNull UUID courseId,
-            @NotBlank @Size(max = 2000) String question,
+            @NotBlank @Size(max = 2000, message = "Question must be at most 2000 characters.") String question,
             @NotEmpty List<@NotNull UUID> materialIds
     ) {
     }

@@ -167,11 +167,14 @@ function renderInline(text: string, citations: Map<number, CitationMeta>): React
     } else {
       const n = Number(token.slice(1, -1))
       const meta = citations.get(n)
-      const label = meta
-        ? meta.sectionHint
-          ? `Source ${n}: ${meta.title}, ${meta.sectionHint}, page ${meta.pageNumber}`
-          : `Source ${n}: ${meta.title}, page ${meta.pageNumber}`
-        : `Source ${n}`
+      if (!meta) {
+        // Unknown / out-of-range markers should not render as dead chips.
+        last = match.index + token.length
+        continue
+      }
+      const label = meta.sectionHint
+        ? `Source ${n}: ${meta.title}, ${meta.sectionHint}, page ${meta.pageNumber}`
+        : `Source ${n}: ${meta.title}, page ${meta.pageNumber}`
       nodes.push(
         <a
           key={key++}
@@ -179,6 +182,17 @@ function renderInline(text: string, citations: Map<number, CitationMeta>): React
           title={label}
           aria-label={label}
           className="mx-0.5 inline-flex h-5 min-w-5 align-middle items-center justify-center rounded-md bg-accent/15 px-1 text-xs font-semibold text-accent-deep no-underline hover:bg-accent/25"
+          onClick={(event) => {
+            event.preventDefault()
+            const target = document.getElementById(`qa-source-${n}`)
+            if (target) {
+              target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              if (window.location.hash !== `#qa-source-${n}`) {
+                window.history.replaceState(null, '', `#qa-source-${n}`)
+              }
+              window.dispatchEvent(new Event('hashchange'))
+            }
+          }}
         >
           {n}
         </a>,

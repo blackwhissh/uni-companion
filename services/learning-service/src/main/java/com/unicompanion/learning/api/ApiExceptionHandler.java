@@ -58,7 +58,10 @@ public class ApiExceptionHandler {
                 details,
                 ex
         );
-        return ResponseEntity.badRequest().body(body("VALIDATION_FAILED", "Request validation failed.", request, details));
+        String message = details.size() == 1
+                ? details.values().iterator().next()
+                : "Request validation failed.";
+        return ResponseEntity.badRequest().body(body("VALIDATION_FAILED", message, request, details));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

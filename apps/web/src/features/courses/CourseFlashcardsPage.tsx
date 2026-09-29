@@ -119,10 +119,20 @@ export function CourseFlashcardsPage() {
     }
     function onKey(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'BUTTON' ||
+          target.isContentEditable ||
+          target.closest('button'))
+      ) {
         return
       }
-      if (event.key === ' ' || event.key === 'Enter') {
+      if (event.key === ' ') {
+        event.preventDefault()
+        setRevealed((value) => !value)
+      } else if (event.key === 'Enter') {
         event.preventDefault()
         setRevealed((value) => !value)
       } else if (event.key === 'ArrowRight') {
@@ -226,7 +236,7 @@ export function CourseFlashcardsPage() {
                 <SectionLabel>
                   Shared deck {deck.version} of {deck.availableVersions} · Card {index + 1} of {cards.length}
                 </SectionLabel>
-                <p className="text-xs text-muted">Space / Enter flip · ← → navigate</p>
+                <p className="text-xs text-muted">Space / Enter flip · ← → navigate · Enter on Next advances</p>
               </div>
               <StudyVersionControls
                 noun="deck"

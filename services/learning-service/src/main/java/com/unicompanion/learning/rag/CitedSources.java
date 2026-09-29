@@ -19,15 +19,17 @@ final class CitedSources {
 
     /**
      * Returns only chunks referenced as [n] in {@code answer}, renumbered 1..k in first-mention order.
-     * If the model cited nothing, falls back to all retrieved chunks (unchanged numbering).
+     * Out-of-range markers are stripped. If the model cited nothing valid, falls back to all retrieved
+     * chunks and strips any leftover invalid markers.
      */
     static Result select(String answer, List<ChatModel.RetrievedChunk> retrieved) {
+        String text = answer == null ? "" : answer;
         if (retrieved == null || retrieved.isEmpty()) {
-            return new Result(answer == null ? "" : answer, List.of());
+            return new Result(stripAllCitations(text), List.of());
         }
-        Set<Integer> cited = firstMentionOrder(answer, retrieved.size());
+        Set<Integer> cited = firstMentionOrder(text, retrieved.size());
         if (cited.isEmpty()) {
-            return new Result(answer, List.copyOf(retrieved));
+            return new Result(stripAllCitations(text), List.copyOf(retrieved));
         }
 
         List<ChatModel.RetrievedChunk> selected = new ArrayList<>();
@@ -37,7 +39,7 @@ final class CitedSources {
             selected.add(retrieved.get(oldIndex - 1));
             oldToNew[oldIndex] = next++;
         }
-        return new Result(rewriteCitations(answer, oldToNew), List.copyOf(selected));
+        return new Result(rewriteCitations(text, oldToNew), List.copyOf(selected));
     }
 
     private static Set<Integer> firstMentionOrder(String answer, int maxIndex) {
@@ -61,11 +63,23 @@ final class CitedSources {
         while (matcher.find()) {
             int oldIndex = Integer.parseInt(matcher.group(1));
             int mapped = oldIndex < oldToNew.length ? oldToNew[oldIndex] : 0;
-            String replacement = mapped > 0 ? "[" + mapped + "]" : matcher.group();
+            // Drop unmapped / out-of-range markers so chips always match Sources 1..n.
+            String replacement = mapped > 0 ? "[" + mapped + "]" : "";
             matcher.appendReplacement(out, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(out);
-        return out.toString();
+        return collapseSpaces(out.toString());
+    }
+
+    private static String stripAllCitations(String answer) {
+        return collapseSpaces(CITATION.matcher(answer).replaceAll(""));
+    }
+
+    private static String collapseSpaces(String value) {
+        return value
+                .replaceAll(" +([.,;:!?])", "$1")
+                .replaceAll(" {2,}", " ")
+                .trim();
     }
 
     record Result(String answer, List<ChatModel.RetrievedChunk> chunks) {
