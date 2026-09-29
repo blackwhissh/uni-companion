@@ -34,6 +34,7 @@ const student = {
   displayName: 'Student',
   interests: '',
   roles: ['STUDENT'],
+  createdAt: '2026-01-01T00:00:00Z',
 }
 
 function renderAt(path: string, ui: ReactNode) {

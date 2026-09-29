@@ -63,35 +63,41 @@ public class FakeChatModel implements ChatModel {
             List<String> questionsToAvoid
     ) {
         List<FlashcardDraft> cards = new ArrayList<>();
-        int variant = fakeVariant(questionsToAvoid);
-        for (RetrievedChunk chunk : chunks) {
-            if (cards.size() >= count) {
-                break;
-            }
+        if (chunks.isEmpty() || count <= 0) {
+            return cards;
+        }
+        int baseVariant = fakeVariant(questionsToAvoid);
+        // Produce up to `count` cards even when few chunks exist (CI fixtures often have 1–2).
+        for (int i = 0; i < count; i++) {
+            RetrievedChunk chunk = chunks.get(i % chunks.size());
+            int variant = baseVariant + i;
             cards.add(new FlashcardDraft(
-                    fakeFlashcardFront(chunk, variant),
-                    fakeFlashcardBack(chunk, variant)
+                    fakeFlashcardFront(chunk, variant, i),
+                    fakeFlashcardBack(chunk, variant, i)
             ));
         }
         return cards;
     }
 
-    private static String fakeFlashcardFront(RetrievedChunk chunk, int variant) {
-        return switch (variant % 3) {
-            case 1 -> "Which exam skill does %s, page %d, help you practice?"
-                    .formatted(chunk.title(), chunk.pageNumber());
-            case 2 -> "Why might a student reread %s on page %d before an assessment?"
-                    .formatted(chunk.title(), chunk.pageNumber());
-            default -> "What is stated in %s on page %d?"
-                    .formatted(chunk.title(), chunk.pageNumber());
+    private static String fakeFlashcardFront(RetrievedChunk chunk, int variant, int index) {
+        String focus = switch (variant % 3) {
+            case 1 -> "Which exam skill does %s, page %d, help you practice (#%d)?"
+                    .formatted(chunk.title(), chunk.pageNumber(), index + 1);
+            case 2 -> "Why might a student reread %s on page %d before an assessment (#%d)?"
+                    .formatted(chunk.title(), chunk.pageNumber(), index + 1);
+            default -> "What is stated in %s on page %d (card %d)?"
+                    .formatted(chunk.title(), chunk.pageNumber(), index + 1);
         };
+        return focus;
     }
 
-    private static String fakeFlashcardBack(RetrievedChunk chunk, int variant) {
+    private static String fakeFlashcardBack(RetrievedChunk chunk, int variant, int index) {
         return switch (variant % 3) {
-            case 1 -> "Use this page to practice applying the lecture idea to a new scenario, not to recite the same sentence.";
-            case 2 -> "Rereading helps when you still cannot reconstruct the argument from memory without looking at the PDF.";
-            default -> truncate(chunk.content(), 280);
+            case 1 -> "Use this page to practice applying the lecture idea to a new scenario (#%d)."
+                    .formatted(index + 1);
+            case 2 -> "Rereading helps when you still cannot reconstruct the argument from memory (#%d)."
+                    .formatted(index + 1);
+            default -> truncate(chunk.content(), 240) + " (angle " + (index + 1) + ")";
         };
     }
 

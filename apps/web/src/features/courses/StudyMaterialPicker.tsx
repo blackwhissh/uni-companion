@@ -128,7 +128,11 @@ export function StudyMaterialPicker({
   )
 }
 
-function selectionFor(ready: Material[], currentIds: string[], initialSelectedIds?: string[]) {
+function selectionFor(
+  ready: Material[],
+  currentIds: string[],
+  initialSelectedIds?: string[],
+): Set<string> {
   const readyIds = ready.map((material) => material.id)
   const readySet = new Set(readyIds)
   const kept = currentIds.filter((id) => readySet.has(id))
@@ -143,5 +147,5 @@ function selectionFor(ready: Material[], currentIds: string[], initialSelectedId
   if (readyIds.length === 1) {
     return new Set(readyIds)
   }
-  return new Set()
+  return new Set<string>()
 }
