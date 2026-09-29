@@ -67,60 +67,64 @@ public class FakeChatModel implements ChatModel {
             return cards;
         }
         int baseVariant = fakeVariant(questionsToAvoid);
+        int generation = questionsToAvoid == null ? 0 : questionsToAvoid.size();
         // Produce up to `count` cards even when few chunks exist (CI fixtures often have 1–2).
-        // Each card must be lexically distinct so StudyService novelty filtering keeps a full deck.
+        // Each card must be lexically distinct so StudyService novelty filtering keeps a full deck,
+        // including across force=true regenerations that pass prior fronts in questionsToAvoid.
         for (int i = 0; i < count; i++) {
             RetrievedChunk chunk = chunks.get(i % chunks.size());
             cards.add(new FlashcardDraft(
-                    fakeFlashcardFront(chunk, baseVariant, i),
-                    fakeFlashcardBack(chunk, baseVariant, i)
+                    fakeFlashcardFront(chunk, baseVariant, generation, i),
+                    fakeFlashcardBack(chunk, baseVariant, generation, i)
             ));
         }
         return cards;
     }
 
-    private static String fakeFlashcardFront(RetrievedChunk chunk, int baseVariant, int index) {
-        int angle = (baseVariant * 7 + index) % 8;
+    private static String fakeFlashcardFront(RetrievedChunk chunk, int baseVariant, int generation, int index) {
+        int angle = (baseVariant * 7 + generation * 3 + index) % 8;
+        String gen = "g" + generation;
         return switch (angle) {
-            case 1 -> "Define the core claim on page %d of %s using your own wording (slot %d)."
-                    .formatted(chunk.pageNumber(), chunk.title(), index + 1);
-            case 2 -> "Name one failure mode a student should watch for after reading %s p.%d (probe %d)."
-                    .formatted(chunk.title(), chunk.pageNumber(), index + 1);
-            case 3 -> "How would you teach the idea from %s page %d to a classmate (variant %d)?"
-                    .formatted(chunk.title(), chunk.pageNumber(), index + 1);
-            case 4 -> "What exam trap is suggested by %s on page %d (item %d)?"
-                    .formatted(chunk.title(), chunk.pageNumber(), index + 1);
-            case 5 -> "List the prerequisites implied by %s page %d before applying it (card %d)."
-                    .formatted(chunk.title(), chunk.pageNumber(), index + 1);
-            case 6 -> "Contrast the page-%d takeaway in %s with a common misconception (focus %d)."
-                    .formatted(chunk.pageNumber(), chunk.title(), index + 1);
-            case 7 -> "Which concrete example best anchors %s page %d for recall practice (seed %d)?"
-                    .formatted(chunk.title(), chunk.pageNumber(), index + 1);
-            default -> "Summarize the actionable step from %s page %d for active recall (index %d)."
-                    .formatted(chunk.title(), chunk.pageNumber(), index + 1);
+            case 1 -> "Define the core claim on page %d of %s using your own wording (%s slot %d)."
+                    .formatted(chunk.pageNumber(), chunk.title(), gen, index + 1);
+            case 2 -> "Name one failure mode a student should watch for after reading %s p.%d (%s probe %d)."
+                    .formatted(chunk.title(), chunk.pageNumber(), gen, index + 1);
+            case 3 -> "How would you teach the idea from %s page %d to a classmate (%s variant %d)?"
+                    .formatted(chunk.title(), chunk.pageNumber(), gen, index + 1);
+            case 4 -> "What exam trap is suggested by %s on page %d (%s item %d)?"
+                    .formatted(chunk.title(), chunk.pageNumber(), gen, index + 1);
+            case 5 -> "List the prerequisites implied by %s page %d before applying it (%s card %d)."
+                    .formatted(chunk.title(), chunk.pageNumber(), gen, index + 1);
+            case 6 -> "Contrast the page-%d takeaway in %s with a common misconception (%s focus %d)."
+                    .formatted(chunk.pageNumber(), chunk.title(), gen, index + 1);
+            case 7 -> "Which concrete example best anchors %s page %d for recall practice (%s seed %d)?"
+                    .formatted(chunk.title(), chunk.pageNumber(), gen, index + 1);
+            default -> "Summarize the actionable step from %s page %d for active recall (%s index %d)."
+                    .formatted(chunk.title(), chunk.pageNumber(), gen, index + 1);
         };
     }
 
-    private static String fakeFlashcardBack(RetrievedChunk chunk, int baseVariant, int index) {
-        int angle = (baseVariant * 7 + index) % 8;
+    private static String fakeFlashcardBack(RetrievedChunk chunk, int baseVariant, int generation, int index) {
+        int angle = (baseVariant * 7 + generation * 3 + index) % 8;
         String snippet = truncate(chunk.content(), 120);
+        String gen = "g" + generation;
         return switch (angle) {
-            case 1 -> "Restate the claim without copying: %s — then check against the PDF (slot %d)."
-                    .formatted(snippet, index + 1);
-            case 2 -> "Watch for skipping edge cases when applying this lecture idea; page evidence: %s (probe %d)."
-                    .formatted(snippet, index + 1);
-            case 3 -> "Teach it as a short story: setup, mechanism, outcome. Source: %s (variant %d)."
-                    .formatted(snippet, index + 1);
-            case 4 -> "Exam trap: memorizing wording instead of deciding when the rule applies. Hint: %s (item %d)."
-                    .formatted(snippet, index + 1);
-            case 5 -> "Prerequisites usually include prior definitions on earlier pages; related text: %s (card %d)."
-                    .formatted(snippet, index + 1);
-            case 6 -> "Misconception: the method always wins. Reality depends on constraints described here: %s (focus %d)."
-                    .formatted(snippet, index + 1);
-            case 7 -> "Anchor with a tiny scenario you invent, then verify against: %s (seed %d)."
-                    .formatted(snippet, index + 1);
-            default -> "Actionable step: close the PDF and reconstruct this idea from memory — %s (index %d)."
-                    .formatted(snippet, index + 1);
+            case 1 -> "Restate the claim without copying: %s — then check against the PDF (%s slot %d)."
+                    .formatted(snippet, gen, index + 1);
+            case 2 -> "Watch for skipping edge cases when applying this lecture idea; page evidence: %s (%s probe %d)."
+                    .formatted(snippet, gen, index + 1);
+            case 3 -> "Teach it as a short story: setup, mechanism, outcome. Source: %s (%s variant %d)."
+                    .formatted(snippet, gen, index + 1);
+            case 4 -> "Exam trap: memorizing wording instead of deciding when the rule applies. Hint: %s (%s item %d)."
+                    .formatted(snippet, gen, index + 1);
+            case 5 -> "Prerequisites usually include prior definitions on earlier pages; related text: %s (%s card %d)."
+                    .formatted(snippet, gen, index + 1);
+            case 6 -> "Misconception: the method always wins. Reality depends on constraints described here: %s (%s focus %d)."
+                    .formatted(snippet, gen, index + 1);
+            case 7 -> "Anchor with a tiny scenario you invent, then verify against: %s (%s seed %d)."
+                    .formatted(snippet, gen, index + 1);
+            default -> "Actionable step: close the PDF and reconstruct this idea from memory — %s (%s index %d)."
+                    .formatted(snippet, gen, index + 1);
         };
     }
 
