@@ -134,7 +134,7 @@ SSH in, then:
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git
-sudo git clone https://github.com/<you>/uni-companion.git /opt/uni-companion
+sudo git clone https://github.com/blackwhissh/uni-companion.git /opt/uni-companion
 sudo bash /opt/uni-companion/deploy/oracle-bootstrap.sh
 ```
 
