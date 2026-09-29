@@ -27,4 +27,10 @@ Consensus keeps replicas consistent [1].
     )
     expect(screen.getByText(/agreement among replicas/)).toBeInTheDocument()
   })
+
+  it('renders inline LaTeX with KaTeX', () => {
+    const { container } = render(<StudyMarkdown markdown={`Load factor $\\alpha = n/m$.`} />)
+    expect(container.querySelector('.katex')).toBeTruthy()
+    expect(screen.queryByText(/\$\\alpha/)).not.toBeInTheDocument()
+  })
 })

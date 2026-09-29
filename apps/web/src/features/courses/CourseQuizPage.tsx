@@ -1,7 +1,8 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
+import { useAuth } from '../auth/use-auth.ts'
 import {
   Alert,
   BackLink,
@@ -16,6 +17,7 @@ import {
 import { getCourse } from './course-api.ts'
 import { listMaterials } from './material-api.ts'
 import { clearQuizAnswers, loadQuizAnswers, saveQuizAnswers } from './quiz-answer-storage.ts'
+import { clearStudyGeneration, loadStudyGeneration, saveStudyGeneration } from './study-generation-storage.ts'
 import { StudyMaterialPicker } from './StudyMaterialPicker.tsx'
 import { StudyVersionControls } from './StudyVersionControls.tsx'
 import { generateQuiz, reportQuizVersion, selectQuizVersion, submitQuiz } from './study-api.ts'
@@ -24,6 +26,8 @@ import { studyActionError, studyWorkingCopy } from './study-ui.ts'
 
 export function CourseQuizPage() {
   const { courseId = '' } = useParams()
+  const { user } = useAuth()
+  const userId = user?.id ?? null
   const course = useQuery({ queryKey: ['courses', courseId], queryFn: () => getCourse(courseId), retry: false })
   const materials = useQuery({
     queryKey: ['materials', courseId],
@@ -40,21 +44,29 @@ export function CourseQuizPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [picking, setPicking] = useState(true)
   const [generateForce, setGenerateForce] = useState(false)
+  const resumedGeneration = useRef(false)
 
   useEffect(() => {
     if (!quiz || attempt) {
       return
     }
-    saveQuizAnswers(quiz.id, answers)
-  }, [quiz, answers, attempt])
+    saveQuizAnswers(quiz.id, answers, userId)
+  }, [quiz, answers, attempt, userId])
 
   const generate = useMutation({
     mutationFn: ({ materialIds, force }: { materialIds: string[]; force: boolean }) => {
       setGenerateForce(force)
       setSelectedMaterialIds(materialIds)
+      setPicking(false)
+      saveStudyGeneration('quiz', courseId, {
+        materialIds,
+        force,
+        startedAt: Date.now(),
+      })
       return generateQuiz(courseId, materialIds, force)
     },
     onSuccess: (next, variables) => {
+      clearStudyGeneration('quiz', courseId)
       setError(null)
       setNotice(null)
       setPicking(false)
@@ -62,22 +74,43 @@ export function CourseQuizPage() {
       setQuiz(next)
       setAttempt(null)
       if (variables.force || next.delivery === 'CREATED') {
-        clearQuizAnswers(next.id)
+        clearQuizAnswers(next.id, userId)
         setAnswers({})
       } else {
-        setAnswers(loadQuizAnswers(next.id))
+        setAnswers(loadQuizAnswers(next.id, userId))
       }
     },
     onError: (err) => {
+      clearStudyGeneration('quiz', courseId)
       setError(studyActionError(err, 'Could not generate a quiz.'))
     },
   })
 
+  useEffect(() => {
+    if (resumedGeneration.current || !courseId || course.data?.enrolled !== true) {
+      return
+    }
+    const pending = loadStudyGeneration('quiz', courseId)
+    if (!pending) {
+      return
+    }
+    resumedGeneration.current = true
+    setNotice('Still preparing your shared quiz…')
+    generate.mutate({ materialIds: pending.materialIds, force: pending.force })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, course.data?.enrolled])
+
+  function startGeneration(materialIds: string[], force: boolean) {
+    if (generate.isPending) {
+      return
+    }
+    generate.mutate({ materialIds, force })
+  }
   const selectVersion = useMutation({
     mutationFn: (versionId: string) => selectQuizVersion(courseId, selectedMaterialIds, versionId),
     onSuccess: (next) => {
       setQuiz(next)
-      setAnswers(loadQuizAnswers(next.id))
+      setAnswers(loadQuizAnswers(next.id, userId))
       setAttempt(null)
       setError(null)
       setNotice(null)
@@ -98,7 +131,7 @@ export function CourseQuizPage() {
       setError(null)
       if (result.retired) {
         if (quiz) {
-          clearQuizAnswers(quiz.id)
+          clearQuizAnswers(quiz.id, userId)
         }
         setQuiz(null)
         setPicking(true)
@@ -129,7 +162,7 @@ export function CourseQuizPage() {
       setError(null)
       setAttempt(result)
       if (quiz) {
-        clearQuizAnswers(quiz.id)
+        clearQuizAnswers(quiz.id, userId)
       }
     },
     onError: (err) => {
@@ -194,7 +227,7 @@ export function CourseQuizPage() {
                     type="button"
                     variant="secondary"
                     disabled={generate.isPending}
-                    onClick={() => generate.mutate({ materialIds: selectedMaterialIds, force: generateForce })}
+                    onClick={() => startGeneration(selectedMaterialIds, generateForce)}
                   >
                     Try again
                   </Button>
@@ -209,6 +242,7 @@ export function CourseQuizPage() {
               <SectionLabel>Working</SectionLabel>
               <Panel className="mt-4">
                 <p className="text-muted">{studyWorkingCopy('quiz', generateForce)}</p>
+                <p className="mt-2 text-sm text-muted">You can refresh this page — preparation will continue.</p>
               </Panel>
             </section>
           ) : null}
@@ -221,7 +255,7 @@ export function CourseQuizPage() {
               pending={generate.isPending}
               initialSelectedIds={selectedMaterialIds}
               onCancel={quiz ? () => setPicking(false) : undefined}
-              onConfirm={(materialIds) => generate.mutate({ materialIds, force: false })}
+              onConfirm={(materialIds) => startGeneration(materialIds, false)}
             />
           ) : null}
 
@@ -317,7 +351,7 @@ export function CourseQuizPage() {
                         setAttempt(null)
                         setAnswers({})
                         if (quiz) {
-                          clearQuizAnswers(quiz.id)
+                          clearQuizAnswers(quiz.id, userId)
                         }
                       }}
                     >
@@ -329,7 +363,7 @@ export function CourseQuizPage() {
                       type="button"
                       variant="ghost"
                       disabled={generate.isPending}
-                      onClick={() => generate.mutate({ materialIds: selectedMaterialIds, force: true })}
+                      onClick={() => startGeneration(selectedMaterialIds, true)}
                     >
                       {nextQuizLabel(quiz)}
                     </Button>

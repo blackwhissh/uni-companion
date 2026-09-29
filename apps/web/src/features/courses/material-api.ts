@@ -69,3 +69,15 @@ export async function openMaterialPreview(materialId: string) {
   const blob = await fetchMaterialBlob(materialId)
   return URL.createObjectURL(blob)
 }
+
+/** Opens the PDF in a new tab, requesting the cited page when the browser supports `#page=`. */
+export async function openMaterialAtPage(materialId: string, pageNumber: number) {
+  const blob = await fetchMaterialBlob(materialId)
+  const page = Number.isFinite(pageNumber) && pageNumber > 0 ? Math.floor(pageNumber) : 1
+  const url = `${URL.createObjectURL(blob)}#page=${page}`
+  const opened = window.open(url, '_blank', 'noopener,noreferrer')
+  if (!opened) {
+    // Popup blocked — fall back to same-tab navigation.
+    window.location.assign(url)
+  }
+}

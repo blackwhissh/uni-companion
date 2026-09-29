@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { SectionLabel } from '../../shared/ui/ui.tsx'
+import { openMaterialAtPage } from './material-api.ts'
 import type { RagCitation } from './rag-api.ts'
 
 export function QaSources({
@@ -14,6 +15,8 @@ export function QaSources({
 }) {
   const [active, setActive] = useState<number | null>(null)
   const [expanded, setExpanded] = useState<Record<number, boolean>>({})
+  const [openingId, setOpeningId] = useState<string | null>(null)
+  const [openError, setOpenError] = useState<string | null>(null)
   const mentionCounts = useMemo(() => countMentions(answer, citations.length), [answer, citations.length])
 
   useEffect(() => {
@@ -46,13 +49,15 @@ export function QaSources({
         <div>
           <SectionLabel>Sources used</SectionLabel>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-            Passages the answer cites. Tap a numbered chip in the answer to jump here.
+            Supporting passages from the lecture PDFs. Tap a numbered chip in the answer to jump here, then open the page to verify.
           </p>
         </div>
         <Link to={`/courses/${courseId}`} className="text-sm font-medium text-accent-deep hover:underline">
           Open course materials
         </Link>
       </div>
+
+      {openError ? <p className="mt-3 text-sm text-danger">{openError}</p> : null}
 
       <ol className="mt-5 flex flex-col gap-4">
         {citations.map((citation, index) => {
@@ -62,6 +67,7 @@ export function QaSources({
           const long = citation.excerpt.length > 220
           const shown = !long || isOpen ? citation.excerpt : `${citation.excerpt.slice(0, 200).trim()}…`
           const mentions = mentionCounts[n] ?? 0
+          const opening = openingId === citation.materialId
 
           return (
             <li key={`${citation.materialId}-${citation.pageNumber}-${n}`} id={`qa-source-${n}`}>
@@ -97,19 +103,39 @@ export function QaSources({
                       </div>
                     </div>
 
-                    <blockquote className="mt-3 border-l-2 border-accent/30 pl-3 text-sm leading-relaxed text-ink-soft">
+                    <blockquote className="mt-3 border-l-2 border-accent/40 bg-accent/[0.04] py-2 pl-3 pr-2 text-sm leading-relaxed text-ink">
                       “{shown}”
                     </blockquote>
 
-                    {long ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      {long ? (
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-accent-deep hover:underline"
+                          onClick={() => setExpanded((prev) => ({ ...prev, [n]: !isOpen }))}
+                        >
+                          {isOpen ? 'Show less' : 'Show more'}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        className="mt-2 text-sm font-medium text-accent-deep hover:underline"
-                        onClick={() => setExpanded((prev) => ({ ...prev, [n]: !isOpen }))}
+                        className="text-sm font-medium text-accent-deep hover:underline disabled:opacity-60"
+                        disabled={opening}
+                        onClick={async () => {
+                          setOpenError(null)
+                          setOpeningId(citation.materialId)
+                          try {
+                            await openMaterialAtPage(citation.materialId, citation.pageNumber)
+                          } catch {
+                            setOpenError('Could not open that PDF. Try again from course materials.')
+                          } finally {
+                            setOpeningId(null)
+                          }
+                        }}
                       >
-                        {isOpen ? 'Show less' : 'Show more'}
+                        {opening ? 'Opening…' : `Open PDF at page ${citation.pageNumber}`}
                       </button>
-                    ) : null}
+                    </div>
                   </div>
                 </div>
               </article>

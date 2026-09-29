@@ -67,21 +67,11 @@ describe('material pages', () => {
     return json({ optedIn, activeCount })
   }
 
-  it('lets an enrolled student opt into peer matching and see the active count', async () => {
+  it('explains that peer matching is not available yet', async () => {
     setAccessToken('student-token')
-    let optedIn = false
-    let activeCount = 0
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string, init?: RequestInit) => {
-        if (String(url).endsWith('/active-count')) {
-          return matchStatus(optedIn, activeCount)
-        }
-        if (String(url).includes('/opt-in') && init?.method === 'PUT') {
-          optedIn = JSON.parse(String(init.body)).optedIn === true
-          activeCount = optedIn ? 1 : 0
-          return matchStatus(optedIn, activeCount)
-        }
+      vi.fn(async (url: string) => {
         if (String(url).endsWith('/materials')) {
           return json([{ ...ready, visibility: 'PUBLISHED' }])
         }
@@ -91,10 +81,8 @@ describe('material pages', () => {
 
     renderAt('/courses/course-1', <CourseHomePage />)
 
-    expect(await screen.findByText('0 other classmates matching')).toBeInTheDocument()
-    fireEvent.click(await screen.findByRole('button', { name: 'Find study partners' }))
-    expect(await screen.findByText("You're matching — no other classmates yet")).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Stop matching' })).toBeInTheDocument()
+    expect(await screen.findByText(/Study-partner matching is not available yet/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Find study partners' })).not.toBeInTheDocument()
   })
 
   it('lets an admin upload a PDF and publish it', async () => {
@@ -133,9 +121,10 @@ describe('material pages', () => {
     fireEvent.change(screen.getByLabelText('PDF'), { target: { files: [file] } })
     fireEvent.click(screen.getByRole('button', { name: 'Save PDF' }))
 
-    expect(await screen.findByText('lecture.pdf · Ready · Unpublished')).toBeInTheDocument()
+    expect(await screen.findByText('lecture.pdf · Indexed · Unpublished')).toBeInTheDocument()
+    window.confirm = vi.fn(() => true)
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
-    expect(await screen.findByText('lecture.pdf · Ready · Published')).toBeInTheDocument()
+    expect(await screen.findByText('lecture.pdf · Indexed · Published')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Publish' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(await screen.findByText('No materials yet.')).toBeInTheDocument()

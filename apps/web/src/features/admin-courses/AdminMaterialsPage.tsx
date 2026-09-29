@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { Field } from '../auth/AuthForm.tsx'
 import { useAuth } from '../auth/use-auth.ts'
 import { ApiError } from '../../shared/api/identity-client.ts'
@@ -46,8 +46,11 @@ export function AdminMaterialsPage() {
   const [file, setFile] = useState<File | null>(null)
   const [fileKey, setFileKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
   const canManage = course.data?.owned === true || platformAdmin
+  const courseUnpublished = course.data?.visibility === 'UNPUBLISHED'
 
   function resetForm() {
     setTitle('')
@@ -61,6 +64,7 @@ export function AdminMaterialsPage() {
     onSuccess: async () => {
       resetForm()
       setFormOpen(false)
+      setNotice('PDF uploaded. Wait until status is Indexed, then publish.')
       await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
     },
     onError: (err) => {
@@ -69,23 +73,34 @@ export function AdminMaterialsPage() {
   })
 
   const visibility = useMutation({
-    mutationFn: ({ id, next }: { id: string; next: Material['visibility'] }) => setMaterialVisibility(id, next),
-    onSuccess: async () => {
+    mutationFn: ({ id, next }: { id: string; next: Material['visibility']; title: string }) =>
+      setMaterialVisibility(id, next),
+    onSuccess: async (_data, variables) => {
       setError(null)
+      setBusyId(null)
+      setNotice(
+        variables.next === 'PUBLISHED'
+          ? `Published “${variables.title}”. Enrolled students can use it in study modes.`
+          : `Unpublished “${variables.title}”. Students can no longer select it.`,
+      )
       await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
     },
     onError: (err) => {
+      setBusyId(null)
       setError(err instanceof ApiError ? err.message : 'Could not update visibility.')
     },
   })
 
   const remove = useMutation({
-    mutationFn: deleteMaterial,
-    onSuccess: async () => {
+    mutationFn: ({ id }: { id: string; title: string }) => deleteMaterial(id),
+    onSuccess: async (_data, variables) => {
       setError(null)
+      setBusyId(null)
+      setNotice(`Deleted “${variables.title}”.`)
       await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
     },
     onError: (err) => {
+      setBusyId(null)
       setError(err instanceof ApiError ? err.message : 'Could not delete the material.')
     },
   })
@@ -104,6 +119,48 @@ export function AdminMaterialsPage() {
     setFormOpen(false)
   }
 
+  function requestPublishToggle(material: Material) {
+    const publishing = material.visibility !== 'PUBLISHED'
+    if (publishing && material.processingStatus !== 'READY') {
+      setError('Wait until this PDF is Indexed before publishing.')
+      return
+    }
+    if (publishing) {
+      const courseNote = courseUnpublished
+        ? '\n\nNote: this course is still unpublished, so students cannot open the course yet even after you publish the PDF.'
+        : ''
+      if (
+        !window.confirm(
+          `Publish “${material.title}” for enrolled students?${courseNote}`,
+        )
+      ) {
+        return
+      }
+    } else if (!window.confirm(`Unpublish “${material.title}”? Students will lose access in study modes.`)) {
+      return
+    }
+    setNotice(null)
+    setBusyId(material.id)
+    visibility.mutate({
+      id: material.id,
+      next: publishing ? 'PUBLISHED' : 'UNPUBLISHED',
+      title: material.title,
+    })
+  }
+
+  function requestDelete(material: Material) {
+    if (
+      !window.confirm(
+        `Delete “${material.title}” permanently? This cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    setNotice(null)
+    setBusyId(material.id)
+    remove.mutate({ id: material.id, title: material.title })
+  }
+
   return (
     <Page>
       <BackLink to="/admin/courses">Course console</BackLink>
@@ -111,16 +168,29 @@ export function AdminMaterialsPage() {
         <PageHeader
           eyebrow="Materials"
           title={course.data?.title ?? 'Materials'}
-          description="Upload lecture PDFs, wait until processing is Ready, then publish so enrolled students can study. Click a row or Download to save the original PDF. Professors manage their own materials; platform admins can upload, publish, unpublish, or delete on any course."
+          description="Upload lecture PDFs, wait until they are Indexed, then publish so enrolled students can study. Indexed means the PDF is searchable — it is not student-visible until Published."
           actions={
-            canManage && !formOpen ? (
-              <Button type="button" onClick={() => setFormOpen(true)}>
-                Upload PDF
-              </Button>
-            ) : null
+            <div className="flex flex-wrap gap-2">
+              {course.data?.visibility === 'PUBLISHED' ? (
+                <ButtonLinkish to={`/courses/${courseId}`}>Preview as student</ButtonLinkish>
+              ) : null}
+              {canManage && !formOpen ? (
+                <Button type="button" onClick={() => setFormOpen(true)}>
+                  Upload PDF
+                </Button>
+              ) : null}
+            </div>
           }
         />
       </div>
+
+      {courseUnpublished ? (
+        <div className="mt-6">
+          <Alert>
+            This course is unpublished. Publishing a PDF alone will not open the course for students until you publish the course.
+          </Alert>
+        </div>
+      ) : null}
 
       {canManage && formOpen ? (
         <Panel className="mt-8 animate-rise">
@@ -160,11 +230,16 @@ export function AdminMaterialsPage() {
           <Alert>{error}</Alert>
         </div>
       ) : null}
+      {notice ? (
+        <Panel className="mt-6">
+          <p className="text-sm text-ink-soft">{notice}</p>
+        </Panel>
+      ) : null}
 
       {materials.data?.length === 0 ? (
         <EmptyState
           title="No materials yet."
-          description="Use Upload PDF to add a lecture file. Processing and visibility are separate — Ready does not mean students can see it until you Publish."
+          description="Use Upload PDF to add a lecture file. Indexed means searchable; Published means students can select it."
         />
       ) : null}
 
@@ -172,87 +247,116 @@ export function AdminMaterialsPage() {
         <section className="mt-10 animate-rise-delay">
           <SectionLabel>Library</SectionLabel>
           <ul className="mt-4 flex flex-col gap-3">
-            {materials.data.map((material) => (
-              <li key={material.id} className="surface-panel relative rounded-2xl px-5 py-4 transition duration-300 hover:-translate-y-0.5 hover:border-accent/35">
-                <button
-                  type="button"
-                  aria-label={`Download ${material.title}`}
-                  onClick={() =>
-                    downloadMaterial(material).catch((err) => {
-                      setError(err instanceof ApiError ? err.message : 'Could not download the PDF.')
-                    })
-                  }
-                  className="absolute inset-0 cursor-pointer rounded-2xl"
-                />
-                <div className="pointer-events-none relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-medium text-ink">{material.title}</p>
-                    <p className="mt-1 text-sm text-muted">
-                      {material.fileName} · {labelFor(material.processingStatus)} ·{' '}
-                      {material.visibility === 'PUBLISHED' ? 'Published' : 'Unpublished'}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <StatusPill
-                        tone={processingTone(material.processingStatus)}
-                        pulse={
-                          material.processingStatus === 'PROCESSING' || material.processingStatus === 'UPLOADED'
-                        }
-                      >
-                        {labelFor(material.processingStatus)}
-                      </StatusPill>
-                      <StatusPill tone={material.visibility === 'PUBLISHED' ? 'ok' : 'warn'}>
+            {materials.data.map((material) => {
+              const indexed = material.processingStatus === 'READY'
+              const rowBusy = busyId === material.id && (visibility.isPending || remove.isPending)
+              return (
+                <li
+                  key={material.id}
+                  className="surface-panel relative rounded-2xl px-5 py-4 transition duration-300 hover:-translate-y-0.5 hover:border-accent/35"
+                >
+                  <button
+                    type="button"
+                    aria-label={`Download ${material.title}`}
+                    onClick={() =>
+                      downloadMaterial(material).catch((err) => {
+                        setError(err instanceof ApiError ? err.message : 'Could not download the PDF.')
+                      })
+                    }
+                    className="absolute inset-0 cursor-pointer rounded-2xl"
+                  />
+                  <div className="pointer-events-none relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-medium text-ink">{material.title}</p>
+                      <p className="mt-1 text-sm text-muted">
+                        {material.fileName} · {labelFor(material.processingStatus)} ·{' '}
                         {material.visibility === 'PUBLISHED' ? 'Published' : 'Unpublished'}
-                      </StatusPill>
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <StatusPill
+                          tone={processingTone(material.processingStatus)}
+                          pulse={
+                            material.processingStatus === 'PROCESSING' || material.processingStatus === 'UPLOADED'
+                          }
+                        >
+                          {labelFor(material.processingStatus)}
+                        </StatusPill>
+                        <StatusPill tone={material.visibility === 'PUBLISHED' ? 'ok' : 'warn'}>
+                          {material.visibility === 'PUBLISHED' ? 'Published' : 'Unpublished'}
+                        </StatusPill>
+                      </div>
+                      {indexed && material.visibility !== 'PUBLISHED' ? (
+                        <p className="mt-2 text-xs text-muted">
+                          Indexed for search — students cannot see it until you Publish.
+                        </p>
+                      ) : null}
+                      {material.visibility === 'PUBLISHED' && courseUnpublished ? (
+                        <p className="mt-2 text-xs text-warn">
+                          Material is published, but the course itself is still unpublished.
+                        </p>
+                      ) : null}
+                      {material.failureReason ? (
+                        <p className="mt-2 text-sm text-danger">{material.failureReason}</p>
+                      ) : null}
                     </div>
-                    {material.failureReason ? (
-                      <p className="mt-2 text-sm text-danger">{material.failureReason}</p>
-                    ) : null}
-                  </div>
-                  <div className="pointer-events-auto flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() =>
-                        downloadMaterial(material).catch((err) => {
-                          setError(err instanceof ApiError ? err.message : 'Could not download the PDF.')
-                        })
-                      }
-                    >
-                      Download
-                    </Button>
-                    {canManage ? (
+                    <div className="pointer-events-auto flex flex-wrap gap-2">
                       <Button
                         type="button"
-                        variant={material.visibility === 'PUBLISHED' ? 'warn' : 'success'}
-                        disabled={visibility.isPending}
+                        variant="secondary"
                         onClick={() =>
-                          visibility.mutate({
-                            id: material.id,
-                            next: material.visibility === 'PUBLISHED' ? 'UNPUBLISHED' : 'PUBLISHED',
+                          downloadMaterial(material).catch((err) => {
+                            setError(err instanceof ApiError ? err.message : 'Could not download the PDF.')
                           })
                         }
                       >
-                        {material.visibility === 'PUBLISHED' ? 'Unpublish' : 'Publish'}
+                        Download
                       </Button>
-                    ) : null}
-                    {canManage ? (
-                      <Button
-                        type="button"
-                        variant="danger"
-                        disabled={remove.isPending}
-                        onClick={() => remove.mutate(material.id)}
-                      >
-                        Delete
-                      </Button>
-                    ) : null}
+                      {canManage ? (
+                        <Button
+                          type="button"
+                          variant={material.visibility === 'PUBLISHED' ? 'warn' : 'success'}
+                          disabled={rowBusy || visibility.isPending || (!indexed && material.visibility !== 'PUBLISHED')}
+                          title={
+                            !indexed && material.visibility !== 'PUBLISHED'
+                              ? 'Wait until Indexed before publishing'
+                              : undefined
+                          }
+                          onClick={() => requestPublishToggle(material)}
+                        >
+                          {material.visibility === 'PUBLISHED' ? 'Unpublish' : 'Publish'}
+                        </Button>
+                      ) : null}
+                      {canManage ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          className="sm:ml-2"
+                          disabled={rowBusy || remove.isPending}
+                          onClick={() => requestDelete(material)}
+                        >
+                          Delete
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         </section>
       ) : null}
     </Page>
+  )
+}
+
+function ButtonLinkish({ to, children }: { to: string; children: string }) {
+  return (
+    <Link
+      to={to}
+      className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-ink/20 bg-white/70 px-3.5 py-2 text-sm font-medium text-ink transition duration-200 hover:border-ink/40 hover:bg-white"
+    >
+      {children}
+    </Link>
   )
 }
 
@@ -263,7 +367,7 @@ function labelFor(status: Material['processingStatus']) {
     case 'PROCESSING':
       return 'Processing'
     case 'READY':
-      return 'Ready'
+      return 'Indexed'
     case 'FAILED':
       return 'Failed'
   }

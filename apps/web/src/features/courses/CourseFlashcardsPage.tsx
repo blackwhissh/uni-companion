@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import {
@@ -14,6 +14,7 @@ import {
 } from '../../shared/ui/ui.tsx'
 import { getCourse } from './course-api.ts'
 import { listMaterials } from './material-api.ts'
+import { clearStudyGeneration, loadStudyGeneration, saveStudyGeneration } from './study-generation-storage.ts'
 import { StudyMaterialPicker } from './StudyMaterialPicker.tsx'
 import { StudyVersionControls } from './StudyVersionControls.tsx'
 import { generateFlashcards, reportFlashcardVersion, selectFlashcardVersion } from './study-api.ts'
@@ -38,16 +39,24 @@ export function CourseFlashcardsPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [picking, setPicking] = useState(true)
   const [generateForce, setGenerateForce] = useState(false)
+  const resumedGeneration = useRef(false)
 
   const generate = useMutation({
     mutationFn: ({ materialIds, force }: { materialIds: string[]; force: boolean }) => {
       setGenerateForce(force)
       setSelectedMaterialIds(materialIds)
+      setPicking(false)
+      saveStudyGeneration('flashcards', courseId, {
+        materialIds,
+        force,
+        startedAt: Date.now(),
+      })
       return generateFlashcards(courseId, materialIds, force)
     },
     onSuccess: (next: FlashcardDeck, variables) => {
+      clearStudyGeneration('flashcards', courseId)
       setError(null)
-      setNotice(null)
+      setNotice(next.cards.length > 0 ? `This shared deck has ${next.cards.length} cards.` : null)
       setPicking(false)
       setSelectedMaterialIds(variables.materialIds)
       setDeck(next)
@@ -55,9 +64,24 @@ export function CourseFlashcardsPage() {
       setRevealed(false)
     },
     onError: (err) => {
+      clearStudyGeneration('flashcards', courseId)
       setError(studyActionError(err, 'Could not generate flashcards.'))
     },
   })
+
+  useEffect(() => {
+    if (resumedGeneration.current || !courseId || course.data?.enrolled !== true) {
+      return
+    }
+    const pending = loadStudyGeneration('flashcards', courseId)
+    if (!pending) {
+      return
+    }
+    resumedGeneration.current = true
+    setNotice('Still preparing your shared deck…')
+    generate.mutate({ materialIds: pending.materialIds, force: pending.force })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, course.data?.enrolled])
 
   const selectVersion = useMutation({
     mutationFn: (versionId: string) => selectFlashcardVersion(courseId, selectedMaterialIds, versionId),
@@ -66,7 +90,7 @@ export function CourseFlashcardsPage() {
       setIndex(0)
       setRevealed(false)
       setError(null)
-      setNotice(null)
+      setNotice(`Opened deck ${next.version} · ${next.cards.length} cards.`)
     },
     onError: (err) => {
       setError(err instanceof ApiError ? err.message : 'Could not open that deck version.')
@@ -104,6 +128,17 @@ export function CourseFlashcardsPage() {
   const cards = deck?.cards ?? []
   const card = cards[index]
   const showPicker = picking || (!deck && !generate.isPending)
+  const sourceTitles = readyMaterials
+    .filter((material) => selectedMaterialIds.includes(material.id))
+    .map((material) => material.title)
+  const generating = generate.isPending
+
+  function startGeneration(materialIds: string[], force: boolean) {
+    if (generating) {
+      return
+    }
+    generate.mutate({ materialIds, force })
+  }
 
   function go(next: number) {
     if (next < 0 || next >= cards.length) {
@@ -114,7 +149,7 @@ export function CourseFlashcardsPage() {
   }
 
   useEffect(() => {
-    if (!card || picking || generate.isPending) {
+    if (!card || picking || generating) {
       return
     }
     function onKey(event: KeyboardEvent) {
@@ -129,10 +164,7 @@ export function CourseFlashcardsPage() {
       ) {
         return
       }
-      if (event.key === ' ') {
-        event.preventDefault()
-        setRevealed((value) => !value)
-      } else if (event.key === 'Enter') {
+      if (event.key === ' ' || event.key === 'Enter') {
         event.preventDefault()
         setRevealed((value) => !value)
       } else if (event.key === 'ArrowRight') {
@@ -145,7 +177,7 @@ export function CourseFlashcardsPage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [card, index, cards.length, picking, generate.isPending])
+  }, [card, index, cards.length, picking, generating])
 
   return (
     <Page>
@@ -157,7 +189,7 @@ export function CourseFlashcardsPage() {
           description="Choose materials and study a shared deck. Existing versions are reused before a new one is created."
           actions={
             enrolled && readyCount > 0 && deck && !picking ? (
-              <Button type="button" variant="secondary" disabled={generate.isPending} onClick={() => setPicking(true)}>
+              <Button type="button" variant="secondary" disabled={generating} onClick={() => setPicking(true)}>
                 Change materials
               </Button>
             ) : null
@@ -191,8 +223,8 @@ export function CourseFlashcardsPage() {
                   <Button
                     type="button"
                     variant="secondary"
-                    disabled={generate.isPending}
-                    onClick={() => generate.mutate({ materialIds: selectedMaterialIds, force: generateForce })}
+                    disabled={generating}
+                    onClick={() => startGeneration(selectedMaterialIds, generateForce)}
                   >
                     Try again
                   </Button>
@@ -200,49 +232,58 @@ export function CourseFlashcardsPage() {
               ) : null}
             </div>
           ) : null}
-          {notice ? <Panel className="mt-6"><p className="text-sm text-ink-soft">{notice}</p></Panel> : null}
+          {notice ? (
+            <Panel className="mt-6">
+              <p className="text-sm text-ink-soft">{notice}</p>
+            </Panel>
+          ) : null}
 
-          {generate.isPending ? (
+          {generating ? (
             <section className="mt-8 animate-pulse-soft" aria-live="polite">
               <SectionLabel>Working</SectionLabel>
               <Panel className="mt-4">
                 <p className="text-muted">{studyWorkingCopy('deck', generateForce)}</p>
+                <p className="mt-2 text-sm text-muted">You can refresh this page — preparation will continue.</p>
               </Panel>
             </section>
           ) : null}
 
-          {showPicker && !generate.isPending ? (
+          {showPicker && !generating ? (
             <StudyMaterialPicker
               materials={readyMaterials}
               description="Select the lecture PDFs to study. You will resume your deck or receive the first shared version for this exact selection."
               confirmLabel={deck ? 'Open selected deck' : 'Start flashcards'}
-              pending={generate.isPending}
+              pending={generating}
               initialSelectedIds={selectedMaterialIds}
               onCancel={deck ? () => setPicking(false) : undefined}
-              onConfirm={(materialIds) => generate.mutate({ materialIds, force: false })}
+              onConfirm={(materialIds) => startGeneration(materialIds, false)}
             />
           ) : null}
 
-          {deck && cards.length === 0 && !generate.isPending && !picking ? (
+          {deck && cards.length === 0 && !generating && !picking ? (
             <EmptyState
               title="This deck has no cards"
               description="Try generating again, or choose a different set of materials."
             />
           ) : null}
 
-          {deck && card && !generate.isPending && !picking ? (
+          {deck && card && !generating && !picking ? (
             <section className="mt-8 animate-rise-delay">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <SectionLabel>
-                  Shared deck {deck.version} of {deck.availableVersions} · Card {index + 1} of {cards.length}
+                  Shared deck {deck.version} of {deck.availableVersions} · {cards.length} cards · Card {index + 1} of{' '}
+                  {cards.length}
                 </SectionLabel>
                 <p className="text-xs text-muted">Space / Enter flip · ← → navigate · Enter on Next advances</p>
               </div>
+              {sourceTitles.length > 0 ? (
+                <p className="mt-2 text-sm text-muted">Sources: {sourceTitles.join(' · ')}</p>
+              ) : null}
               <StudyVersionControls
                 noun="deck"
                 delivery={deck.delivery}
                 versions={deck.versions}
-                busy={selectVersion.isPending || reportVersion.isPending}
+                busy={selectVersion.isPending || reportVersion.isPending || generating}
                 onSelect={(versionId) => selectVersion.mutate(versionId)}
                 onReport={() => reportVersion.mutate()}
               />
@@ -278,20 +319,15 @@ export function CourseFlashcardsPage() {
                 <Button type="button" variant="ghost" disabled={index === 0} onClick={() => go(index - 1)}>
                   Previous
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={index >= cards.length - 1}
-                  onClick={() => go(index + 1)}
-                >
+                <Button type="button" variant="ghost" disabled={index >= cards.length - 1} onClick={() => go(index + 1)}>
                   Next
                 </Button>
                 {selectedMaterialIds.length > 0 ? (
                   <Button
                     type="button"
                     variant="ghost"
-                    disabled={generate.isPending}
-                    onClick={() => generate.mutate({ materialIds: selectedMaterialIds, force: true })}
+                    disabled={generating}
+                    onClick={() => startGeneration(selectedMaterialIds, true)}
                   >
                     {nextDeckLabel(deck)}
                   </Button>

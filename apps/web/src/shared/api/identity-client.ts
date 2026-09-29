@@ -17,16 +17,39 @@ export class ApiError extends Error {
 type TokenResponse = { token: string }
 
 let refreshInFlight: Promise<boolean> | null = null
+/** Set after logout so a racing 401 cannot silently restore the previous session. */
+let refreshBlocked = false
+
+export function blockTokenRefresh() {
+  refreshBlocked = true
+  refreshInFlight = null
+}
+
+export function allowTokenRefresh() {
+  refreshBlocked = false
+}
 
 export async function tryRefreshAccessToken(): Promise<boolean> {
+  if (refreshBlocked) {
+    clearAccessToken()
+    return false
+  }
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       try {
+        if (refreshBlocked) {
+          clearAccessToken()
+          return false
+        }
         const response = await fetch(`${identityApiUrl}/api/auth/refresh`, {
           method: 'POST',
           credentials: 'include',
         })
         if (!response.ok) {
+          clearAccessToken()
+          return false
+        }
+        if (refreshBlocked) {
           clearAccessToken()
           return false
         }

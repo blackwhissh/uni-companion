@@ -148,12 +148,12 @@ From your course materials, consensus keeps replicas consistent.
 
     renderAt('/courses/course-1/qa', <CourseQaPage />)
 
-    expect(await screen.findByText('2 of 2 selected')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
-    expect(screen.getByText('0 of 2 selected')).toBeInTheDocument()
+    expect(await screen.findByText('0 of 2 selected')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Use selected materials' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
     expect(screen.getByText('2 of 2 selected')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+    expect(screen.getByText('0 of 2 selected')).toBeInTheDocument()
   })
 
   it('keeps the current Q&A material selection when changing materials', async () => {
@@ -168,8 +168,7 @@ From your course materials, consensus keeps replicas consistent.
 
     renderAt('/courses/course-1/qa', <CourseQaPage />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Clear all' }))
-    fireEvent.click(screen.getByLabelText(/Lecture 1/))
+    fireEvent.click(await screen.findByLabelText(/Lecture 1/))
     fireEvent.click(screen.getByRole('button', { name: 'Use selected materials' }))
     expect(screen.getByText('Searching 1 selected material.')).toBeInTheDocument()
 

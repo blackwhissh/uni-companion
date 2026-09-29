@@ -2,6 +2,7 @@ package com.unicompanion.identity.api;
 
 import com.unicompanion.identity.application.AccountService;
 import com.unicompanion.identity.application.AccountView;
+import com.unicompanion.identity.application.RefreshTokenDenylist;
 import com.unicompanion.identity.application.TokenService;
 import com.unicompanion.identity.config.IdentityProperties;
 import com.unicompanion.identity.domain.IdentityException;
@@ -28,16 +29,19 @@ public class AuthController {
     private final TokenService tokens;
     private final JwtDecoder jwtDecoder;
     private final IdentityProperties properties;
+    private final RefreshTokenDenylist refreshDenylist;
 
     public AuthController(
             AccountService accounts,
             TokenService tokens,
             JwtDecoder jwtDecoder,
-            IdentityProperties properties) {
+            IdentityProperties properties,
+            RefreshTokenDenylist refreshDenylist) {
         this.accounts = accounts;
         this.tokens = tokens;
         this.jwtDecoder = jwtDecoder;
         this.properties = properties;
+        this.refreshDenylist = refreshDenylist;
     }
 
     @PostMapping("/register")
@@ -73,7 +77,13 @@ public class AuthController {
             if (!TokenService.REFRESH.equals(jwt.getClaimAsString(TokenService.CLAIM_TOKEN_USE))) {
                 throw IdentityException.unauthenticated();
             }
+            if (refreshDenylist.isRevoked(jwt)) {
+                RefreshCookies.clear(httpRequest, httpResponse);
+                throw IdentityException.unauthenticated();
+            }
             AccountView account = accounts.get(UUID.fromString(jwt.getSubject()));
+            // Rotate: revoke the presented refresh token before issuing a new pair.
+            refreshDenylist.revoke(jwt);
             return issueSession(account, httpRequest, httpResponse);
         } catch (JwtException | IllegalArgumentException ex) {
             RefreshCookies.clear(httpRequest, httpResponse);
@@ -84,6 +94,17 @@ public class AuthController {
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        String refreshToken = RefreshCookies.read(httpRequest);
+        if (refreshToken != null) {
+            try {
+                Jwt jwt = jwtDecoder.decode(refreshToken);
+                if (TokenService.REFRESH.equals(jwt.getClaimAsString(TokenService.CLAIM_TOKEN_USE))) {
+                    refreshDenylist.revoke(jwt);
+                }
+            } catch (JwtException | IllegalArgumentException ignored) {
+                // Still clear the cookie below.
+            }
+        }
         RefreshCookies.clear(httpRequest, httpResponse);
     }
 

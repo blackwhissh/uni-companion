@@ -72,4 +72,23 @@ class CitationTextTest {
                 .contains("Coordination: Simpler → A major design problem")
                 .doesNotContain("Property Centralized Distributed State Mostly");
     }
+
+    @Test
+    void prefersSentenceContainingNumericClaimFromAnswer() {
+        String content = """
+                Chapter 4 — Sorting. Quicksort often uses a random pivot in textbooks. \
+                In these exercises, Quicksort always uses median-of-three pivoting when n >= 17. \
+                Insertion sort is preferred when n < 17 because the overhead of Quicksort dominates.
+                """;
+
+        String excerpt = CitationText.excerpt(
+                content,
+                "When is insertion sort used?",
+                "Insertion sort is used when n < 17."
+        );
+
+        assertThat(excerpt)
+                .contains("n < 17")
+                .doesNotContain("random pivot in textbooks");
+    }
 }

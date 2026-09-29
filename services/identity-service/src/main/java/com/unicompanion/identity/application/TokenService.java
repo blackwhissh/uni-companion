@@ -46,6 +46,7 @@ public class TokenService {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(ttl);
         JwtClaimsSet claims = JwtClaimsSet.builder()
+                .id(java.util.UUID.randomUUID().toString())
                 .subject(account.id().toString())
                 .issuedAt(now)
                 .expiresAt(expiresAt)

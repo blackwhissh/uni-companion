@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setAccessToken } from '../../shared/api/access-token.ts'
+import { AuthProvider } from '../auth/AuthProvider.tsx'
 import { CourseQuizPage } from './CourseQuizPage.tsx'
 import type { Course } from './course-api.ts'
 import type { Material } from './material-api.ts'
@@ -27,14 +28,24 @@ const material: Material = {
   processingStatus: 'READY',
 }
 
+const student = {
+  id: 'student-1',
+  email: 'student@example.com',
+  displayName: 'Student',
+  interests: '',
+  roles: ['STUDENT'],
+}
+
 function renderAt(path: string, ui: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/courses/:courseId/quiz" element={ui} />
-        </Routes>
+        <AuthProvider initialUser={student} initialReady>
+          <Routes>
+            <Route path="/courses/:courseId/quiz" element={ui} />
+          </Routes>
+        </AuthProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )

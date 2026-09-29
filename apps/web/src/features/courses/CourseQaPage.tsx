@@ -222,10 +222,13 @@ export function CourseQaPage() {
               initialSelectedIds={selectedMaterialIds}
               onCancel={selectedMaterialIds.length > 0 ? () => setPickingMaterials(false) : undefined}
               onConfirm={(materialIds) => {
+                const recovering = materialNotice != null
                 setSelectedMaterialIds(materialIds)
                 setPickingMaterials(false)
-                setResult(null)
-                setAskedQuestion(null)
+                if (!recovering) {
+                  setResult(null)
+                  setAskedQuestion(null)
+                }
                 setError(null)
                 setMaterialNotice(null)
               }}
@@ -302,7 +305,7 @@ export function CourseQaPage() {
             </section>
           ) : null}
 
-          {!pickingMaterials && result ? (
+          {result ? (
             <section className={`mt-10 ${ask.isPending ? 'opacity-60' : 'animate-rise-delay'}`}>
               {askedQuestion ? (
                 <div className="mb-6 rounded-2xl border border-line/80 bg-mist/60 px-5 py-4">

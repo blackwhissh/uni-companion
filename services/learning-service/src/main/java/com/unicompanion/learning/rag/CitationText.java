@@ -238,7 +238,9 @@ final class CitationText {
         }
         String lower = sentence.toLowerCase(Locale.ROOT);
         if (lower.contains(" is a ") || lower.contains(" are ") || lower.contains(" means ")
-                || lower.contains(" defined as ") || lower.contains(" refers to ")) {
+                || lower.contains(" defined as ") || lower.contains(" refers to ")
+                || lower.contains(" always ") || lower.contains(" when ")
+                || lower.contains(" used for ") || lower.contains(" used in ")) {
             score += 4;
         }
         if (lower.contains(" for example ") || lower.contains(" such as ")) {
@@ -259,7 +261,15 @@ final class CitationText {
             return out;
         }
         for (String raw : text.toLowerCase(Locale.ROOT).split("[^a-z0-9]+")) {
-            if (raw.length() < 4 || STOP.contains(raw)) {
+            if (raw.isEmpty()) {
+                continue;
+            }
+            // Keep numbers (e.g. 17) and short technical tokens so excerpts match the claim.
+            if (raw.chars().allMatch(Character::isDigit)) {
+                out.add(raw);
+                continue;
+            }
+            if (raw.length() < 3 || STOP.contains(raw)) {
                 continue;
             }
             out.add(raw);

@@ -43,17 +43,27 @@ class CitedSourcesTest {
     }
 
     @Test
-    void fallsBackToAllChunksWhenAnswerHasNoCitations() {
+    void injectsGroundingChipWhenAnswerHasNoCitations() {
         List<ChatModel.RetrievedChunk> retrieved = List.of(chunk("A", 1, "alpha"), chunk("B", 2, "beta"));
 
-        CitedSources.Result result = CitedSources.select("No markers here.", retrieved);
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        Networks move packets between hosts.
+
+                        ## Explanation
+                        Details follow.
+                        """,
+                retrieved
+        );
 
         assertThat(result.chunks()).hasSize(2);
-        assertThat(result.answer()).isEqualTo("No markers here.");
+        assertThat(result.answer()).contains("[1]");
+        assertThat(result.answer()).contains("Networks move packets between hosts. [1]");
     }
 
     @Test
-    void stripsOutOfRangeMarkersAndKeepsValidOnesRenumbered() {
+    void stripsPageNumberBracketsButKeepsValidExcerptCitations() {
         List<ChatModel.RetrievedChunk> retrieved = List.of(
                 chunk("A", 1, "alpha"),
                 chunk("B", 2, "beta"),
@@ -62,7 +72,7 @@ class CitedSourcesTest {
         );
 
         CitedSources.Result result = CitedSources.select(
-                "See [5] and also [2] for details.",
+                "See [17] and also [2] for details.",
                 retrieved
         );
 
@@ -72,13 +82,23 @@ class CitedSourcesTest {
     }
 
     @Test
-    void stripsInvalidMarkersWhenNoneAreInRange() {
-        List<ChatModel.RetrievedChunk> retrieved = List.of(chunk("A", 1, "alpha"));
+    void recoversWhenOnlyPageNumberBracketsWereUsed() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(chunk("Lecture 3", 12, "median of three"));
 
-        CitedSources.Result result = CitedSources.select("Claim from [9] only.", retrieved);
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        Insertion sort is used when n < 17.
 
-        assertThat(result.chunks()).hasSize(1);
-        assertThat(result.answer()).isEqualTo("Claim from only.");
+                        ## Explanation
+                        The notes mention median-of-three for Quicksort.
+                        """.replace("n < 17", "n < 17 [17]"),
+                retrieved
+        );
+
+        assertThat(result.chunks()).isNotEmpty();
+        assertThat(result.answer()).contains("[1]");
+        assertThat(result.answer()).doesNotContain("[17]");
     }
 
     private static ChatModel.RetrievedChunk chunk(String title, int page, String content) {

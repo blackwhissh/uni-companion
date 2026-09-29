@@ -1,16 +1,25 @@
-import { NavLink, Link } from 'react-router'
+import { NavLink, Link, useNavigate } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../features/auth/use-auth.ts'
 import { homePathFor } from '../features/auth/home-path.ts'
 import { Button } from '../shared/ui/ui.tsx'
 
 export function AppHeader() {
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const home = user ? homePathFor(user.roles) : '/'
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `rounded-md px-2.5 py-1.5 text-sm font-medium transition ${
       isActive ? 'bg-mist text-ink' : 'text-muted hover:bg-mist/70 hover:text-ink'
     }`
+
+  async function onLogout() {
+    await logout()
+    queryClient.clear()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <header className="sticky top-0 z-20 border-b border-line/80 bg-paper/80 backdrop-blur-md">
@@ -27,7 +36,9 @@ export function AppHeader() {
         <nav className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
           {user ? (
             <>
-              <span className="mr-1 hidden text-sm text-muted sm:inline">{user.displayName}</span>
+              <span className="mr-1 max-w-[9rem] truncate text-sm text-muted" title={user.displayName}>
+                {user.displayName}
+              </span>
               <NavLink to="/courses" className={linkClass}>
                 Courses
               </NavLink>
@@ -39,7 +50,7 @@ export function AppHeader() {
               <NavLink to="/profile" className={linkClass}>
                 Profile
               </NavLink>
-              <Button type="button" variant="ghost" className="!px-2.5" onClick={logout}>
+              <Button type="button" variant="ghost" className="!px-2.5" onClick={() => void onLogout()}>
                 Log out
               </Button>
             </>

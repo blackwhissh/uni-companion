@@ -1,8 +1,9 @@
 import { getAccessToken, setAccessToken } from '../../shared/api/access-token.ts'
-import { identityFetch, tryRefreshAccessToken } from '../../shared/api/identity-client.ts'
+import { allowTokenRefresh, blockTokenRefresh, identityFetch, tryRefreshAccessToken } from '../../shared/api/identity-client.ts'
 import type { AuthResponse, User } from './types.ts'
 
 export function registerAccount(input: { email: string; password: string; displayName: string }) {
+  allowTokenRefresh()
   return identityFetch<AuthResponse>('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify(input),
@@ -10,6 +11,7 @@ export function registerAccount(input: { email: string; password: string; displa
 }
 
 export function loginAccount(input: { email: string; password: string }) {
+  allowTokenRefresh()
   return identityFetch<AuthResponse>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({
@@ -19,8 +21,15 @@ export function loginAccount(input: { email: string; password: string }) {
   })
 }
 
-export function logoutAccount() {
-  return identityFetch<void>('/api/auth/logout', { method: 'POST' }).catch(() => undefined)
+export async function logoutAccount() {
+  blockTokenRefresh()
+  try {
+    await identityFetch<void>('/api/auth/logout', { method: 'POST' }, false)
+  } catch {
+    // Still clear local session below — lab PCs must not keep the previous user.
+  } finally {
+    setAccessToken(null)
+  }
 }
 
 export function updateProfile(input: { displayName: string; interests: string }) {
@@ -35,6 +44,7 @@ export function fetchMe() {
 }
 
 export async function restoreSession(): Promise<AuthResponse | null> {
+  allowTokenRefresh()
   const existing = getAccessToken()
   if (existing) {
     try {

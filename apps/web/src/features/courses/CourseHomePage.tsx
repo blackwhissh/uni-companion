@@ -16,7 +16,6 @@ import {
 import { enrollInCourse, getCourse, unenrollFromCourse } from './course-api.ts'
 import { downloadMaterial, listMaterials, openMaterialPreview } from './material-api.ts'
 import type { Material } from './material-api.ts'
-import { getMatchStatus, setMatchOptIn } from './match-api.ts'
 
 export function CourseHomePage() {
   const { courseId = '' } = useParams()
@@ -28,16 +27,9 @@ export function CourseHomePage() {
     enabled: course.data?.enrolled === true,
     retry: false,
   })
-  const match = useQuery({
-    queryKey: ['match', courseId],
-    queryFn: () => getMatchStatus(courseId),
-    enabled: course.data?.enrolled === true,
-    retry: false,
-  })
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['courses'] })
     await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
-    await queryClient.invalidateQueries({ queryKey: ['match', courseId] })
   }
   const [fileError, setFileError] = useState<string | null>(null)
   const [actionNotice, setActionNotice] = useState<string | null>(null)
@@ -55,13 +47,6 @@ export function CourseHomePage() {
     onSuccess: async () => {
       setActionNotice('Unenrolled.')
       await refresh()
-    },
-  })
-  const toggleMatch = useMutation({
-    mutationFn: (optedIn: boolean) => setMatchOptIn(courseId, optedIn),
-    onSuccess: (status) => {
-      queryClient.setQueryData(['match', courseId], status)
-      setActionNotice(status.optedIn ? 'Matching is on.' : 'Matching stopped.')
     },
   })
   const unavailable = course.error instanceof ApiError && course.error.status === 404
@@ -114,7 +99,7 @@ export function CourseHomePage() {
           title={course.data?.title ?? 'Course'}
           description={
             course.data?.enrolled
-              ? 'Study from published materials, then opt into peer matching when you are ready.'
+              ? 'Study from published materials. Peer matching will arrive later with an explicit consent step.'
               : 'Enroll to unlock materials and study tools for this module.'
           }
           actions={
@@ -265,39 +250,9 @@ export function CourseHomePage() {
           <Panel className="mt-10">
             <SectionLabel>Peer matching</SectionLabel>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              Opt in to show that you want a study partner for this module. Matching stays off until you choose it.
+              Study-partner matching is not available yet. When it launches, you will see a clear consent screen
+              before anything about you is shared with classmates.
             </p>
-            <p className="mt-4 text-sm text-ink">
-              {match.isLoading ? 'Loading matching status…' : matchingSummary(match.data?.optedIn ?? false, match.data?.activeCount ?? 0)}
-            </p>
-            {toggleMatch.isError ? (
-              <div className="mt-3">
-                <Alert>
-                  {toggleMatch.error instanceof ApiError
-                    ? toggleMatch.error.message
-                    : 'Could not update matching preference.'}
-                </Alert>
-              </div>
-            ) : null}
-            <Button
-              type="button"
-              variant={match.data?.optedIn ? 'warn' : 'success'}
-              className="mt-4"
-              disabled={match.isLoading || toggleMatch.isPending}
-              onClick={() => {
-                const next = !(match.data?.optedIn ?? false)
-                if (!next && !window.confirm('Stop matching for this course?')) {
-                  return
-                }
-                toggleMatch.mutate(next)
-              }}
-            >
-              {toggleMatch.isPending
-                ? 'Updating…'
-                : match.data?.optedIn
-                  ? 'Stop matching'
-                  : 'Find study partners'}
-            </Button>
           </Panel>
         </>
       ) : null}
@@ -310,15 +265,6 @@ export function CourseHomePage() {
       ) : null}
     </Page>
   )
-}
-
-function matchingSummary(optedIn: boolean, activeCount: number) {
-  const others = Math.max(0, activeCount - (optedIn ? 1 : 0))
-  const othersLabel = `${others} other classmate${others === 1 ? '' : 's'} matching`
-  if (optedIn) {
-    return others === 0 ? `You're matching — no other classmates yet` : `You're matching · ${othersLabel}`
-  }
-  return othersLabel
 }
 
 function StudyMode({

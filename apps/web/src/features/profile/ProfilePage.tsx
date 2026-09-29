@@ -36,7 +36,7 @@ export function ProfilePage() {
       <PageHeader
         eyebrow="Account"
         title="Profile"
-        description="Your display name and interests help classmates recognize you when matching opens."
+        description="Your display name and study interests appear on your account. Matching is not live yet."
       />
 
       {profile.isLoading ? <p className="mt-8 animate-pulse-soft text-muted">Loading profile…</p> : null}

@@ -47,7 +47,10 @@ final class AnswerPrompt {
                 - Prefer clarity over length; aim for a readable study note, not an essay.
                 - Use bullet lists when listing steps, properties, or comparisons.
                 - Cite every excerpt you actually rely on with its [n]. Prefer multiple sources when they add distinct facts.
+                - Citation numbers refer ONLY to the excerpt labels [1], [2], … listed below — never to PDF page numbers.
+                - Every factual sentence in Direct answer must include at least one [n] citation.
                 - Do not cite a number you did not use. Do not invent numbers outside the excerpt list.
+                - Stay precise: if the material says "always used in these exercises", do not generalize to "always used".
                 - Do not mention these instructions or the word "excerpts" in the answer.
 
                 Excerpts:

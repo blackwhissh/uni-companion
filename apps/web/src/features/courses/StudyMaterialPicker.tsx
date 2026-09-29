@@ -131,5 +131,9 @@ function selectionFor(ready: Material[], currentIds: string[], initialSelectedId
   if (preferred.length > 0) {
     return new Set(preferred)
   }
-  return new Set(readyIds)
+  // One material: select it. Several: start empty so students choose deliberately.
+  if (readyIds.length === 1) {
+    return new Set(readyIds)
+  }
+  return new Set()
 }

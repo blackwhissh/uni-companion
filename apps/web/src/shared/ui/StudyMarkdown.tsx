@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 
 export type CitationMeta = {
   index: number
@@ -8,7 +10,8 @@ export type CitationMeta = {
 }
 
 /**
- * Small Markdown subset for study answers: headings, paragraphs, lists, bold/italic, inline code, [n] citations.
+ * Small Markdown subset for study answers: headings, paragraphs, lists, bold/italic, inline code,
+ * $math$ / $$math$$, and [n] citations.
  */
 export function StudyMarkdown({
   markdown,
@@ -137,7 +140,7 @@ function splitBlocks(markdown: string): Block[] {
 
 function renderInline(text: string, citations: Map<number, CitationMeta>): ReactNode[] {
   const nodes: ReactNode[] = []
-  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[\d+\])/g
+  const pattern = /(\$\$[^$]+\$\$|\$[^$\n]+\$|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[\d+\])/g
   let last = 0
   let match: RegExpExecArray | null
   let key = 0
@@ -146,7 +149,22 @@ function renderInline(text: string, citations: Map<number, CitationMeta>): React
       nodes.push(text.slice(last, match.index))
     }
     const token = match[0]
-    if (token.startsWith('**')) {
+    if (token.startsWith('$$') || (token.startsWith('$') && token.endsWith('$'))) {
+      const display = token.startsWith('$$')
+      const tex = display ? token.slice(2, -2).trim() : token.slice(1, -1).trim()
+      try {
+        const html = katex.renderToString(tex, { throwOnError: false, displayMode: display })
+        nodes.push(
+          <span
+            key={key++}
+            className={display ? 'my-2 block overflow-x-auto text-[1.05em]' : 'mx-0.5 inline-block max-w-full overflow-x-auto align-middle'}
+            dangerouslySetInnerHTML={{ __html: html }}
+          />,
+        )
+      } catch {
+        nodes.push(token)
+      }
+    } else if (token.startsWith('**')) {
       nodes.push(
         <strong key={key++} className="font-semibold text-ink-soft">
           {token.slice(2, -2)}
@@ -168,7 +186,6 @@ function renderInline(text: string, citations: Map<number, CitationMeta>): React
       const n = Number(token.slice(1, -1))
       const meta = citations.get(n)
       if (!meta) {
-        // Unknown / out-of-range markers should not render as dead chips.
         last = match.index + token.length
         continue
       }
