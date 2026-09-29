@@ -1,0 +1,19 @@
+target/
+node_modules/
+dist/
+.env
+.env.local
+.env.prod
+.env.*.local
+data/
+.idea/
+*.iml
+.vscode/
+*.log
+.DS_Store
+Thumbs.db
+ssh keys/
+*.key
+*.pem
+secrets/*
+!secrets/.gitkeep

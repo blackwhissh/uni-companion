@@ -1,0 +1,5 @@
+CREATE DATABASE identity;
+CREATE DATABASE learning;
+
+\c learning
+CREATE EXTENSION IF NOT EXISTS vector;

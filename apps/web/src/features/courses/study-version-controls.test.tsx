@@ -1,0 +1,41 @@
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { StudyVersionControls } from './StudyVersionControls.tsx'
+
+describe('study version controls', () => {
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
+  it('describes a resumed shared version', () => {
+    render(
+      <StudyVersionControls
+        noun="deck"
+        delivery="RESUMED"
+        versions={[{ id: 'deck-1', version: 1, createdAt: '2026-09-29T00:00:00Z', current: true }]}
+        onSelect={() => undefined}
+        onReport={() => undefined}
+      />,
+    )
+
+    expect(screen.getByText('Your previous shared deck is open again.')).toBeInTheDocument()
+  })
+
+  it('asks before recording a quality report', () => {
+    const onReport = vi.fn()
+    vi.stubGlobal('confirm', () => true)
+    render(
+      <StudyVersionControls
+        noun="quiz"
+        delivery="CREATED"
+        versions={[{ id: 'quiz-1', version: 1, createdAt: '2026-09-29T00:00:00Z', current: true }]}
+        onSelect={() => undefined}
+        onReport={onReport}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report quality issue' }))
+    expect(onReport).toHaveBeenCalledTimes(1)
+  })
+})

@@ -1,0 +1,99 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-sans: 'Outfit', ui-sans-serif, sans-serif;
+
+  --color-ink: #07343c;
+  --color-ink-soft: #0d4a54;
+  --color-mist: #e8f1f2;
+  --color-fog: #f3f8f8;
+  --color-paper: #f7fbfb;
+  --color-line: #c5d6d8;
+  --color-muted: #5a7378;
+  --color-accent: #2f9e8a;
+  --color-accent-deep: #1f7a6a;
+  --color-warn: #b45309;
+  --color-danger: #b42318;
+  --color-ok: #1b7a4a;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    background-color: var(--color-fog);
+    background-image:
+      radial-gradient(ellipse 90% 60% at 10% -10%, rgb(47 158 138 / 0.18), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 95% 5%, rgb(7 52 60 / 0.1), transparent 50%),
+      linear-gradient(180deg, #f7fbfb 0%, #eef5f5 100%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: rgb(47 158 138 / 0.25);
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .surface-panel {
+    border: 1px solid var(--color-line);
+    background: rgb(255 255 255 / 0.72);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 1px 0 rgb(7 52 60 / 0.04);
+  }
+
+  .study-grid {
+    background-image:
+      linear-gradient(rgb(7 52 60 / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(7 52 60 / 0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  .animate-rise {
+    animation: rise-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-rise-delay {
+    animation: rise-in 620ms cubic-bezier(0.22, 1, 0.36, 1) 90ms both;
+  }
+
+  .animate-rise-delay-2 {
+    animation: rise-in 700ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}

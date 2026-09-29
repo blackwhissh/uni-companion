@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: learning-service
+  profiles:
+    default: local
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+unicompanion:
+  jwt:
+    secret: ${JWT_SECRET:local-dev-jwt-secret-change-me-32}
+  cors-allowed-origins:
+    - http://localhost:5173
+  storage:
+    path: ${STORAGE_LOCAL_PATH:./data/materials}
+  study:
+    max-shared-versions: ${STUDY_MAX_SHARED_VERSIONS:3}
+    report-retirement-threshold: ${STUDY_REPORT_RETIREMENT_THRESHOLD:3}
+    generation-revision: ${STUDY_GENERATION_REVISION:v3}
+  gemini:
+    enabled: ${GEMINI_VERTEX_ENABLED:false}
+    project-id: ${GOOGLE_CLOUD_PROJECT:uniconai}
+    location: ${GOOGLE_CLOUD_LOCATION:global}
+    embedding-model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
+    chat-model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}
+
+server:
+  port: 8082
+
+logging:
+  level:
+    root: INFO
+    com.unicompanion: DEBUG
+    org.springframework.security: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%15.15t] %-40.40logger{39} [cid=%X{correlationId:-}] : %m%n%wEx"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

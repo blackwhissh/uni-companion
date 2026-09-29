@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: ${LEARNING_DATABASE_URL:jdbc:postgresql://localhost:5433/learning}
+    username: ${DATABASE_USERNAME:unicompanion}
+    password: ${DATABASE_PASSWORD:unicompanion}
+
+logging:
+  level:
+    org.springframework.web.cors: DEBUG
+    org.springframework.security.web.access: DEBUG
+    org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver: DEBUG
+

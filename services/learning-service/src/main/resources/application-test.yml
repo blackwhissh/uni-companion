@@ -1,0 +1,17 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+logging:
+  level:
+    com.unicompanion: INFO
+    com.unicompanion.learning.config.RequestAccessLogFilter: WARN
+
+unicompanion:
+  jwt:
+    secret: test-secret-test-secret-test-secret
+  storage:
+    path: target/test-materials
+  gemini:
+    enabled: false

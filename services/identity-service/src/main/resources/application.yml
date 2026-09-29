@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: identity-service
+  profiles:
+    default: local
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+unicompanion:
+  jwt:
+    secret: ${JWT_SECRET:local-dev-jwt-secret-change-me-32}
+    ttl: 12h
+  seed:
+    admin-email: ${SEED_ADMIN_EMAIL:admin@uni-companion.local}
+    admin-password: ${SEED_ADMIN_PASSWORD:admin-pass-1}
+    admin-display-name: Course Admin
+  cors-allowed-origins:
+    - http://localhost:5173
+
+server:
+  port: 8081
+
+logging:
+  level:
+    root: INFO
+    com.unicompanion: DEBUG
+    org.springframework.security: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%15.15t] %-40.40logger{39} [cid=%X{correlationId:-}] : %m%n%wEx"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

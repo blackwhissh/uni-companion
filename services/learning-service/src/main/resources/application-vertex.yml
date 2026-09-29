@@ -1,0 +1,11 @@
+# Real Vertex Gemini (embeddings + RAG chat).
+# Activate with: --spring.profiles.active=local,vertex
+# Requires: gcloud auth application-default login --project=uniconai
+# Unset GOOGLE_APPLICATION_CREDENTIALS if it points at another project's SA.
+unicompanion:
+  gemini:
+    enabled: true
+    project-id: ${GOOGLE_CLOUD_PROJECT:uniconai}
+    location: ${GOOGLE_CLOUD_LOCATION:global}
+    embedding-model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
+    chat-model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}

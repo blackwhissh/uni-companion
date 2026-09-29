@@ -1,0 +1,17 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+logging:
+  level:
+    com.unicompanion: INFO
+    com.unicompanion.identity.api.RequestAccessLogFilter: WARN
+
+unicompanion:
+  jwt:
+    secret: test-secret-test-secret-test-secret
+  seed:
+    admin-email: admin@uni-companion.test
+    admin-password: admin-pass-1
+    admin-display-name: Course Admin

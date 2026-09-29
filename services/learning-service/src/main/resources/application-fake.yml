@@ -1,0 +1,5 @@
+# Local AI stub — no Vertex/ADC required.
+# Activate with: --spring.profiles.active=local,fake
+unicompanion:
+  gemini:
+    enabled: false

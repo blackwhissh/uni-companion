@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${IDENTITY_DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+
+unicompanion:
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost}
+
+logging:
+  level:
+    root: INFO
+    com.unicompanion: INFO

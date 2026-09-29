@@ -1,0 +1,5 @@
+spring:
+  datasource:
+    url: ${IDENTITY_DATABASE_URL:jdbc:postgresql://localhost:5433/identity}
+    username: ${DATABASE_USERNAME:unicompanion}
+    password: ${DATABASE_PASSWORD:unicompanion}

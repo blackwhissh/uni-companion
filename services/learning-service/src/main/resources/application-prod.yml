@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: ${LEARNING_DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+
+unicompanion:
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost}
+  storage:
+    path: ${STORAGE_LOCAL_PATH:/data/materials}
+
+logging:
+  level:
+    root: INFO
+    com.unicompanion: INFO
