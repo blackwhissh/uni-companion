@@ -43,8 +43,11 @@ class CitedSourcesTest {
     }
 
     @Test
-    void returnsNoSourcesWhenAnswerHasNoValidCitations() {
-        List<ChatModel.RetrievedChunk> retrieved = List.of(chunk("A", 1, "alpha"), chunk("B", 2, "beta"));
+    void returnsNoSourcesWhenAnswerHasNoValidCitationsAndNoOverlap() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("A", 1, "consensus raft leader election"),
+                chunk("B", 2, "vector clocks happen before")
+        );
 
         CitedSources.Result result = CitedSources.select(
                 """
@@ -82,8 +85,10 @@ class CitedSourcesTest {
     }
 
     @Test
-    void doesNotFabricateChipsWhenOnlyPageNumberBracketsWereUsed() {
-        List<ChatModel.RetrievedChunk> retrieved = List.of(chunk("Lecture 3", 12, "median of three"));
+    void recoversOverlapWhenOnlyPageNumberBracketsWereUsed() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("Lecture 3", 12, "Insertion sort is always used when n < 17. Use median of three for Quicksort.")
+        );
 
         CitedSources.Result result = CitedSources.select(
                 """
@@ -96,9 +101,47 @@ class CitedSourcesTest {
                 retrieved
         );
 
-        assertThat(result.chunks()).isEmpty();
+        assertThat(result.chunks()).hasSize(1);
+        assertThat(result.chunks().getFirst().title()).isEqualTo("Lecture 3");
         assertThat(result.answer()).doesNotContain("[17]");
-        assertThat(result.answer()).doesNotContain("[1]");
+        assertThat(result.answer()).contains("[1]");
+        assertThat(result.answer()).contains("Insertion sort is used when n < 17");
+    }
+
+    @Test
+    void expandsListCitationsAndDropsOutOfRangeIndexes() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(chunk("Only", 1, "heapsort is not discussed here"));
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        Heapsort is not covered in the published materials [1, 2, 3, 4, 6].
+
+                        ## Explanation
+                        Try another lecture PDF [2, 6].
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).isEmpty();
+        assertThat(result.answer()).doesNotContain("[");
+        assertThat(result.answer()).contains("Heapsort is not covered");
+    }
+
+    @Test
+    void keepsValidMembersOfListCitationsWhenAnswerIsGrounded() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("A", 1, "alpha fact"),
+                chunk("B", 2, "beta fact")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                "Consensus needs a majority [1, 2, 9].",
+                retrieved
+        );
+
+        assertThat(result.chunks()).hasSize(2);
+        assertThat(result.answer()).isEqualTo("Consensus needs a majority [1] [2].");
     }
 
     private static ChatModel.RetrievedChunk chunk(String title, int page, String content) {

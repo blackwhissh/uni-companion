@@ -92,10 +92,17 @@ public class MaterialService {
     @Transactional(readOnly = true)
     public List<MaterialEntity> list(UUID courseId, UUID userId, boolean admin) {
         CourseEntity course = courses.findById(courseId).orElseThrow(MaterialService::notFound);
-        if (admin) {
+        boolean owner = course.getOwnerId().equals(userId);
+        if (admin && !owner) {
             List<MaterialEntity> all = materials.findByCourseIdOrderByTitleAsc(courseId);
             log.debug("Listed {} materials for course admin={} course={} owner={}",
                     all.size(), userId, courseId, course.getOwnerId());
+            return all;
+        }
+        if (owner) {
+            // Owner preview / console: return the full set; the student course page filters to published+ready.
+            List<MaterialEntity> all = materials.findByCourseIdOrderByTitleAsc(courseId);
+            log.debug("Listed {} materials for owner={} course={}", all.size(), userId, courseId);
             return all;
         }
         if (!course.isPublished()) {

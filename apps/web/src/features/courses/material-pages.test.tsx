@@ -227,6 +227,30 @@ describe('material pages', () => {
     )
   })
 
+  it('shows published materials in owner student preview without enroll', async () => {
+    setAccessToken('admin-token')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).endsWith('/materials')) {
+          return json([
+            { ...ready, visibility: 'PUBLISHED' },
+            { ...ready, id: 'draft-1', title: 'Draft notes', visibility: 'UNPUBLISHED' },
+          ])
+        }
+        return json({ ...course, enrolled: false, owned: true, visibility: 'UNPUBLISHED' })
+      }),
+    )
+
+    renderAt('/courses/course-1', <CourseHomePage />)
+
+    expect(await screen.findByText(/Preview as student/)).toBeInTheDocument()
+    expect(await screen.findByText('Lecture 1')).toBeInTheDocument()
+    expect(screen.queryByText('Draft notes')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enroll to try study modes' })).toBeInTheDocument()
+    expect(screen.getAllByText('Enroll to try').length).toBeGreaterThan(0)
+  })
+
   it('offers enroll when the student cannot list materials yet', async () => {
     setAccessToken('student-token')
     let enrolled = false

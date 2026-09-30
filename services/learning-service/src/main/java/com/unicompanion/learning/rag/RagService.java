@@ -50,7 +50,8 @@ public class RagService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Question must be at most 2000 characters.");
         }
         CourseEntity course = courses.findById(courseId).orElseThrow(RagService::notFound);
-        if (!course.isPublished()) {
+        boolean owner = course.getOwnerId().equals(userId);
+        if (!course.isPublished() && !owner) {
             throw notFound();
         }
         if (!enrollments.existsById(new EnrollmentKey(courseId, userId))) {

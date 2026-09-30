@@ -144,7 +144,8 @@ public class CourseService {
     @Transactional
     public void unenroll(UUID courseId, UUID userId) {
         CourseEntity course = courses.findById(courseId).orElseThrow(CourseService::notFound);
-        if (!course.isPublished()) {
+        boolean owner = course.getOwnerId().equals(userId);
+        if (!course.isPublished() && !owner) {
             throw notFound();
         }
         enrollments.deleteById(new EnrollmentKey(courseId, userId));

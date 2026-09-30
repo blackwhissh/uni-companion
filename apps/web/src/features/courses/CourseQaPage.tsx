@@ -333,7 +333,7 @@ export function CourseQaPage() {
                 </div>
               ) : null}
 
-              <SectionLabel>{insufficient ? 'No grounded match' : 'Answer'}</SectionLabel>
+              <SectionLabel>{insufficient ? 'No supporting passage found' : 'Answer'}</SectionLabel>
               <Panel className={`mt-4 ${insufficient ? 'border-warn/30 bg-amber-50/50' : ''}`}>
                 <StudyMarkdown
                   markdown={result.answer}
@@ -344,6 +344,12 @@ export function CourseQaPage() {
                     sectionHint: citation.sectionHint,
                   }))}
                 />
+                {insufficient ? (
+                  <p className="mt-4 border-t border-warn/20 pt-3 text-sm leading-relaxed text-ink-soft" role="status">
+                    No supporting passage was found in the selected materials for this answer. Treat it as
+                    unverified until you open the lecture PDF yourself.
+                  </p>
+                ) : null}
               </Panel>
 
               <QaSources courseId={courseId} citations={result.citations} answer={result.answer} />

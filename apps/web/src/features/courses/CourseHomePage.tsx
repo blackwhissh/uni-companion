@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import {
@@ -38,7 +38,7 @@ export function CourseHomePage() {
   const enroll = useMutation({
     mutationFn: () => enrollInCourse(courseId),
     onSuccess: async () => {
-      setActionNotice('Enrolled.')
+      setActionNotice('Enrolled. Study modes are unlocked.')
       await refresh()
     },
   })
@@ -50,9 +50,20 @@ export function CourseHomePage() {
     },
   })
   const unavailable = course.error instanceof ApiError && course.error.status === 404
-  const readyCount =
-    materials.data?.filter((material) => material.visibility === 'PUBLISHED' && material.processingStatus === 'READY')
-      .length ?? 0
+  const enrolled = course.data?.enrolled === true
+  const owned = course.data?.owned === true
+  const ownerPreview = owned && !enrolled
+  const coursePublished = course.data?.visibility === 'PUBLISHED'
+  const studentMaterials = useMemo(
+    () =>
+      (materials.data ?? []).filter(
+        (material) => material.visibility === 'PUBLISHED' && material.processingStatus === 'READY',
+      ),
+    [materials.data],
+  )
+  const visibleMaterials = enrolled || ownerPreview ? studentMaterials : []
+  const readyCount = visibleMaterials.length
+  const canOpenStudy = enrolled && readyCount > 0
 
   async function onDownload(material: Material) {
     try {
@@ -92,22 +103,24 @@ export function CourseHomePage() {
 
   return (
     <Page>
-      <BackLink to="/courses">Your courses</BackLink>
+      <BackLink to={owned ? `/admin/courses/${courseId}/materials` : '/courses'}>
+        {owned ? 'Back to course console' : 'Your courses'}
+      </BackLink>
       <div className="mt-4">
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Course'}
           title={course.data?.title ?? 'Course'}
           description={
-            course.data?.enrolled
-              ? 'Study from published materials. Peer matching will arrive later with an explicit consent step.'
-              : course.data?.owned
-                ? 'Preview the student course page. Enroll yourself to walk through study modes before publishing.'
+            ownerPreview
+              ? 'Student preview: published materials only, the same list enrolled students will see.'
+              : enrolled
+                ? 'Study from published materials. Peer matching will arrive later with an explicit consent step.'
                 : 'Enroll to unlock materials and study tools for this module.'
           }
           actions={
-            course.data && !course.data.enrolled ? (
+            course.data && !enrolled ? (
               <Button type="button" variant="success" disabled={enroll.isPending} onClick={() => enroll.mutate()}>
-                {enroll.isPending ? 'Working…' : course.data.owned ? 'Enroll to preview' : 'Enroll'}
+                {enroll.isPending ? 'Working…' : owned ? 'Enroll to try study modes' : 'Enroll'}
               </Button>
             ) : null
           }
@@ -122,11 +135,28 @@ export function CourseHomePage() {
 
       {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
 
-      {course.data?.enrolled ? (
+      {ownerPreview && !unavailable ? (
+        <div className="mt-6 rounded-lg border border-accent/25 bg-accent/5 px-4 py-3 text-sm leading-relaxed text-ink-soft" role="status">
+          <span className="font-medium text-ink">Preview as student</span>
+          {!coursePublished ? ' — this course is still unpublished, so real students cannot open it yet.' : '.'}{' '}
+          You are seeing only published, indexed materials. Enroll above to try Q&A, flashcards, and quiz.
+        </div>
+      ) : null}
+
+      {enrolled || ownerPreview ? (
         <>
-          <p className="mt-3">
-            <StatusPill tone="ok">Enrolled</StatusPill>
-          </p>
+          {enrolled ? (
+            <p className="mt-3">
+              <StatusPill tone="ok">Enrolled</StatusPill>
+              {owned && !coursePublished ? (
+                <span className="ml-2 text-sm text-muted">Owner preview enrollment (course unpublished)</span>
+              ) : null}
+            </p>
+          ) : (
+            <p className="mt-3">
+              <StatusPill tone="neutral">Student preview</StatusPill>
+            </p>
+          )}
 
           <section className="mt-10 animate-rise-delay">
             <SectionLabel>Study modes</SectionLabel>
@@ -134,20 +164,20 @@ export function CourseHomePage() {
               <StudyMode
                 title="Q&A"
                 body="Ask questions grounded in published lecture PDFs."
-                state={readyCount > 0 ? 'Open' : 'Needs materials'}
-                to={readyCount > 0 ? `/courses/${courseId}/qa` : undefined}
+                state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
+                to={canOpenStudy ? `/courses/${courseId}/qa` : undefined}
               />
               <StudyMode
                 title="Flashcards"
                 body="Drill key ideas extracted from your course pack."
-                state={readyCount > 0 ? 'Open' : 'Needs materials'}
-                to={readyCount > 0 ? `/courses/${courseId}/flashcards` : undefined}
+                state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
+                to={canOpenStudy ? `/courses/${courseId}/flashcards` : undefined}
               />
               <StudyMode
                 title="Quiz"
                 body="Check understanding with generated practice questions."
-                state={readyCount > 0 ? 'Open' : 'Needs materials'}
-                to={readyCount > 0 ? `/courses/${courseId}/quiz` : undefined}
+                state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
+                to={canOpenStudy ? `/courses/${courseId}/quiz` : undefined}
               />
             </div>
           </section>
@@ -164,15 +194,19 @@ export function CourseHomePage() {
               </div>
             ) : null}
 
-            {materials.data?.length === 0 ? (
+            {!materials.isLoading && visibleMaterials.length === 0 ? (
               <EmptyState
-                title="No materials yet."
-                description="Your course admin has not published lecture PDFs for this module. Check back after they go live."
+                title="No published materials yet."
+                description={
+                  owned
+                    ? 'Publish at least one indexed PDF in the course console to see what students will get.'
+                    : 'Your course admin has not published lecture PDFs for this module. Check back after they go live.'
+                }
               />
             ) : null}
 
             <ul className="mt-4 flex flex-col gap-3">
-              {materials.data?.map((material) => (
+              {visibleMaterials.map((material) => (
                 <li key={material.id}>
                   <article className="surface-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-4 transition duration-300 hover:border-accent/35">
                     <button
@@ -236,34 +270,38 @@ export function CourseHomePage() {
             ) : null}
           </section>
 
-          <Panel className="mt-10">
-            <SectionLabel>Peer matching</SectionLabel>
-            <p className="mt-3 text-sm leading-relaxed text-muted">
-              Study-partner matching is not available yet. When it launches, you will see a clear consent screen
-              before anything about you is shared with classmates.
-            </p>
-          </Panel>
+          {enrolled ? (
+            <>
+              <Panel className="mt-10">
+                <SectionLabel>Peer matching</SectionLabel>
+                <p className="mt-3 text-sm leading-relaxed text-muted">
+                  Study-partner matching is not available yet. When it launches, you will see a clear consent screen
+                  before anything about you is shared with classmates.
+                </p>
+              </Panel>
 
-          <div className="mt-10 border-t border-line/70 pt-6">
-            <p className="text-sm text-muted">Need to leave this course?</p>
-            <Button
-              type="button"
-              variant="ghost"
-              className="mt-2"
-              disabled={unenroll.isPending}
-              onClick={() => {
-                if (window.confirm(`Unenroll from “${course.data?.title ?? 'this course'}”?`)) {
-                  unenroll.mutate()
-                }
-              }}
-            >
-              {unenroll.isPending ? 'Working…' : 'Unenroll from course'}
-            </Button>
-          </div>
+              <div className="mt-10 border-t border-line/70 pt-6">
+                <p className="text-sm text-muted">Need to leave this course?</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="mt-2"
+                  disabled={unenroll.isPending}
+                  onClick={() => {
+                    if (window.confirm(`Unenroll from “${course.data?.title ?? 'this course'}”?`)) {
+                      unenroll.mutate()
+                    }
+                  }}
+                >
+                  {unenroll.isPending ? 'Working…' : 'Unenroll from course'}
+                </Button>
+              </div>
+            </>
+          ) : null}
         </>
       ) : null}
 
-      {course.data && !course.data.enrolled && !unavailable ? (
+      {course.data && !enrolled && !owned && !unavailable ? (
         <EmptyState
           title="You are not enrolled yet"
           description="Join this course to see published materials and unlock study modes. Use Enroll above to get started."

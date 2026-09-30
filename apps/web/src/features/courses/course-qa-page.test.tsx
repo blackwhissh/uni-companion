@@ -179,7 +179,7 @@ From your course materials, consensus keeps replicas consistent.
     expect(screen.getByLabelText(/Lecture 2/)).not.toBeChecked()
   })
 
-  it('labels an answer without citations as no grounded match', async () => {
+  it('labels an answer without citations as no supporting passage found', async () => {
     setAccessToken('student-token')
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (String(url).endsWith('/rag/query') && init?.method === 'POST') {
@@ -202,7 +202,8 @@ From your course materials, consensus keeps replicas consistent.
     })
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
-    expect(await screen.findByText('No grounded match')).toBeInTheDocument()
+    expect(await screen.findByText('No supporting passage found')).toBeInTheDocument()
+    expect(screen.getByText(/No supporting passage was found/i)).toBeInTheDocument()
     expect(screen.getByText('The published pages do not cover that question.')).toBeInTheDocument()
     expect(screen.queryByText('Sources used')).not.toBeInTheDocument()
   })
