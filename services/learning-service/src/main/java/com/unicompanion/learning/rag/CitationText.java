@@ -29,6 +29,9 @@ final class CitationText {
     private static final Pattern TWO_CELLS = Pattern.compile(
             "^(.+?)\\s+([A-ZÀ-ÖØ-Þ0-9].*)$"
     );
+    private static final Pattern DIRECT_ANSWER_SECTION = Pattern.compile(
+            "(?is)##\\s*(?:Direct answer|Direkte Antwort|Antwort)\\s*(.*?)(?=##\\s|$)"
+    );
     /**
      * Longer labels first so "Failure scope" wins over "Failure".
      */
@@ -80,6 +83,8 @@ final class CitationText {
         }
 
         Set<String> focus = tokens(question);
+        // Prefer overlap with the Direct answer claim so the quote matches what the student sees first.
+        focus.addAll(tokens(directAnswerBody(answer)));
         focus.addAll(tokens(answer));
 
         String prose = pickProse(body, focus);
@@ -97,6 +102,17 @@ final class CitationText {
             return trimToMax(sentences.getFirst());
         }
         return trimToMax(body);
+    }
+
+    private static String directAnswerBody(String answer) {
+        if (answer == null || answer.isBlank()) {
+            return "";
+        }
+        Matcher matcher = DIRECT_ANSWER_SECTION.matcher(answer);
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+        return answer;
     }
 
     private static String pickProse(String body, Set<String> focus) {

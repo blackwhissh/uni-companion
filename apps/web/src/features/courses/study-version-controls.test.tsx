@@ -1,11 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StudyVersionControls } from './StudyVersionControls.tsx'
 
 describe('study version controls', () => {
   afterEach(() => {
     cleanup()
-    vi.unstubAllGlobals()
   })
 
   it('describes a resumed shared version', () => {
@@ -24,7 +23,6 @@ describe('study version controls', () => {
 
   it('asks before recording a quality report', () => {
     const onReport = vi.fn()
-    vi.stubGlobal('confirm', () => true)
     render(
       <StudyVersionControls
         noun="quiz"
@@ -36,6 +34,9 @@ describe('study version controls', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Report quality issue' }))
+    expect(onReport).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Report' }))
     expect(onReport).toHaveBeenCalledTimes(1)
   })
 })

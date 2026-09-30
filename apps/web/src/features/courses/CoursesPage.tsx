@@ -7,6 +7,7 @@ import {
   Alert,
   Button,
   ButtonLink,
+  ConfirmDialog,
   EmptyState,
   Page,
   PageHeader,
@@ -27,6 +28,7 @@ export function CoursesPage() {
   })
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [unenrollTarget, setUnenrollTarget] = useState<Course | null>(null)
   const enroll = useMutation({
     mutationFn: enrollInCourse,
     onSuccess: async () => {
@@ -98,11 +100,7 @@ export function CoursesPage() {
                   (unenroll.isPending && unenroll.variables === course.id)
                 }
                 onEnroll={() => enroll.mutate(course.id)}
-                onUnenroll={() => {
-                  if (window.confirm(`Unenroll from “${course.title}”?`)) {
-                    unenroll.mutate(course.id)
-                  }
-                }}
+                onUnenroll={() => setUnenrollTarget(course)}
               />
             ))}
           </ul>
@@ -123,16 +121,33 @@ export function CoursesPage() {
                   (unenroll.isPending && unenroll.variables === course.id)
                 }
                 onEnroll={() => enroll.mutate(course.id)}
-                onUnenroll={() => {
-                  if (window.confirm(`Unenroll from “${course.title}”?`)) {
-                    unenroll.mutate(course.id)
-                  }
-                }}
+                onUnenroll={() => setUnenrollTarget(course)}
               />
             ))}
           </ul>
         </section>
       ) : null}
+
+      <ConfirmDialog
+        open={unenrollTarget !== null}
+        title="Unenroll from course?"
+        body={
+          unenrollTarget
+            ? `Unenroll from “${unenrollTarget.title}”? You can join again later.`
+            : ''
+        }
+        confirmLabel="Unenroll"
+        danger
+        onCancel={() => setUnenrollTarget(null)}
+        onConfirm={() => {
+          if (!unenrollTarget) {
+            return
+          }
+          const id = unenrollTarget.id
+          setUnenrollTarget(null)
+          unenroll.mutate(id)
+        }}
+      />
     </Page>
   )
 }

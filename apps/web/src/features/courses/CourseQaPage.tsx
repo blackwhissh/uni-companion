@@ -41,6 +41,7 @@ export function CourseQaPage() {
   const [askedQuestion, setAskedQuestion] = useState<string | null>(null)
   const [result, setResult] = useState<RagAnswer | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [pasteWarning, setPasteWarning] = useState<string | null>(null)
   const [materialNotice, setMaterialNotice] = useState<string | null>(null)
   const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>(() =>
     courseId ? loadMaterialSelection('qa', courseId) : [],
@@ -175,6 +176,7 @@ export function CourseQaPage() {
 
   function useSuggestedPrompt(prompt: string) {
     setError(null)
+    setPasteWarning(null)
     setQuestion(prompt.slice(0, QUESTION_MAX))
   }
 
@@ -183,7 +185,7 @@ export function CourseQaPage() {
   const enrolled = course.data?.enrolled === true
   const insufficient = result != null && result.citations.length === 0
   const overLimit = question.length > QUESTION_MAX
-  const canAsk = !ask.isPending && question.trim().length > 0 && !overLimit
+  const canAsk = !ask.isPending && question.trim().length > 0 && !overLimit && question.length <= QUESTION_MAX
 
   return (
     <Page>
@@ -266,15 +268,39 @@ export function CourseQaPage() {
                 <textarea
                   id="qa-question"
                   value={question}
-                  onChange={(event) => setQuestion(event.target.value)}
+                  onChange={(event) => {
+                    setPasteWarning(null)
+                    setQuestion(event.target.value.slice(0, QUESTION_MAX))
+                  }}
+                  onPaste={(event) => {
+                    const pasted = event.clipboardData.getData('text')
+                    if (!pasted) {
+                      return
+                    }
+                    const start = event.currentTarget.selectionStart ?? question.length
+                    const end = event.currentTarget.selectionEnd ?? start
+                    const merged = question.slice(0, start) + pasted + question.slice(end)
+                    if (merged.length > QUESTION_MAX) {
+                      event.preventDefault()
+                      setQuestion(merged.slice(0, QUESTION_MAX))
+                      setPasteWarning(
+                        `Paste was trimmed to ${QUESTION_MAX.toLocaleString()} characters. Shorten your question before asking.`,
+                      )
+                    } else {
+                      setPasteWarning(null)
+                    }
+                  }}
                   rows={4}
-                  maxLength={QUESTION_MAX}
                   className="rounded-lg border border-line bg-white/80 px-3 py-2.5 text-base font-normal text-ink shadow-[inset_0_1px_0_rgb(7_52_60_/_0.03)] outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
                   placeholder="What are the main ideas covered in these materials?"
                 />
-                <span className={`text-xs font-normal ${overLimit ? 'text-danger' : 'text-muted'}`}>
+                <span className={`text-xs font-normal ${overLimit || pasteWarning ? 'text-danger' : 'text-muted'}`}>
                   {question.length.toLocaleString()} / {QUESTION_MAX.toLocaleString()} characters
-                  {overLimit ? ' — shorten your question to ask' : ''}
+                  {pasteWarning
+                    ? ` — ${pasteWarning}`
+                    : overLimit
+                      ? ' — shorten your question to ask'
+                      : ''}
                 </span>
               </div>
 

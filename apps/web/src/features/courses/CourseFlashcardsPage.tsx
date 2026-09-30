@@ -64,7 +64,7 @@ export function CourseFlashcardsPage() {
       clearStudyGeneration('flashcards', courseId)
       setBlockingForResume(false)
       setError(null)
-      setNotice(next.cards.length > 0 ? `This shared deck has ${next.cards.length} cards.` : null)
+      setNotice(next.cards.length > 0 ? `This shared deck has ${cardCountLabel(next.cards.length)}.` : null)
       setPicking(false)
       setSelectedMaterialIds(variables.materialIds)
       setDeck(next)
@@ -102,7 +102,7 @@ export function CourseFlashcardsPage() {
       setIndex(0)
       setRevealed(false)
       setError(null)
-      setNotice(`Opened deck ${next.version} · ${next.cards.length} cards.`)
+      setNotice(`Opened deck ${next.version} · ${cardCountLabel(next.cards.length)}.`)
     },
     onError: (err) => {
       setError(err instanceof ApiError ? err.message : 'Could not open that deck version.')
@@ -289,8 +289,8 @@ export function CourseFlashcardsPage() {
             <section className="mt-8 animate-rise-delay">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <SectionLabel>
-                  Shared deck {deck.version} of {deck.availableVersions} · {cards.length} cards · Card {index + 1} of{' '}
-                  {cards.length}
+                  Shared deck {deck.version} of {deck.availableVersions} · {cardCountLabel(cards.length)} · Card{' '}
+                  {index + 1} of {cards.length}
                 </SectionLabel>
                 <p className="text-xs text-muted">Space / Enter flip · ← → navigate · Enter on Next advances</p>
               </div>
@@ -367,4 +367,8 @@ function nextDeckLabel(deck: FlashcardDeck) {
     return 'Create another deck'
   }
   return 'Review from deck 1'
+}
+
+function cardCountLabel(count: number) {
+  return count === 1 ? '1 card' : `${count} cards`
 }

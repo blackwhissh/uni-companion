@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -122,11 +122,14 @@ describe('material pages', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save PDF' }))
 
     expect(await screen.findByText('lecture.pdf · Indexed · Unpublished')).toBeInTheDocument()
-    window.confirm = vi.fn(() => true)
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    const publishDialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(publishDialog).getByRole('button', { name: 'Publish' }))
     expect(await screen.findByText('lecture.pdf · Indexed · Published')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Publish' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    const deleteDialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete permanently' }))
     expect(await screen.findByText('No materials yet.')).toBeInTheDocument()
   })
 
@@ -303,8 +306,6 @@ describe('material pages', () => {
         return json({ ...course, enrolled, owned: false })
       }),
     )
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-
     renderAt('/courses/course-1', <CourseHomePage />, {
       id: 'student-1',
       email: 'student@uni-companion.test',
@@ -316,6 +317,7 @@ describe('material pages', () => {
 
     expect(await screen.findByText('Lecture 1')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Unenroll from course' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Unenroll' }))
     expect(await screen.findByText('You are not enrolled yet')).toBeInTheDocument()
     expect(screen.queryByText('Lecture 1')).not.toBeInTheDocument()
   })

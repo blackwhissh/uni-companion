@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import { useAuth } from '../auth/use-auth.ts'
 import {
@@ -27,6 +27,7 @@ import { studyActionError, studyWorkingCopy } from './study-ui.ts'
 
 export function CourseQuizPage() {
   const { courseId = '' } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
   const userId = user?.id ?? null
   const course = useQuery({ queryKey: ['courses', courseId], queryFn: () => getCourse(courseId), retry: false })
@@ -94,6 +95,24 @@ export function CourseQuizPage() {
       setError(studyActionError(err, 'Could not generate a quiz.'))
     },
   })
+
+  useEffect(() => {
+    const current = searchParams.get('quiz')
+    if (quiz) {
+      if (current !== quiz.id) {
+        const next = new URLSearchParams(searchParams)
+        next.set('quiz', quiz.id)
+        setSearchParams(next, { replace: true })
+      }
+      return
+    }
+    // Drop stale ?quiz= on hard reload / picker so the URL matches the empty state.
+    if (current && !generate.isPending && !blockingForResume) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('quiz')
+      setSearchParams(next, { replace: true })
+    }
+  }, [quiz, searchParams, setSearchParams, generate.isPending, blockingForResume])
 
   useEffect(() => {
     if (resumedGeneration.current || !courseId || course.data?.enrolled !== true) {

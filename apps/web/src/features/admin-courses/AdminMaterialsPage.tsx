@@ -9,6 +9,7 @@ import {
   Alert,
   BackLink,
   Button,
+  ConfirmDialog,
   EmptyState,
   Page,
   PageHeader,
@@ -49,6 +50,13 @@ export function AdminMaterialsPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{
+    kind: 'publish' | 'unpublish' | 'delete'
+    material: Material
+    title: string
+    body: string
+    confirmLabel: string
+  } | null>(null)
   const canManage = course.data?.owned === true || platformAdmin
   const courseUnpublished = course.data?.visibility === 'UNPUBLISHED'
 
@@ -80,7 +88,9 @@ export function AdminMaterialsPage() {
       setBusyId(null)
       setNotice(
         variables.next === 'PUBLISHED'
-          ? `Published “${variables.title}”. Enrolled students can use it in study modes.`
+          ? courseUnpublished
+            ? `Published “${variables.title}”. Students still cannot open the course until you publish the course itself.`
+            : `Published “${variables.title}”. Enrolled students can use it in study modes.`
           : `Unpublished “${variables.title}”. Students can no longer select it.`,
       )
       await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
@@ -127,41 +137,56 @@ export function AdminMaterialsPage() {
     }
     if (publishing) {
       const draftNote = looksLikeDraftTitle(material.title)
-        ? `\n\nThis title looks like a draft (“${material.title}”). Publish anyway?`
+        ? `\n\nThis title looks like a draft (“${material.title}”).`
         : ''
       const courseNote = courseUnpublished
         ? '\n\nNote: this course is still unpublished, so students cannot open the course yet even after you publish the PDF.'
         : ''
-      if (
-        !window.confirm(
-          `Publish “${material.title}” for enrolled students?${draftNote}${courseNote}`,
-        )
-      ) {
-        return
-      }
-    } else if (!window.confirm(`Unpublish “${material.title}”? Students will lose access in study modes.`)) {
+      setConfirm({
+        kind: 'publish',
+        material,
+        title: 'Publish material?',
+        body: `Publish “${material.title}” for enrolled students?${draftNote}${courseNote}`,
+        confirmLabel: 'Publish',
+      })
       return
     }
-    setNotice(null)
-    setBusyId(material.id)
-    visibility.mutate({
-      id: material.id,
-      next: publishing ? 'PUBLISHED' : 'UNPUBLISHED',
-      title: material.title,
+    setConfirm({
+      kind: 'unpublish',
+      material,
+      title: 'Unpublish material?',
+      body: `Unpublish “${material.title}”? Students will lose access in study modes.`,
+      confirmLabel: 'Unpublish',
     })
   }
 
   function requestDelete(material: Material) {
-    if (
-      !window.confirm(
-        `Delete “${material.title}” permanently? This cannot be undone.`,
-      )
-    ) {
+    setConfirm({
+      kind: 'delete',
+      material,
+      title: 'Delete material?',
+      body: `Delete “${material.title}” permanently?\n\nThis cannot be undone.`,
+      confirmLabel: 'Delete permanently',
+    })
+  }
+
+  function runConfirm() {
+    if (!confirm) {
       return
     }
+    const { kind, material } = confirm
+    setConfirm(null)
     setNotice(null)
     setBusyId(material.id)
-    remove.mutate({ id: material.id, title: material.title })
+    if (kind === 'delete') {
+      remove.mutate({ id: material.id, title: material.title })
+      return
+    }
+    visibility.mutate({
+      id: material.id,
+      next: kind === 'publish' ? 'PUBLISHED' : 'UNPUBLISHED',
+      title: material.title,
+    })
   }
 
   return (
@@ -289,6 +314,9 @@ export function AdminMaterialsPage() {
                         <StatusPill tone={material.visibility === 'PUBLISHED' ? 'ok' : 'warn'}>
                           {material.visibility === 'PUBLISHED' ? 'Published' : 'Unpublished'}
                         </StatusPill>
+                        {looksLikeDraftTitle(material.title) ? (
+                          <StatusPill tone="warn">Draft title</StatusPill>
+                        ) : null}
                       </div>
                       {indexed && material.visibility !== 'PUBLISHED' ? (
                         <p className="mt-2 text-xs text-muted">
@@ -335,7 +363,7 @@ export function AdminMaterialsPage() {
                         <Button
                           type="button"
                           variant="danger"
-                          className="sm:ml-2"
+                          className="min-w-[5.5rem]"
                           disabled={rowBusy || remove.isPending}
                           onClick={() => requestDelete(material)}
                         >
@@ -350,6 +378,16 @@ export function AdminMaterialsPage() {
           </ul>
         </section>
       ) : null}
+
+      <ConfirmDialog
+        open={confirm !== null}
+        title={confirm?.title ?? ''}
+        body={confirm?.body ?? ''}
+        confirmLabel={confirm?.confirmLabel ?? 'Confirm'}
+        danger={confirm?.kind === 'delete'}
+        onCancel={() => setConfirm(null)}
+        onConfirm={runConfirm}
+      />
     </Page>
   )
 }

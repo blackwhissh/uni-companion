@@ -6,6 +6,7 @@ import {
   Alert,
   BackLink,
   Button,
+  ConfirmDialog,
   EmptyState,
   Page,
   PageHeader,
@@ -35,6 +36,7 @@ export function CourseHomePage() {
   const [actionNotice, setActionNotice] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ material: Material; url: string } | null>(null)
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null)
+  const [confirmUnenroll, setConfirmUnenroll] = useState(false)
   const enroll = useMutation({
     mutationFn: () => enrollInCourse(courseId),
     onSuccess: async () => {
@@ -287,11 +289,7 @@ export function CourseHomePage() {
                   variant="ghost"
                   className="mt-2"
                   disabled={unenroll.isPending}
-                  onClick={() => {
-                    if (window.confirm(`Unenroll from “${course.data?.title ?? 'this course'}”?`)) {
-                      unenroll.mutate()
-                    }
-                  }}
+                  onClick={() => setConfirmUnenroll(true)}
                 >
                   {unenroll.isPending ? 'Working…' : 'Unenroll from course'}
                 </Button>
@@ -300,6 +298,19 @@ export function CourseHomePage() {
           ) : null}
         </>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmUnenroll}
+        title="Unenroll from course?"
+        body={`Unenroll from “${course.data?.title ?? 'this course'}”? You can join again later.`}
+        confirmLabel="Unenroll"
+        danger
+        onCancel={() => setConfirmUnenroll(false)}
+        onConfirm={() => {
+          setConfirmUnenroll(false)
+          unenroll.mutate()
+        }}
+      />
 
       {course.data && !enrolled && !owned && !unavailable ? (
         <EmptyState

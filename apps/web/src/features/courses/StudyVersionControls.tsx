@@ -1,4 +1,5 @@
-import { Button } from '../../shared/ui/ui.tsx'
+import { useState } from 'react'
+import { Button, ConfirmDialog } from '../../shared/ui/ui.tsx'
 import type { StudyDelivery, StudyVersion } from './study-api.ts'
 
 type Props = {
@@ -11,6 +12,8 @@ type Props = {
 }
 
 export function StudyVersionControls({ noun, delivery, versions, busy = false, onSelect, onReport }: Props) {
+  const [confirmReport, setConfirmReport] = useState(false)
+
   return (
     <div className="mt-4 rounded-xl border border-line bg-mist/50 px-4 py-3">
       <p className="text-sm text-ink-soft" aria-live="polite">
@@ -29,23 +32,23 @@ export function StudyVersionControls({ noun, delivery, versions, busy = false, o
             {noun === 'deck' ? 'Deck' : 'Quiz'} {version.version}
           </Button>
         ))}
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={busy}
-          onClick={() => {
-            if (
-              window.confirm(
-                `Report this ${noun} as a quality issue? Repeated reports can retire it for everyone.`,
-              )
-            ) {
-              onReport()
-            }
-          }}
-        >
+        <Button type="button" variant="ghost" disabled={busy} onClick={() => setConfirmReport(true)}>
           Report quality issue
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmReport}
+        title={`Report this ${noun}?`}
+        body={`Report this ${noun} as a quality issue? Repeated reports can retire it for everyone.`}
+        confirmLabel="Report"
+        danger
+        onCancel={() => setConfirmReport(false)}
+        onConfirm={() => {
+          setConfirmReport(false)
+          onReport()
+        }}
+      />
     </div>
   )
 }

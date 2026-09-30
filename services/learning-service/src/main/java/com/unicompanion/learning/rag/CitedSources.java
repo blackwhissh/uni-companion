@@ -28,7 +28,9 @@ final class CitedSources {
                     + "do not appear in|doesn't appear in|does not appear in"
                     + ")\\b"
     );
-    private static final Pattern DIRECT_ANSWER_HEADING = Pattern.compile("(?m)^##\\s+Direct answer\\s*$");
+    private static final Pattern DIRECT_ANSWER_HEADING = Pattern.compile(
+            "(?m)^##\\s+(?:Direct answer|Direkte Antwort|Antwort)\\s*$"
+    );
     private static final Set<String> STOP = Set.of(
             "a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "is", "are", "was", "were",
             "be", "as", "by", "with", "from", "that", "this", "it", "its", "you", "your", "what",
@@ -288,6 +290,9 @@ final class CitedSources {
                 .replaceAll(" +([.,;:!?])", "$1")
                 .replaceAll(" {2,}", " ")
                 .replaceAll(" *\\n", "\n")
+                // Stray punctuation left alone after a chip/list strip (e.g. ".\n" after [1]).
+                .replaceAll("(?m)^\\s*[.,;:]+\\s*$", "")
+                .replaceAll("\\n{3,}", "\n\n")
                 .trim();
     }
 

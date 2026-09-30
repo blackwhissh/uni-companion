@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { SectionLabel } from '../../shared/ui/ui.tsx'
 import { openMaterialAtPage } from './material-api.ts'
@@ -18,6 +18,7 @@ export function QaSources({
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [openError, setOpenError] = useState<string | null>(null)
   const mentionCounts = useMemo(() => countMentions(answer, citations.length), [answer, citations.length])
+  const focusTerms = useMemo(() => significantTerms(answer), [answer])
 
   useEffect(() => {
     function onHash() {
@@ -104,7 +105,7 @@ export function QaSources({
                     </div>
 
                     <blockquote className="mt-3 border-l-2 border-accent/40 bg-accent/[0.04] py-2 pl-3 pr-2 text-sm leading-relaxed text-ink">
-                      “{shown}”
+                      “{highlightPassage(shown, focusTerms, isActive)}”
                     </blockquote>
 
                     <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -158,4 +159,56 @@ function countMentions(answer: string, citationCount: number): Record<number, nu
     }
   }
   return counts
+}
+
+const STOP = new Set([
+  'a', 'an', 'the', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'is', 'are', 'was', 'were',
+  'be', 'as', 'by', 'with', 'from', 'that', 'this', 'it', 'its', 'you', 'your', 'what',
+  'how', 'why', 'when', 'which', 'about', 'into', 'than', 'then', 'also', 'can', 'do',
+  'does', 'did', 'will', 'would', 'should', 'could', 'not', 'no', 'yes', 'direct', 'answer',
+  'explanation', 'key', 'terms', 'der', 'die', 'das', 'und', 'oder', 'ein', 'eine', 'ist',
+  'sind', 'nicht', 'mit', 'auf', 'für', 'den', 'dem', 'des',
+])
+
+function significantTerms(text: string): Set<string> {
+  const out = new Set<string>()
+  for (const raw of text.toLowerCase().split(/[^a-z0-9äöüß]+/i)) {
+    if (!raw) {
+      continue
+    }
+    if (/^\d+$/.test(raw)) {
+      out.add(raw)
+      continue
+    }
+    if (raw.length < 3 || STOP.has(raw)) {
+      continue
+    }
+    out.add(raw)
+  }
+  return out
+}
+
+function highlightPassage(excerpt: string, focus: Set<string>, emphasize: boolean): ReactNode {
+  if (focus.size === 0) {
+    return excerpt
+  }
+  const parts = excerpt.split(/([^a-z0-9äöüß]+)/i)
+  return parts.map((part, index) => {
+    const key = part.toLowerCase()
+    if (focus.has(key) || (/^\d+$/.test(part) && focus.has(part))) {
+      return (
+        <mark
+          key={index}
+          className={
+            emphasize
+              ? 'rounded-sm bg-accent/35 px-0.5 text-ink'
+              : 'rounded-sm bg-accent/20 px-0.5 text-ink'
+          }
+        >
+          {part}
+        </mark>
+      )
+    }
+    return part
+  })
 }

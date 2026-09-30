@@ -40,7 +40,12 @@ export function StudyMaterialPicker({
         return selectionFor(ready, [...current], initialSelectedIds)
       }
       const readyIds = new Set(ready.map((material) => material.id))
-      return new Set([...current].filter((id) => readyIds.has(id)))
+      const kept = [...current].filter((id) => readyIds.has(id))
+      if (kept.length > 0) {
+        return new Set(kept)
+      }
+      // Materials often load after mount — restore the remembered selection once ready.
+      return selectionFor(ready, [], initialSelectedIds)
     })
   }, [ready, initialSelectedIds])
 

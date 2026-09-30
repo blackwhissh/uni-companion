@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -95,7 +95,6 @@ describe('course pages', () => {
 
   it('lets a student unenroll and shows Enroll again', async () => {
     setAccessToken('student-token')
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     let joined = true
     vi.stubGlobal(
       'fetch',
@@ -111,7 +110,8 @@ describe('course pages', () => {
     renderWithQuery(<CoursesPage />, studentUser)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Unenroll' }))
-    expect(window.confirm).toHaveBeenCalled()
+    const dialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Unenroll' }))
     expect(await screen.findByRole('button', { name: 'Enroll' })).toBeInTheDocument()
     expect(screen.queryByText('Enrolled')).not.toBeInTheDocument()
   })
@@ -165,10 +165,13 @@ describe('course pages', () => {
       '/admin/courses/course-2/materials',
     )
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Publish' }))
     expect(await screen.findByText('CISS-NEW · 2026WS · Published')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Unpublish' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Unpublish' }))
     expect(await screen.findByText('CISS-NEW · 2026WS · Unpublished')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete permanently' }))
     expect(await screen.findByText('No courses yet.')).toBeInTheDocument()
   })
 })

@@ -78,6 +78,9 @@ function Block({
       </ol>
     )
   }
+  if (/^[.,;:!?]+$/.test(block.text.trim())) {
+    return null
+  }
   return <p>{renderInline(block.text, citations)}</p>
 }
 
@@ -140,7 +143,7 @@ function splitBlocks(markdown: string): Block[] {
 
 function renderInline(text: string, citations: Map<number, CitationMeta>): ReactNode[] {
   const nodes: ReactNode[] = []
-  const pattern = /(\$\$[^$]+\$\$|\$[^$\n]+\$|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[\d+\])/g
+  const pattern = /(\$\$[^$]+\$\$|\$[^$\n]+\$|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[\d+][.,;:!?]?)/g
   let last = 0
   let match: RegExpExecArray | null
   let key = 0
@@ -183,7 +186,9 @@ function renderInline(text: string, citations: Map<number, CitationMeta>): React
         </code>,
       )
     } else {
-      const n = Number(token.slice(1, -1))
+      const citeMatch = /^\[(\d+)]([.,;:!?]?)$/.exec(token)
+      const n = citeMatch ? Number(citeMatch[1]) : Number(token.slice(1, -1))
+      const trailing = citeMatch?.[2] ?? ''
       const meta = citations.get(n)
       if (!meta) {
         last = match.index + token.length
@@ -193,26 +198,28 @@ function renderInline(text: string, citations: Map<number, CitationMeta>): React
         ? `Source ${n}: ${meta.title}, ${meta.sectionHint}, page ${meta.pageNumber}`
         : `Source ${n}: ${meta.title}, page ${meta.pageNumber}`
       nodes.push(
-        <a
-          key={key++}
-          href={`#qa-source-${n}`}
-          title={label}
-          aria-label={label}
-          className="mx-0.5 inline-flex h-5 min-w-5 align-middle items-center justify-center rounded-md bg-accent/15 px-1 text-xs font-semibold text-accent-deep no-underline hover:bg-accent/25"
-          onClick={(event) => {
-            event.preventDefault()
-            const target = document.getElementById(`qa-source-${n}`)
-            if (target) {
-              target.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              if (window.location.hash !== `#qa-source-${n}`) {
-                window.history.replaceState(null, '', `#qa-source-${n}`)
+        <span key={key++} className="whitespace-nowrap">
+          <a
+            href={`#qa-source-${n}`}
+            title={label}
+            aria-label={label}
+            className="mx-0.5 inline-flex h-5 min-w-5 align-middle items-center justify-center rounded-md bg-accent/15 px-1 text-xs font-semibold text-accent-deep no-underline hover:bg-accent/25"
+            onClick={(event) => {
+              event.preventDefault()
+              const target = document.getElementById(`qa-source-${n}`)
+              if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                if (window.location.hash !== `#qa-source-${n}`) {
+                  window.history.replaceState(null, '', `#qa-source-${n}`)
+                }
+                window.dispatchEvent(new Event('hashchange'))
               }
-              window.dispatchEvent(new Event('hashchange'))
-            }
-          }}
-        >
-          {n}
-        </a>,
+            }}
+          >
+            {n}
+          </a>
+          {trailing}
+        </span>,
       )
     }
     last = match.index + token.length
