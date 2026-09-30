@@ -33,15 +33,19 @@ export function CourseFlashcardsPage() {
   })
 
   const [deck, setDeck] = useState<FlashcardDeck | null>(null)
+  const pendingAtMount = useRef(courseId ? loadStudyGeneration('flashcards', courseId) : null)
   const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>(() =>
-    courseId ? loadMaterialSelection('flashcards', courseId) : [],
+    pendingAtMount.current?.materialIds ?? (courseId ? loadMaterialSelection('flashcards', courseId) : []),
   )
   const [index, setIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [picking, setPicking] = useState(true)
-  const [generateForce, setGenerateForce] = useState(false)
+  const [notice, setNotice] = useState<string | null>(() =>
+    pendingAtMount.current ? 'Still preparing your shared deck…' : null,
+  )
+  const [picking, setPicking] = useState(() => !pendingAtMount.current)
+  const [blockingForResume, setBlockingForResume] = useState(() => !!pendingAtMount.current)
+  const [generateForce, setGenerateForce] = useState(() => pendingAtMount.current?.force === true)
   const resumedGeneration = useRef(false)
 
   const generate = useMutation({
@@ -58,6 +62,7 @@ export function CourseFlashcardsPage() {
     },
     onSuccess: (next: FlashcardDeck, variables) => {
       clearStudyGeneration('flashcards', courseId)
+      setBlockingForResume(false)
       setError(null)
       setNotice(next.cards.length > 0 ? `This shared deck has ${next.cards.length} cards.` : null)
       setPicking(false)
@@ -68,6 +73,7 @@ export function CourseFlashcardsPage() {
     },
     onError: (err) => {
       clearStudyGeneration('flashcards', courseId)
+      setBlockingForResume(false)
       setError(studyActionError(err, 'Could not generate flashcards.'))
     },
   })
@@ -76,11 +82,14 @@ export function CourseFlashcardsPage() {
     if (resumedGeneration.current || !courseId || course.data?.enrolled !== true) {
       return
     }
-    const pending = loadStudyGeneration('flashcards', courseId)
+    const pending = pendingAtMount.current ?? loadStudyGeneration('flashcards', courseId)
     if (!pending) {
+      setBlockingForResume(false)
       return
     }
     resumedGeneration.current = true
+    setBlockingForResume(true)
+    setPicking(false)
     setNotice('Still preparing your shared deck…')
     generate.mutate({ materialIds: pending.materialIds, force: pending.force })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,11 +139,12 @@ export function CourseFlashcardsPage() {
   const enrolled = course.data?.enrolled === true
   const cards = deck?.cards ?? []
   const card = cards[index]
-  const showPicker = picking || (!deck && !generate.isPending)
+  const showPicker = !blockingForResume && !generate.isPending && (picking || !deck)
+  const showWorking = generate.isPending || blockingForResume
   const sourceTitles = readyMaterials
     .filter((material) => selectedMaterialIds.includes(material.id))
     .map((material) => material.title)
-  const generating = generate.isPending
+  const generating = generate.isPending || blockingForResume
 
   function startGeneration(materialIds: string[], force: boolean) {
     if (generating) {
@@ -242,17 +252,21 @@ export function CourseFlashcardsPage() {
             </Panel>
           ) : null}
 
-          {generating ? (
+          {showWorking ? (
             <section className="mt-8 animate-pulse-soft" aria-live="polite">
               <SectionLabel>Working</SectionLabel>
               <Panel className="mt-4">
-                <p className="text-muted">{studyWorkingCopy('deck', generateForce)}</p>
+                <p className="text-muted">
+                  {blockingForResume && !generate.isPending
+                    ? 'Still preparing your shared deck…'
+                    : studyWorkingCopy('deck', generateForce)}
+                </p>
                 <p className="mt-2 text-sm text-muted">You can refresh this page — preparation will continue.</p>
               </Panel>
             </section>
           ) : null}
 
-          {showPicker && !generating ? (
+          {showPicker ? (
             <StudyMaterialPicker
               materials={readyMaterials}
               description="Select the lecture PDFs to study. You will resume your deck or receive the first shared version for this exact selection."

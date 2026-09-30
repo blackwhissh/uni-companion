@@ -398,8 +398,7 @@ public class StudyService {
             boolean advance
     ) {
         StudyProgressKey progressKey = new StudyProgressKey(courseId, userId, materialsKey);
-        List<FlashcardDeckEntity> versions =
-                decks.findByCourseIdAndMaterialsKeyAndActiveTrueOrderByCreatedAtAsc(courseId, materialsKey);
+        List<FlashcardDeckEntity> versions = activeFlashcardDecks(courseId, materialsKey);
         Optional<UUID> currentId = deckProgress.findById(progressKey)
                 .map(FlashcardDeckProgressEntity::getDeckId)
                 .filter(id -> versions.stream().anyMatch(version -> version.getId().equals(id)));
@@ -716,7 +715,7 @@ public class StudyService {
     }
 
     private List<ChatModel.FlashcardDraft> existingFlashcards(UUID courseId, String materialsKey) {
-        return decks.findByCourseIdAndMaterialsKeyAndActiveTrueOrderByCreatedAtAsc(courseId, materialsKey).stream()
+        return activeFlashcardDecks(courseId, materialsKey).stream()
                 .flatMap(deck -> flashcards.findByDeckIdOrderBySortOrderAsc(deck.getId()).stream())
                 .map(card -> new ChatModel.FlashcardDraft(card.getFront(), card.getBack()))
                 .toList();
@@ -1136,16 +1135,44 @@ public class StudyService {
         }
     }
 
+    private List<FlashcardDeckEntity> activeFlashcardDecks(UUID courseId, String materialsKey) {
+        List<FlashcardDeckEntity> versions =
+                decks.findByCourseIdAndMaterialsKeyAndActiveTrueOrderByCreatedAtAsc(courseId, materialsKey);
+        Instant now = Instant.now();
+        boolean changed = false;
+        for (FlashcardDeckEntity deck : versions) {
+            int cardCount = flashcards.findByDeckIdOrderBySortOrderAsc(deck.getId()).size();
+            if (cardCount < MIN_CARD_COUNT) {
+                deck.retire("Too few cards for useful study (" + cardCount + ")", now);
+                decks.save(deck);
+                changed = true;
+                log.info(
+                        "Retired undersized flashcard deck id={} course={} cards={} min={}",
+                        deck.getId(),
+                        courseId,
+                        cardCount,
+                        MIN_CARD_COUNT
+                );
+            }
+        }
+        if (!changed) {
+            return versions;
+        }
+        return decks.findByCourseIdAndMaterialsKeyAndActiveTrueOrderByCreatedAtAsc(courseId, materialsKey);
+    }
+
     private DeckView toDeckView(
             FlashcardDeckEntity deck,
             List<FlashcardEntity> cards,
             Delivery delivery
     ) {
-        List<FlashcardDeckEntity> versions =
-                decks.findByCourseIdAndMaterialsKeyAndActiveTrueOrderByCreatedAtAsc(
-                deck.getCourseId(),
-                deck.getMaterialsKey()
-        );
+        List<FlashcardDeckEntity> versions = activeFlashcardDecks(deck.getCourseId(), deck.getMaterialsKey());
+        if (versions.stream().noneMatch(version -> version.getId().equals(deck.getId()))) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "That flashcard deck was retired because it had too few cards."
+            );
+        }
         int currentVersion = versionOf(versions.stream().map(FlashcardDeckEntity::getId).toList(), deck.getId());
         return new DeckView(
                 deck.getId(),

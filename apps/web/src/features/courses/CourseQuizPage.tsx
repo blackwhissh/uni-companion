@@ -38,15 +38,19 @@ export function CourseQuizPage() {
   })
 
   const [quiz, setQuiz] = useState<Quiz | null>(null)
+  const pendingAtMount = useRef(courseId ? loadStudyGeneration('quiz', courseId) : null)
   const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>(() =>
-    courseId ? loadMaterialSelection('quiz', courseId) : [],
+    pendingAtMount.current?.materialIds ?? (courseId ? loadMaterialSelection('quiz', courseId) : []),
   )
   const [answers, setAnswers] = useState<Record<string, number>>({})
   const [attempt, setAttempt] = useState<QuizAttempt | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [picking, setPicking] = useState(true)
-  const [generateForce, setGenerateForce] = useState(false)
+  const [notice, setNotice] = useState<string | null>(() =>
+    pendingAtMount.current ? 'Still preparing your shared quiz…' : null,
+  )
+  const [picking, setPicking] = useState(() => !pendingAtMount.current)
+  const [blockingForResume, setBlockingForResume] = useState(() => !!pendingAtMount.current)
+  const [generateForce, setGenerateForce] = useState(() => pendingAtMount.current?.force === true)
   const resumedGeneration = useRef(false)
 
   useEffect(() => {
@@ -70,6 +74,7 @@ export function CourseQuizPage() {
     },
     onSuccess: (next, variables) => {
       clearStudyGeneration('quiz', courseId)
+      setBlockingForResume(false)
       setError(null)
       setNotice(null)
       setPicking(false)
@@ -85,6 +90,7 @@ export function CourseQuizPage() {
     },
     onError: (err) => {
       clearStudyGeneration('quiz', courseId)
+      setBlockingForResume(false)
       setError(studyActionError(err, 'Could not generate a quiz.'))
     },
   })
@@ -93,11 +99,14 @@ export function CourseQuizPage() {
     if (resumedGeneration.current || !courseId || course.data?.enrolled !== true) {
       return
     }
-    const pending = loadStudyGeneration('quiz', courseId)
+    const pending = pendingAtMount.current ?? loadStudyGeneration('quiz', courseId)
     if (!pending) {
+      setBlockingForResume(false)
       return
     }
     resumedGeneration.current = true
+    setBlockingForResume(true)
+    setPicking(false)
     setNotice('Still preparing your shared quiz…')
     generate.mutate({ materialIds: pending.materialIds, force: pending.force })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -185,7 +194,8 @@ export function CourseQuizPage() {
   const unansweredCount =
     quiz?.questions?.filter((question) => answers[question.id] === undefined).length ?? 0
   const reviewsByQuestion = new Map((attempt?.reviews ?? []).map((review) => [review.questionId, review]))
-  const showPicker = picking || (!quiz && !generate.isPending)
+  const showPicker = !blockingForResume && !generate.isPending && (picking || !quiz)
+  const showWorking = generate.isPending || blockingForResume
 
   return (
     <Page>
@@ -242,17 +252,21 @@ export function CourseQuizPage() {
           ) : null}
           {notice ? <Panel className="mt-6"><p className="text-sm text-ink-soft">{notice}</p></Panel> : null}
 
-          {generate.isPending ? (
+          {showWorking ? (
             <section className="mt-8 animate-pulse-soft" aria-live="polite">
               <SectionLabel>Working</SectionLabel>
               <Panel className="mt-4">
-                <p className="text-muted">{studyWorkingCopy('quiz', generateForce)}</p>
+                <p className="text-muted">
+                  {blockingForResume && !generate.isPending
+                    ? 'Still preparing your shared quiz…'
+                    : studyWorkingCopy('quiz', generateForce)}
+                </p>
                 <p className="mt-2 text-sm text-muted">You can refresh this page — preparation will continue.</p>
               </Panel>
             </section>
           ) : null}
 
-          {showPicker && !generate.isPending ? (
+          {showPicker ? (
             <StudyMaterialPicker
               materials={readyMaterials}
               description="Select the lecture PDFs to practice. You will resume your quiz or receive the first shared version for this exact selection."

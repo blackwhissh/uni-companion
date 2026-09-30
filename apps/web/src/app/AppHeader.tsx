@@ -10,6 +10,7 @@ export function AppHeader() {
   const queryClient = useQueryClient()
   const home = user ? homePathFor(user.roles) : '/'
   const isStaff = user?.roles.includes('COURSE_ADMIN') || user?.roles.includes('ADMIN')
+  const shortName = user ? shortDisplayName(user.displayName) : ''
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `shrink-0 rounded-md px-2 py-1.5 text-sm font-medium transition ${
@@ -24,7 +25,7 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-line/80 bg-paper/80 backdrop-blur-md">
-      <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 sm:py-3.5">
+      <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-3 sm:h-auto sm:gap-4 sm:px-6 sm:py-3.5">
         <Link to={home} className="group flex min-w-0 shrink items-center gap-2 sm:gap-2.5">
           <span
             aria-hidden
@@ -36,11 +37,15 @@ export function AppHeader() {
             Uni Companion
           </span>
         </Link>
-        <nav className="ml-auto flex max-w-full items-center justify-end gap-0.5 overflow-x-auto sm:gap-2">
+        <nav className="ml-auto flex max-w-full items-center justify-end gap-0.5 overflow-x-auto whitespace-nowrap sm:gap-2">
           {user ? (
             <>
-              <span className="mr-1 hidden max-w-[8rem] truncate text-sm text-muted md:inline" title={user.displayName}>
-                {user.displayName}
+              <span
+                className="mr-1 max-w-[6.5rem] truncate text-xs font-medium text-ink-soft sm:max-w-[9rem] sm:text-sm"
+                title={user.displayName}
+              >
+                <span className="sm:hidden">{shortName}</span>
+                <span className="hidden sm:inline">{user.displayName}</span>
               </span>
               <NavLink to="/courses" className={linkClass}>
                 Courses
@@ -75,4 +80,16 @@ export function AppHeader() {
       </div>
     </header>
   )
+}
+
+function shortDisplayName(displayName: string) {
+  const trimmed = displayName.trim()
+  if (!trimmed) {
+    return 'Account'
+  }
+  const parts = trimmed.split(/\s+/).filter(Boolean)
+  if (parts.length === 1) {
+    return parts[0].length > 10 ? `${parts[0].slice(0, 9)}…` : parts[0]
+  }
+  return `${parts[0]} ${parts[1][0]}.`
 }

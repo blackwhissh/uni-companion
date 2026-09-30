@@ -56,6 +56,7 @@ describe('course quiz page', () => {
   afterEach(() => {
     cleanup()
     setAccessToken(null)
+    sessionStorage.clear()
     vi.unstubAllGlobals()
   })
 
@@ -182,6 +183,60 @@ describe('course quiz page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('Which statement is supported?')).toBeInTheDocument()
     expect(generateCalls).toBe(2)
+  })
+
+  it('resumes an in-flight quiz generation after refresh instead of showing the picker', async () => {
+    setAccessToken('student-token')
+    sessionStorage.setItem(
+      'uc-study-gen:quiz:course-1',
+      JSON.stringify({ materialIds: ['material-1'], force: false, startedAt: Date.now() }),
+    )
+    let resolveGenerate: ((value: Response) => void) | undefined
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const path = String(url)
+        if (path.includes('/quizzes/generate') && init?.method === 'POST') {
+          return new Promise<Response>((resolve) => {
+            resolveGenerate = resolve
+          })
+        }
+        if (path.endsWith('/materials')) {
+          return json([material])
+        }
+        return json(course)
+      }),
+    )
+
+    renderAt('/courses/course-1/quiz', <CourseQuizPage />)
+
+    expect(await screen.findByText('Still preparing your shared quiz…')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start quiz' })).not.toBeInTheDocument()
+
+    expect(resolveGenerate).toBeTypeOf('function')
+    resolveGenerate!(
+      json(
+        {
+          id: 'quiz-1',
+          courseId: 'course-1',
+          version: 1,
+          availableVersions: 1,
+          maxVersions: 3,
+          delivery: 'CREATED',
+          versions: [{ id: 'quiz-1', version: 1, createdAt: '2026-09-28T20:00:00Z', current: true }],
+          questions: [
+            {
+              id: 'q-1',
+              prompt: 'Resumed question?',
+              options: ['Yes', 'No', 'Maybe', 'Later'],
+            },
+          ],
+        },
+        201,
+      ),
+    )
+
+    expect(await screen.findByText('Resumed question?')).toBeInTheDocument()
   })
 })
 
