@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, Navigate, useLocation } from 'react-router'
 import { useAuth } from '../features/auth/use-auth.ts'
+import { shouldSkipReturnPath } from '../features/auth/auth-session-sync.ts'
 import { Page } from '../shared/ui/ui.tsx'
 
 function SessionLoading() {
@@ -18,6 +19,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     return <SessionLoading />
   }
   if (!user) {
+    // After logout, do not stash the previous page as the next login return path.
+    if (shouldSkipReturnPath()) {
+      return <Navigate to="/login" replace />
+    }
     return <Navigate to="/login" replace state={{ from: location }} />
   }
   return children
@@ -30,6 +35,9 @@ export function RequireRole({ role, children }: { role: string; children: ReactN
     return <SessionLoading />
   }
   if (!user) {
+    if (shouldSkipReturnPath()) {
+      return <Navigate to="/login" replace />
+    }
     return <Navigate to="/login" replace state={{ from: location }} />
   }
   if (!user.roles.includes(role)) {

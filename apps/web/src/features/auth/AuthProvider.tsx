@@ -68,7 +68,7 @@ export function AuthProvider({
     setUserState(null)
   }
 
-  function setUser(next: User) {
+  function setUser(next: User | null) {
     setUserState(next)
   }
 

@@ -20,7 +20,7 @@ export function AppHeader() {
   async function onLogout() {
     await logout()
     queryClient.clear()
-    navigate('/login', { replace: true })
+    navigate('/login', { replace: true, state: {} })
   }
 
   return (

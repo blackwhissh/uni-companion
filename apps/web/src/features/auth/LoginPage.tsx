@@ -2,13 +2,17 @@ import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { useAuth } from './use-auth.ts'
 import { AuthForm, Field } from './AuthForm.tsx'
+import { consumeSkipReturnPath, shouldSkipReturnPath } from './auth-session-sync.ts'
 import { homePathFor } from './home-path.ts'
 
 type LocationState = { from?: { pathname?: string; search?: string; hash?: string } }
 
-function targetFrom(state: unknown, roles: string[]) {
+function resolvePostLoginTarget(state: unknown, roles: string[]) {
+  if (shouldSkipReturnPath()) {
+    return homePathFor(roles)
+  }
   const from = (state as LocationState | null)?.from
-  if (from?.pathname) {
+  if (from?.pathname && from.pathname.startsWith('/') && !from.pathname.startsWith('//')) {
     return `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`
   }
   return homePathFor(roles)
@@ -20,9 +24,13 @@ export function LoginPage() {
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [submittedLogin, setSubmittedLogin] = useState(false)
 
-  if (ready && user) {
-    return <Navigate to={targetFrom(location.state, user.roles)} replace />
+  // Already signed in (e.g. opened /login with a live session) — honor skip-return from logout.
+  if (ready && user && !submittedLogin) {
+    const target = resolvePostLoginTarget(location.state, user.roles)
+    consumeSkipReturnPath()
+    return <Navigate to={target} replace state={{}} />
   }
 
   return (
@@ -31,8 +39,11 @@ export function LoginPage() {
       subtitle="Pick up where you left off — courses, materials, and matching stay with your account."
       submitLabel="Log in"
       onSubmit={async (values) => {
+        setSubmittedLogin(true)
         const next = await login(values.email ?? email, values.password ?? password)
-        navigate(targetFrom(location.state, next.roles), { replace: true })
+        const target = resolvePostLoginTarget(location.state, next.roles)
+        consumeSkipReturnPath()
+        navigate(target, { replace: true, state: {} })
       }}
       footer={
         <>

@@ -7,7 +7,7 @@ export type AuthContextValue = {
   login: (email: string, password: string) => Promise<User>
   register: (email: string, password: string, displayName: string) => Promise<User>
   logout: () => void | Promise<void>
-  setUser: (user: User) => void
+  setUser: (user: User | null) => void
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

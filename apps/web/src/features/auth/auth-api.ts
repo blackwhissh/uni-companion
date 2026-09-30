@@ -2,6 +2,8 @@ import { getAccessToken, setAccessToken } from '../../shared/api/access-token.ts
 import { allowTokenRefresh, blockTokenRefresh, identityFetch, tryRefreshAccessToken } from '../../shared/api/identity-client.ts'
 import { clearAllMaterialSelections } from '../courses/material-selection-storage.ts'
 import { clearAllQuizAnswers } from '../courses/quiz-answer-storage.ts'
+import { clearAllStudyGenerations } from '../courses/study-generation-storage.ts'
+import { broadcastAuthLogout, markLogoutNavigation } from './auth-session-sync.ts'
 import type { AuthResponse, User } from './types.ts'
 
 export function registerAccount(input: { email: string; password: string; displayName: string }) {
@@ -24,6 +26,8 @@ export function loginAccount(input: { email: string; password: string }) {
 }
 
 export async function logoutAccount() {
+  markLogoutNavigation()
+  broadcastAuthLogout()
   blockTokenRefresh()
   try {
     await identityFetch<void>('/api/auth/logout', { method: 'POST' }, false)
@@ -33,6 +37,7 @@ export async function logoutAccount() {
     setAccessToken(null)
     clearAllQuizAnswers()
     clearAllMaterialSelections()
+    clearAllStudyGenerations()
   }
 }
 

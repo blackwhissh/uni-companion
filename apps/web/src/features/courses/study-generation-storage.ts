@@ -73,3 +73,24 @@ export function clearStudyGeneration(kind: StudyGenKind, courseId: string) {
     // ignore
   }
 }
+
+export function clearAllStudyGenerations() {
+  const storage = store()
+  if (!storage) {
+    return
+  }
+  try {
+    const toRemove: string[] = []
+    for (let i = 0; i < storage.length; i++) {
+      const entry = storage.key(i)
+      if (entry?.startsWith(PREFIX)) {
+        toRemove.push(entry)
+      }
+    }
+    for (const entry of toRemove) {
+      storage.removeItem(entry)
+    }
+  } catch {
+    // ignore
+  }
+}
