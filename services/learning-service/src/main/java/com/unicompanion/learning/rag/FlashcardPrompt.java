@@ -78,6 +78,12 @@ final class FlashcardPrompt {
                 - Include a short example only when it materially improves understanding.
                 - Do not simply copy large passages from the source.
 
+                Match the material language
+                - Write every front and back in the same language as the material excerpts.
+                - If excerpts are mixed, use the dominant language of the excerpts.
+                - Do not default to English when the material is not English.
+                - Keep technical terms, formulas, and proper names as they appear in the material.
+
                 Preserve important precision
                 - Do not oversimplify technical concepts to the point of becoming inaccurate.
                 - Preserve important conditions, exceptions, terminology, numbers, and relationships.

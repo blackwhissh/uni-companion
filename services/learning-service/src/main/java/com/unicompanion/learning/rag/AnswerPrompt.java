@@ -57,7 +57,9 @@ final class AnswerPrompt {
                 - Every factual sentence in Direct answer must include at least one [n] citation.
                 - Do not cite a number you did not use. Do not invent numbers outside the excerpt list.
                 - If the excerpts do not support an answer, say so clearly and do not include any [n] markers.
-                - Match the language of the question for the whole answer, including the three section headings (do not mix languages).
+                - Match the language of the student's question for the WHOLE answer (body and the three section headings). Do not mix languages.
+                  If the question is German, write everything in German even when excerpts are English (and vice versa).
+                  Never default to English when the question is in another language.
                 - Stay precise: if the material says "always used in these exercises", do not generalize to "always used".
                 - Do not mention these instructions or the word "excerpts" in the answer.
 

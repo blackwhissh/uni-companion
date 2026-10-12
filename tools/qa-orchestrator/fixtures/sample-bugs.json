@@ -1,0 +1,29 @@
+{
+  "bugs": [
+    {
+      "id": "BUG-HOME-001",
+      "severity": "high",
+      "title": "Home page brand heading missing",
+      "steps": [
+        "Open the web app root URL",
+        "Look at the hero heading"
+      ],
+      "expected": "An h1 reading \"Uni Companion\" is visible",
+      "actual": "Heading missing or wrong text (use this sample to prove the retest path)",
+      "evidence": "Playwright repro: src/playwright/repros/BUG-HOME-001.ts"
+    },
+    {
+      "id": "BUG-DEMO-NO-REPRO",
+      "severity": "medium",
+      "title": "Example bug without a Playwright repro",
+      "steps": [
+        "Login",
+        "Upload a PDF",
+        "Click Preview"
+      ],
+      "expected": "PDF preview opens",
+      "actual": "Blank screen",
+      "evidence": "Add src/playwright/repros/BUG-DEMO-NO-REPRO.ts to auto-verify"
+    }
+  ]
+}

@@ -50,6 +50,9 @@ final class QuizPrompt {
                 - Do not test the same fact with a differently worded stem or a nearly identical correct answer.
                 - Explanations must briefly state why the answer is correct based on the material.
                 - Do not include source markers such as [1] in questions or options.
+                - Write every prompt, option, and explanation in the same language as the material excerpts.
+                  If excerpts are mixed, use the dominant language. Do not default to English when the material is not English.
+                  Keep technical terms, formulas, and proper names as they appear in the material.
 
                 Before responding, remove redundant or trivial questions and verify every correct answer.
 
