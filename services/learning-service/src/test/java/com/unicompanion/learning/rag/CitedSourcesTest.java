@@ -129,6 +129,37 @@ class CitedSourcesTest {
     }
 
     @Test
+    void realignsMarkerWhenClaimMatchesDifferentExcerpt() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk(
+                        "Lecture 3",
+                        8,
+                        "In the exercises we always use the median-of-three pivot rule for Quicksort."
+                ),
+                chunk("Lecture 3", 9, "Insertion sort is always used when n < 17 in this course.")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        Insertion sort is used when n < 17 [1].
+                        Quicksort exercises use median-of-three pivoting.
+
+                        ## Explanation
+                        Both rules come from Lecture 3.
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).hasSize(2);
+        assertThat(result.chunks().getFirst().content()).contains("n < 17");
+        assertThat(result.answer()).contains("Insertion sort is used when n < 17 [1]");
+        assertThat(result.answer()).contains("median-of-three");
+        assertThat(result.answer()).contains("[2]");
+        assertThat(result.chunks()).hasSize(2);
+    }
+
+    @Test
     void keepsValidMembersOfListCitationsWhenAnswerIsGrounded() {
         List<ChatModel.RetrievedChunk> retrieved = List.of(
                 chunk("A", 1, "alpha fact"),

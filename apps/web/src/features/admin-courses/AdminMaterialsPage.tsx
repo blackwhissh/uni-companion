@@ -26,6 +26,7 @@ import {
   uploadMaterial,
 } from '../courses/material-api.ts'
 import type { Material } from '../courses/material-api.ts'
+import { draftTitleWarning, looksLikeDraftTitle } from '../../shared/draft-title.ts'
 
 export function AdminMaterialsPage() {
   const { courseId = '' } = useParams()
@@ -136,8 +137,8 @@ export function AdminMaterialsPage() {
       return
     }
     if (publishing) {
-      const draftNote = looksLikeDraftTitle(material.title)
-        ? `\n\nThis title looks like a draft (“${material.title}”).`
+      const draftNote = draftTitleWarning(material.title)
+        ? `\n\n${draftTitleWarning(material.title)}`
         : ''
       const courseNote = courseUnpublished
         ? '\n\nNote: this course is still unpublished, so students cannot open the course yet even after you publish the PDF.'
@@ -332,11 +333,12 @@ export function AdminMaterialsPage() {
                         <p className="mt-2 text-sm text-danger">{material.failureReason}</p>
                       ) : null}
                     </div>
-                    <div className="pointer-events-auto flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() =>
+                    <div className="pointer-events-auto flex shrink-0 flex-nowrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="whitespace-nowrap"
+                          onClick={() =>
                           downloadMaterial(material).catch((err) => {
                             setError(err instanceof ApiError ? err.message : 'Could not download the PDF.')
                           })
@@ -348,6 +350,7 @@ export function AdminMaterialsPage() {
                         <Button
                           type="button"
                           variant={material.visibility === 'PUBLISHED' ? 'warn' : 'success'}
+                          className="whitespace-nowrap"
                           disabled={rowBusy || visibility.isPending || (!indexed && material.visibility !== 'PUBLISHED')}
                           title={
                             !indexed && material.visibility !== 'PUBLISHED'
@@ -363,7 +366,7 @@ export function AdminMaterialsPage() {
                         <Button
                           type="button"
                           variant="danger"
-                          className="min-w-[5.5rem]"
+                          className="min-w-[5.5rem] whitespace-nowrap"
                           disabled={rowBusy || remove.isPending}
                           onClick={() => requestDelete(material)}
                         >
@@ -390,10 +393,6 @@ export function AdminMaterialsPage() {
       />
     </Page>
   )
-}
-
-function looksLikeDraftTitle(title: string) {
-  return /\b(entwurf|draft|untitled|wip|tmp|temp|test)\b/i.test(title.trim())
 }
 
 function ButtonLinkish({ to, children }: { to: string; children: string }) {

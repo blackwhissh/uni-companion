@@ -58,7 +58,8 @@ final class CitedSources {
             return new Result(stripAllCitationGroups(text), List.of());
         }
 
-        String normalized = expandCitationGroups(text, retrieved.size());
+        String aligned = alignCitationMarkers(text, retrieved);
+        String normalized = expandCitationGroups(aligned, retrieved.size());
         Set<Integer> cited = firstMentionOrder(normalized, retrieved.size());
         if (cited.isEmpty()) {
             return recoverFromOverlap(normalized, retrieved);
@@ -153,6 +154,136 @@ final class CitedSources {
 
     private static boolean looksInsufficient(String answer) {
         return answer != null && INSUFFICIENT.matcher(answer).find();
+    }
+
+    /**
+     * Remaps [n] markers that clearly belong to a different retrieved excerpt, and adds chips for
+     * grounded Direct-answer sentences the model forgot to cite.
+     */
+    private static String alignCitationMarkers(String answer, List<ChatModel.RetrievedChunk> retrieved) {
+        if (answer == null || answer.isBlank() || retrieved == null || retrieved.isEmpty()) {
+            return answer == null ? "" : answer;
+        }
+        String realigned = remapMisalignedMarkers(answer, retrieved);
+        return addMissingDirectAnswerCitations(realigned, retrieved);
+    }
+
+    private static String remapMisalignedMarkers(String answer, List<ChatModel.RetrievedChunk> retrieved) {
+        Matcher matcher = CITATION_GROUP.matcher(answer);
+        StringBuilder out = new StringBuilder();
+        while (matcher.find()) {
+            int start = matcher.start();
+            int end = matcher.end();
+            int sentenceStart = Math.max(0, answer.lastIndexOf('\n', start) + 1);
+            int sentenceEnd = answer.length();
+            int nextBreak = answer.indexOf('\n', end);
+            if (nextBreak >= 0) {
+                sentenceEnd = nextBreak;
+            }
+            String sentence = answer.substring(sentenceStart, sentenceEnd);
+            String claim = stripAllCitationGroups(sentence);
+            Set<String> claimTerms = significantTerms(claim);
+            List<Integer> numbers = parseGroup(matcher.group(1));
+            StringBuilder replacement = new StringBuilder();
+            Set<Integer> seen = new LinkedHashSet<>();
+            for (int cited : numbers) {
+                int mapped = cited;
+                if (cited >= 1 && cited <= retrieved.size() && claimTerms.size() >= 2) {
+                    int best = bestOverlapIndex(claimTerms, retrieved);
+                    if (best > 0) {
+                        long citedOverlap = sharedTermCount(claimTerms, significantTerms(retrieved.get(cited - 1).content()));
+                        long bestOverlap = sharedTermCount(claimTerms, significantTerms(retrieved.get(best - 1).content()));
+                        if (best != cited && bestOverlap >= citedOverlap + 2) {
+                            mapped = best;
+                        } else if (citedOverlap < 2 && bestOverlap >= 2) {
+                            mapped = best;
+                        }
+                    }
+                }
+                if (mapped >= 1 && mapped <= retrieved.size() && seen.add(mapped)) {
+                    if (!replacement.isEmpty()) {
+                        replacement.append(' ');
+                    }
+                    replacement.append('[').append(mapped).append(']');
+                }
+            }
+            matcher.appendReplacement(out, Matcher.quoteReplacement(replacement.toString()));
+        }
+        matcher.appendTail(out);
+        return out.toString();
+    }
+
+    private static String addMissingDirectAnswerCitations(String answer, List<ChatModel.RetrievedChunk> retrieved) {
+        Matcher heading = DIRECT_ANSWER_HEADING.matcher(answer);
+        if (!heading.find()) {
+            return answer;
+        }
+        int bodyStart = heading.end();
+        while (bodyStart < answer.length() && answer.charAt(bodyStart) == '\n') {
+            bodyStart++;
+        }
+        int sectionBreak = answer.indexOf("\n## ", bodyStart);
+        if (sectionBreak < 0) {
+            sectionBreak = answer.indexOf("\r\n## ", bodyStart);
+        }
+        int bodyEnd = sectionBreak >= 0 ? sectionBreak : answer.length();
+        String before = answer.substring(0, bodyStart);
+        String body = answer.substring(bodyStart, bodyEnd);
+        String after = sectionBreak >= 0 ? answer.substring(sectionBreak) : "";
+
+        String[] parts = body.split("(?<=[.!?…])\\s+");
+        StringBuilder rebuilt = new StringBuilder();
+        for (String part : parts) {
+            String sentence = part.trim();
+            if (sentence.isEmpty()) {
+                continue;
+            }
+            if (CITATION_GROUP.matcher(sentence).find()) {
+                rebuilt.append(sentence).append(' ');
+                continue;
+            }
+            Set<String> claimTerms = significantTerms(stripAllCitationGroups(sentence));
+            if (claimTerms.size() < 3) {
+                rebuilt.append(sentence).append(' ');
+                continue;
+            }
+            int best = bestOverlapIndex(claimTerms, retrieved);
+            if (best < 1) {
+                rebuilt.append(sentence).append(' ');
+                continue;
+            }
+            Set<String> chunkTerms = significantTerms(retrieved.get(best - 1).content());
+            long shared = sharedTermCount(claimTerms, chunkTerms);
+            double overlap = (double) shared / Math.min(claimTerms.size(), chunkTerms.size());
+            if (shared >= 2 && overlap >= 0.22) {
+                rebuilt.append(sentence.stripTrailing()).append(" [").append(best).append("] ");
+            } else {
+                rebuilt.append(sentence).append(' ');
+            }
+        }
+        String newBody = rebuilt.toString().trim();
+        if (newBody.isEmpty()) {
+            return answer;
+        }
+        return before + newBody + after;
+    }
+
+    private static int bestOverlapIndex(Set<String> claimTerms, List<ChatModel.RetrievedChunk> retrieved) {
+        int bestIndex = -1;
+        long bestShared = 0;
+        for (int i = 0; i < retrieved.size(); i++) {
+            Set<String> chunkTerms = significantTerms(retrieved.get(i).content());
+            long shared = sharedTermCount(claimTerms, chunkTerms);
+            if (shared > bestShared) {
+                bestShared = shared;
+                bestIndex = i + 1;
+            }
+        }
+        return bestIndex;
+    }
+
+    private static long sharedTermCount(Set<String> left, Set<String> right) {
+        return left.stream().filter(right::contains).count();
     }
 
     /**

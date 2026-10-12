@@ -15,6 +15,7 @@ import {
   StatusPill,
 } from '../../shared/ui/ui.tsx'
 import { enrollInCourse, getCourse, unenrollFromCourse } from './course-api.ts'
+import { courseDataMatchesRoute, isCourseContextPending } from './course-query.ts'
 import { downloadMaterial, listMaterials, openMaterialPreview } from './material-api.ts'
 import type { Material } from './material-api.ts'
 
@@ -25,7 +26,9 @@ export function CourseHomePage() {
   const materials = useQuery({
     queryKey: ['materials', courseId],
     queryFn: () => listMaterials(courseId),
-    enabled: course.data?.enrolled === true || course.data?.owned === true,
+    enabled:
+      courseDataMatchesRoute(course, courseId) &&
+      (course.data.enrolled === true || course.data.owned === true),
     retry: false,
   })
   const refresh = async () => {
@@ -51,11 +54,13 @@ export function CourseHomePage() {
       await refresh()
     },
   })
+  const coursePending = isCourseContextPending(course, courseId)
+  const courseRow = courseDataMatchesRoute(course, courseId) ? course.data : null
   const unavailable = course.error instanceof ApiError && course.error.status === 404
-  const enrolled = course.data?.enrolled === true
-  const owned = course.data?.owned === true
+  const enrolled = courseRow?.enrolled === true
+  const owned = courseRow?.owned === true
   const ownerPreview = owned && !enrolled
-  const coursePublished = course.data?.visibility === 'PUBLISHED'
+  const coursePublished = courseRow?.visibility === 'PUBLISHED'
   const studentMaterials = useMemo(
     () =>
       (materials.data ?? []).filter(
@@ -66,6 +71,7 @@ export function CourseHomePage() {
   const visibleMaterials = enrolled || ownerPreview ? studentMaterials : []
   const readyCount = visibleMaterials.length
   const canOpenStudy = enrolled && readyCount > 0
+  const studyModesPending = (enrolled || ownerPreview) && materials.isLoading
 
   async function onDownload(material: Material) {
     try {
@@ -110,8 +116,8 @@ export function CourseHomePage() {
       </BackLink>
       <div className="mt-4">
         <PageHeader
-          eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Course'}
-          title={course.data?.title ?? 'Course'}
+          eyebrow={courseRow ? `${courseRow.code} · ${courseRow.term}` : 'Course'}
+          title={courseRow?.title ?? 'Course'}
           description={
             ownerPreview
               ? 'Student preview: published materials only, the same list enrolled students will see.'
@@ -120,7 +126,7 @@ export function CourseHomePage() {
                 : 'Enroll to unlock materials and study tools for this module.'
           }
           actions={
-            course.data && !enrolled ? (
+            courseRow && !enrolled ? (
               <Button type="button" variant="success" disabled={enroll.isPending} onClick={() => enroll.mutate()}>
                 {enroll.isPending ? 'Working…' : owned ? 'Enroll to try study modes' : 'Enroll'}
               </Button>
@@ -135,9 +141,11 @@ export function CourseHomePage() {
         </p>
       ) : null}
 
-      {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
+      {coursePending ? <p className="mt-8 animate-pulse-soft text-muted">Loading course…</p> : null}
 
-      {ownerPreview && !unavailable ? (
+      {unavailable && !coursePending ? <p className="mt-6 text-muted">This course is not available.</p> : null}
+
+      {!coursePending && ownerPreview && !unavailable ? (
         <div className="mt-6 rounded-lg border border-accent/25 bg-accent/5 px-4 py-3 text-sm leading-relaxed text-ink-soft" role="status">
           <span className="font-medium text-ink">Preview as student</span>
           {!coursePublished ? ' — this course is still unpublished, so real students cannot open it yet.' : '.'}{' '}
@@ -145,7 +153,7 @@ export function CourseHomePage() {
         </div>
       ) : null}
 
-      {enrolled || ownerPreview ? (
+      {!coursePending && (enrolled || ownerPreview) ? (
         <>
           {enrolled ? (
             <p className="mt-3">
@@ -162,7 +170,14 @@ export function CourseHomePage() {
 
           <section className="mt-10 animate-rise-delay">
             <SectionLabel>Study modes</SectionLabel>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {studyModesPending ? (
+              <p className="mt-2 text-sm text-muted" role="status">
+                Loading study modes…
+              </p>
+            ) : null}
+            <div
+              className={`mt-4 grid gap-3 sm:grid-cols-3 ${studyModesPending ? 'pointer-events-none opacity-50' : ''}`}
+            >
               <StudyMode
                 title="Q&A"
                 body="Ask questions grounded in published lecture PDFs."
@@ -302,7 +317,7 @@ export function CourseHomePage() {
       <ConfirmDialog
         open={confirmUnenroll}
         title="Unenroll from course?"
-        body={`Unenroll from “${course.data?.title ?? 'this course'}”? You can join again later.`}
+        body={`Unenroll from “${courseRow?.title ?? 'this course'}”? You can join again later.`}
         confirmLabel="Unenroll"
         danger
         onCancel={() => setConfirmUnenroll(false)}
@@ -312,7 +327,7 @@ export function CourseHomePage() {
         }}
       />
 
-      {course.data && !enrolled && !owned && !unavailable ? (
+      {courseRow && !coursePending && !enrolled && !owned && !unavailable ? (
         <EmptyState
           title="You are not enrolled yet"
           description="Join this course to see published materials and unlock study modes. Use Enroll above to get started."

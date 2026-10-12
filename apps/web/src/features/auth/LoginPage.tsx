@@ -33,6 +33,14 @@ export function LoginPage() {
     return <Navigate to={target} replace state={{}} />
   }
 
+  if (submittedLogin) {
+    return (
+      <main className="mx-auto w-full max-w-lg px-6 py-14">
+        <p className="animate-pulse-soft text-muted">Loading courses…</p>
+      </main>
+    )
+  }
+
   return (
     <AuthForm
       title="Log in"

@@ -74,6 +74,24 @@ class CitationTextTest {
     }
 
     @Test
+    void includesFollowUpSentenceWhenItCarriesClaimTerms() {
+        String content = """
+                Chapter 4 — Quicksort. The lecture mentions random pivots from textbooks. \
+                In the exercises we always use the median-of-three pivot rule. \
+                This keeps worst-case behavior predictable on structured inputs.
+                """;
+
+        String excerpt = CitationText.excerpt(
+                content,
+                "What is the pivot rule?",
+                "## Direct answer\nWe use median-of-three in the exercises [1].",
+                1
+        );
+
+        assertThat(excerpt).contains("median-of-three");
+    }
+
+    @Test
     void prefersSentenceContainingNumericClaimFromAnswer() {
         String content = """
                 Chapter 4 — Sorting. Quicksort often uses a random pivot in textbooks. \

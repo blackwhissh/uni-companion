@@ -97,17 +97,21 @@ public class RagService {
                 grounded.chunks().size(),
                 grounded.answer().length()
         );
+        List<ChatModel.RetrievedChunk> citedChunks = grounded.chunks();
+        java.util.stream.IntStream range = java.util.stream.IntStream.range(0, citedChunks.size());
         return new Answer(
                 grounded.answer(),
-                grounded.chunks().stream()
-                        .map(chunk -> new Citation(
-                                chunk.materialId(),
-                                chunk.title(),
-                                CitationText.sectionHint(chunk.content()),
-                                chunk.pageNumber(),
-                                CitationText.excerpt(chunk.content(), trimmed, grounded.answer())
-                        ))
-                        .toList()
+                range.mapToObj(i -> {
+                    ChatModel.RetrievedChunk chunk = citedChunks.get(i);
+                    int citationNumber = i + 1;
+                    return new Citation(
+                            chunk.materialId(),
+                            chunk.title(),
+                            CitationText.sectionHint(chunk.content()),
+                            chunk.pageNumber(),
+                            CitationText.excerpt(chunk.content(), trimmed, grounded.answer(), citationNumber)
+                    );
+                }).toList()
         );
     }
 

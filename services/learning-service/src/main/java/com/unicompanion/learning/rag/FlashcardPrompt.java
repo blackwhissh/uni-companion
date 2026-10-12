@@ -87,6 +87,10 @@ final class FlashcardPrompt {
                 Preserve important precision
                 - Do not oversimplify technical concepts to the point of becoming inaccurate.
                 - Preserve important conditions, exceptions, terminology, numbers, and relationships.
+                - When the material states a course or exercise rule (always, in this course, in the exercises, we use),
+                  state it as a rule on the back — not as a generic textbook example (avoid “e.g.” for those rules).
+                - Include cards for explicit algorithm rules from the material (thresholds such as n < 17, pivot rules,
+                  mandatory procedures) when they appear in the excerpts.
                 - For formulas, include the formula and briefly explain the variables when necessary.
 
                 Avoid redundancy

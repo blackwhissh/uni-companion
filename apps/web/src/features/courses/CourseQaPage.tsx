@@ -15,6 +15,7 @@ import {
 } from '../../shared/ui/ui.tsx'
 import { StudyMarkdown } from '../../shared/ui/StudyMarkdown.tsx'
 import { getCourse } from './course-api.ts'
+import { courseDataMatchesRoute, isCourseContextPending } from './course-query.ts'
 import { listMaterials } from './material-api.ts'
 import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
 import { QaSources } from './QaSources.tsx'
@@ -34,7 +35,7 @@ export function CourseQaPage() {
   const materials = useQuery({
     queryKey: ['materials', courseId],
     queryFn: () => listMaterials(courseId),
-    enabled: course.data?.enrolled === true,
+    enabled: courseDataMatchesRoute(course, courseId) && course.data.enrolled === true,
     retry: false,
   })
   const [question, setQuestion] = useState('')
@@ -180,19 +181,21 @@ export function CourseQaPage() {
     setQuestion(prompt.slice(0, QUESTION_MAX))
   }
 
+  const coursePending = isCourseContextPending(course, courseId)
+  const courseRow = courseDataMatchesRoute(course, courseId) ? course.data : null
   const unavailable = course.error instanceof ApiError && course.error.status === 404
   const readyCount = readyMaterials.length
-  const enrolled = course.data?.enrolled === true
+  const enrolled = courseRow?.enrolled === true
   const insufficient = result != null && result.citations.length === 0
   const overLimit = question.length > QUESTION_MAX
   const canAsk = !ask.isPending && question.trim().length > 0 && !overLimit && question.length <= QUESTION_MAX
 
   return (
     <Page>
-      <BackLink to={`/courses/${courseId}`}>{course.data?.title ?? 'Course'}</BackLink>
+      <BackLink to={`/courses/${courseId}`}>{courseRow?.title ?? 'Course'}</BackLink>
       <div className="mt-4">
         <PageHeader
-          eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Q&A'}
+          eyebrow={courseRow ? `${courseRow.code} · ${courseRow.term}` : 'Q&A'}
           title="Course Q&A"
           description="Ask your own question, or start from a ready prompt. Answers stay grounded in published lecture PDFs."
           actions={
@@ -205,23 +208,25 @@ export function CourseQaPage() {
         />
       </div>
 
-      {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
+      {coursePending ? <p className="mt-8 animate-pulse-soft text-muted">Loading course…</p> : null}
 
-      {course.data && !enrolled && !unavailable ? (
+      {unavailable && !coursePending ? <p className="mt-6 text-muted">This course is not available.</p> : null}
+
+      {courseRow && !coursePending && !enrolled && !unavailable ? (
         <EmptyState
           title="Enroll to ask questions"
           description="Q&A is only available after you join this course."
         />
       ) : null}
 
-      {enrolled && readyCount === 0 ? (
+      {!coursePending && enrolled && readyCount === 0 ? (
         <EmptyState
           title="No published materials yet"
           description="Once your professor publishes ready lecture PDFs, you can ask grounded questions here."
         />
       ) : null}
 
-      {enrolled && readyCount > 0 ? (
+      {!coursePending && enrolled && readyCount > 0 ? (
         <>
           {materialNotice ? (
             <div className="mt-6">

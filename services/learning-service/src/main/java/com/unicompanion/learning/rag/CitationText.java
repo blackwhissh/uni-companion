@@ -77,15 +77,27 @@ final class CitationText {
      * Prefers concrete prose sentences; reformats flattened PDF comparison tables into readable rows.
      */
     static String excerpt(String content, String question, String answer) {
+        return excerpt(content, question, answer, 0);
+    }
+
+    /**
+     * When {@code citationIndex} is 1-based, scoring prefers terms from answer sentences that cite that index.
+     */
+    static String excerpt(String content, String question, String answer, int citationIndex) {
         String body = cleanBody(content);
         if (body.isEmpty()) {
             return body;
         }
 
         Set<String> focus = tokens(question);
-        // Prefer overlap with the Direct answer claim so the quote matches what the student sees first.
-        focus.addAll(tokens(directAnswerBody(answer)));
-        focus.addAll(tokens(answer));
+        String claim = citationIndex >= 1 ? claimForCitation(answer, citationIndex) : "";
+        if (!claim.isBlank()) {
+            focus.addAll(tokens(claim));
+        } else {
+            // Prefer overlap with the Direct answer claim so the quote matches what the student sees first.
+            focus.addAll(tokens(directAnswerBody(answer)));
+            focus.addAll(tokens(answer));
+        }
 
         String prose = pickProse(body, focus);
         if (prose != null) {
@@ -141,12 +153,50 @@ final class CitationText {
             String next = sentences.get(bestIndex + 1);
             if (!looksLikeTableDump(next)
                     && !CHECKLIST.matcher(next).find()
-                    && score(next, focus) >= 2
+                    && (score(next, focus) >= 2 || sharesFocus(next, focus))
                     && out.length() + 1 + next.length() <= EXCERPT_MAX) {
                 out.append(' ').append(next);
             }
         }
         return trimToMax(out.toString());
+    }
+
+    static String claimForCitation(String answer, int citationIndex) {
+        if (answer == null || answer.isBlank() || citationIndex < 1) {
+            return "";
+        }
+        String marker = "[" + citationIndex + "]";
+        StringBuilder claims = new StringBuilder();
+        for (String line : answer.split("\\n")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || !trimmed.contains(marker)) {
+                continue;
+            }
+            String without = trimmed.replaceAll("\\[\\d+(?:\\s*[,;]\\s*\\d+|\\s*-\\s*\\d+)*]", " ").replaceAll("\\s+", " ").trim();
+            if (!without.isEmpty()) {
+                if (!claims.isEmpty()) {
+                    claims.append(' ');
+                }
+                claims.append(without);
+            }
+        }
+        if (!claims.isEmpty()) {
+            return claims.toString();
+        }
+        return answer.contains(marker) ? answer.replaceAll("\\[\\d+(?:\\s*[,;]\\s*\\d+|\\s*-\\s*\\d+)*]", " ").trim() : "";
+    }
+
+    private static boolean sharesFocus(String sentence, Set<String> focus) {
+        if (focus.isEmpty()) {
+            return false;
+        }
+        Set<String> words = tokens(sentence);
+        for (String word : words) {
+            if (focus.contains(word)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static String formatComparisonTable(String body) {

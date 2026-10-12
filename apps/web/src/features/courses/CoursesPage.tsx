@@ -54,8 +54,11 @@ export function CoursesPage() {
     },
   })
 
-  const enrolled = courses.data?.filter((course) => course.enrolled) ?? []
-  const available = courses.data?.filter((course) => !course.enrolled) ?? []
+  const enrollingId = enroll.isPending ? enroll.variables : null
+  const enrolled =
+    courses.data?.filter((course) => course.enrolled && course.id !== enrollingId) ?? []
+  const available =
+    courses.data?.filter((course) => !course.enrolled || course.id === enrollingId) ?? []
 
   return (
     <Page>

@@ -76,11 +76,20 @@ export async function identityFetch<T>(path: string, init: RequestInit = {}, all
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
   }
-  const response = await fetch(`${identityApiUrl}${path}`, {
-    ...init,
-    headers,
-    credentials: 'include',
-  })
+  let response: Response
+  try {
+    response = await fetch(`${identityApiUrl}${path}`, {
+      ...init,
+      headers,
+      credentials: 'include',
+    })
+  } catch {
+    throw new ApiError(
+      'NETWORK_ERROR',
+      'Could not reach the server. Check your connection and try again.',
+      0,
+    )
+  }
   if (response.status === 401 && allowRefresh && !path.startsWith('/api/auth/')) {
     const refreshed = await tryRefreshAccessToken()
     if (refreshed) {
@@ -90,7 +99,16 @@ export async function identityFetch<T>(path: string, init: RequestInit = {}, all
   if (!response.ok) {
     const body = await response.json().catch(() => null)
     const code = body?.code ?? 'REQUEST_FAILED'
-    const message = body?.message ?? 'Request failed'
+    let message = body?.message ?? 'Request failed'
+    if (response.status === 401 && path.startsWith('/api/auth/login')) {
+      message = 'Wrong username or password.'
+    } else if (response.status === 401 && path.startsWith('/api/auth/')) {
+      message = body?.message ?? 'Sign-in failed. Check your credentials and try again.'
+    } else if (response.status >= 500 && message === 'Request failed') {
+      message = 'The server returned an error. Try again in a moment.'
+    } else if (message === 'Request failed') {
+      message = 'Something went wrong. Try again.'
+    }
     throw new ApiError(code, message, response.status, body?.details ?? null)
   }
   if (response.status === 204) {

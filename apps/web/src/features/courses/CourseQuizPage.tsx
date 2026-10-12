@@ -15,6 +15,7 @@ import {
   StatusPill,
 } from '../../shared/ui/ui.tsx'
 import { getCourse } from './course-api.ts'
+import { courseDataMatchesRoute, isCourseContextPending } from './course-query.ts'
 import { listMaterials } from './material-api.ts'
 import { clearQuizAnswers, loadQuizAnswers, saveQuizAnswers } from './quiz-answer-storage.ts'
 import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
@@ -34,7 +35,7 @@ export function CourseQuizPage() {
   const materials = useQuery({
     queryKey: ['materials', courseId],
     queryFn: () => listMaterials(courseId),
-    enabled: course.data?.enrolled === true,
+    enabled: courseDataMatchesRoute(course, courseId) && course.data.enrolled === true,
     retry: false,
   })
 
@@ -203,12 +204,14 @@ export function CourseQuizPage() {
     },
   })
 
+  const coursePending = isCourseContextPending(course, courseId)
+  const courseRow = courseDataMatchesRoute(course, courseId) ? course.data : null
   const unavailable = course.error instanceof ApiError && course.error.status === 404
   const readyMaterials =
     materials.data?.filter((material) => material.visibility === 'PUBLISHED' && material.processingStatus === 'READY') ??
     []
   const readyCount = readyMaterials.length
-  const enrolled = course.data?.enrolled === true
+  const enrolled = courseRow?.enrolled === true
   const allAnswered = quiz?.questions?.every((question) => answers[question.id] !== undefined) ?? false
   const unansweredCount =
     quiz?.questions?.filter((question) => answers[question.id] === undefined).length ?? 0
@@ -218,10 +221,10 @@ export function CourseQuizPage() {
 
   return (
     <Page>
-      <BackLink to={`/courses/${courseId}`}>{course.data?.title ?? 'Course'}</BackLink>
+      <BackLink to={`/courses/${courseId}`}>{courseRow?.title ?? 'Course'}</BackLink>
       <div className="mt-4">
         <PageHeader
-          eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Quiz'}
+          eyebrow={courseRow ? `${courseRow.code} · ${courseRow.term}` : 'Quiz'}
           title="Practice quiz"
           description="Choose materials and take a shared quiz. Existing versions are reused before a new one is created."
           actions={
@@ -234,23 +237,25 @@ export function CourseQuizPage() {
         />
       </div>
 
-      {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
+      {coursePending ? <p className="mt-8 animate-pulse-soft text-muted">Loading course…</p> : null}
 
-      {course.data && !enrolled && !unavailable ? (
+      {unavailable && !coursePending ? <p className="mt-6 text-muted">This course is not available.</p> : null}
+
+      {courseRow && !coursePending && !enrolled && !unavailable ? (
         <EmptyState
           title="Enroll to take quizzes"
           description="Practice quizzes are only available after you join this course."
         />
       ) : null}
 
-      {enrolled && readyCount === 0 ? (
+      {!coursePending && enrolled && readyCount === 0 ? (
         <EmptyState
           title="No published materials yet"
           description="Once your professor publishes ready lecture PDFs, you can generate a practice quiz here."
         />
       ) : null}
 
-      {enrolled && readyCount > 0 ? (
+      {!coursePending && enrolled && readyCount > 0 ? (
         <>
           {error ? (
             <div className="mt-6 flex flex-col gap-3">

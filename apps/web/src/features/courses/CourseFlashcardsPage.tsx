@@ -13,6 +13,7 @@ import {
   SectionLabel,
 } from '../../shared/ui/ui.tsx'
 import { getCourse } from './course-api.ts'
+import { courseDataMatchesRoute, isCourseContextPending } from './course-query.ts'
 import { listMaterials } from './material-api.ts'
 import { clearStudyGeneration, loadStudyGeneration, saveStudyGeneration } from './study-generation-storage.ts'
 import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
@@ -28,7 +29,7 @@ export function CourseFlashcardsPage() {
   const materials = useQuery({
     queryKey: ['materials', courseId],
     queryFn: () => listMaterials(courseId),
-    enabled: course.data?.enrolled === true,
+    enabled: courseDataMatchesRoute(course, courseId) && course.data.enrolled === true,
     retry: false,
   })
 
@@ -131,12 +132,14 @@ export function CourseFlashcardsPage() {
     },
   })
 
+  const coursePending = isCourseContextPending(course, courseId)
+  const courseRow = courseDataMatchesRoute(course, courseId) ? course.data : null
   const unavailable = course.error instanceof ApiError && course.error.status === 404
   const readyMaterials =
     materials.data?.filter((material) => material.visibility === 'PUBLISHED' && material.processingStatus === 'READY') ??
     []
   const readyCount = readyMaterials.length
-  const enrolled = course.data?.enrolled === true
+  const enrolled = courseRow?.enrolled === true
   const cards = deck?.cards ?? []
   const card = cards[index]
   const showPicker = !blockingForResume && !generate.isPending && (picking || !deck)
@@ -195,10 +198,10 @@ export function CourseFlashcardsPage() {
 
   return (
     <Page>
-      <BackLink to={`/courses/${courseId}`}>{course.data?.title ?? 'Course'}</BackLink>
+      <BackLink to={`/courses/${courseId}`}>{courseRow?.title ?? 'Course'}</BackLink>
       <div className="mt-4">
         <PageHeader
-          eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Flashcards'}
+          eyebrow={courseRow ? `${courseRow.code} · ${courseRow.term}` : 'Flashcards'}
           title="Flashcards"
           description="Choose materials and study a shared deck. Existing versions are reused before a new one is created."
           actions={
@@ -211,23 +214,25 @@ export function CourseFlashcardsPage() {
         />
       </div>
 
-      {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
+      {coursePending ? <p className="mt-8 animate-pulse-soft text-muted">Loading course…</p> : null}
 
-      {course.data && !enrolled && !unavailable ? (
+      {unavailable && !coursePending ? <p className="mt-6 text-muted">This course is not available.</p> : null}
+
+      {courseRow && !coursePending && !enrolled && !unavailable ? (
         <EmptyState
           title="Enroll to study flashcards"
           description="Flashcards are only available after you join this course."
         />
       ) : null}
 
-      {enrolled && readyCount === 0 ? (
+      {!coursePending && enrolled && readyCount === 0 ? (
         <EmptyState
           title="No published materials yet"
           description="Once your professor publishes ready lecture PDFs, you can generate flashcards here."
         />
       ) : null}
 
-      {enrolled && readyCount > 0 ? (
+      {!coursePending && enrolled && readyCount > 0 ? (
         <>
           {error ? (
             <div className="mt-6 flex flex-col gap-3">
