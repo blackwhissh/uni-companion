@@ -129,6 +129,54 @@ class CitedSourcesTest {
     }
 
     @Test
+    void citesMedianPivotRuleAgainstMatchingExcerpt() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("Lecture 3", 6, "Quicksort exercises in this course always use median-of-three pivoting.")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        For quicksort exercises, the pivot rule is median-of-three.
+
+                        ## Explanation
+                        From the sorting lecture.
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).hasSize(1);
+        assertThat(result.chunks().getFirst().content()).contains("median-of-three");
+        assertThat(result.answer()).contains("median-of-three [1]");
+    }
+
+    @Test
+    void remapsWrongExcerptIndexAndCitesSecondDirectAnswerClaim() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("Lecture 3", 4, "Quicksort averages O(n log n) time with a good pivot choice."),
+                chunk("Lecture 3", 5, "In these exercises, use insertion sort when n < 17."),
+                chunk("Lecture 3", 6, "Quicksort exercises always use median-of-three pivoting.")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        Insertion sort is used when n < 17 [1]. For quicksort exercises, the pivot rule is median-of-three.
+
+                        ## Explanation
+                        Both rules come from the sorting lecture.
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).hasSize(2);
+        assertThat(result.chunks().getFirst().content()).contains("n < 17");
+        assertThat(result.chunks().get(1).content()).contains("median-of-three pivoting");
+        assertThat(result.answer()).contains("n < 17 [1]");
+        assertThat(result.answer()).contains("median-of-three [2]");
+    }
+
+    @Test
     void keepsValidMembersOfListCitationsWhenAnswerIsGrounded() {
         List<ChatModel.RetrievedChunk> retrieved = List.of(
                 chunk("A", 1, "alpha fact"),

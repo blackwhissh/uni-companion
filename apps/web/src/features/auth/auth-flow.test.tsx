@@ -76,6 +76,36 @@ describe('auth flow', () => {
     expect(await screen.findByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
   })
 
+  it('hides the login form while signing in', async () => {
+    let resolveLogin: ((value: Response) => void) | undefined
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveLogin = resolve
+          }),
+      ),
+    )
+
+    renderAuth('/login', <LoginPage />)
+    fill('Username', 'student1')
+    fill('Password', 'password1')
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }))
+
+    expect(await screen.findByText('Signing you in…')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
+
+    resolveLogin!(
+      new Response(JSON.stringify({ token: 'token-1', user: student }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Your courses' })).toBeInTheDocument()
+  })
+
   it('sends a course admin to the course console after login', async () => {
     const admin = { ...student, roles: ['COURSE_ADMIN'], displayName: 'Course Admin' }
     vi.stubGlobal(

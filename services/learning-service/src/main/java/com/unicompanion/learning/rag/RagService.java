@@ -13,7 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 @Service
 public class RagService {
@@ -87,6 +89,7 @@ public class RagService {
             );
         }
         CitedSources.Result grounded = CitedSources.select(rawAnswer, retrieved);
+        Map<Integer, String> claims = CitedSources.claimsByIndex(grounded.answer());
         log.info(
                 "RAG query course={} user={} materials={} questionChars={} retrieved={} cited={} answerChars={}",
                 courseId,
@@ -99,14 +102,19 @@ public class RagService {
         );
         return new Answer(
                 grounded.answer(),
-                grounded.chunks().stream()
-                        .map(chunk -> new Citation(
-                                chunk.materialId(),
-                                chunk.title(),
-                                CitationText.sectionHint(chunk.content()),
-                                chunk.pageNumber(),
-                                CitationText.excerpt(chunk.content(), trimmed, grounded.answer())
-                        ))
+                IntStream.range(0, grounded.chunks().size())
+                        .mapToObj(i -> {
+                            int n = i + 1;
+                            ChatModel.RetrievedChunk chunk = grounded.chunks().get(i);
+                            String claim = claims.getOrDefault(n, grounded.answer());
+                            return new Citation(
+                                    chunk.materialId(),
+                                    chunk.title(),
+                                    CitationText.sectionHint(chunk.content()),
+                                    chunk.pageNumber(),
+                                    CitationText.excerpt(chunk.content(), trimmed, claim)
+                            );
+                        })
                         .toList()
         );
     }

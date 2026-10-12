@@ -87,6 +87,8 @@ final class FlashcardPrompt {
                 Preserve important precision
                 - Do not oversimplify technical concepts to the point of becoming inaccurate.
                 - Preserve important conditions, exceptions, terminology, numbers, and relationships.
+                - When the material states a course rule or exercise policy (for example "always", "in these exercises", "for this course"), state it as a rule — do not reframe it as a generic textbook example with "e.g." or "often".
+                - When the material names concrete thresholds, pivot rules, or algorithm choices, include at least one card that tests each distinct rule verbatim enough to recall the number or named technique.
                 - For formulas, include the formula and briefly explain the variables when necessary.
 
                 Avoid redundancy

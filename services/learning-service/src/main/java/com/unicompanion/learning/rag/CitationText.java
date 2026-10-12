@@ -83,9 +83,13 @@ final class CitationText {
         }
 
         Set<String> focus = tokens(question);
-        // Prefer overlap with the Direct answer claim so the quote matches what the student sees first.
-        focus.addAll(tokens(directAnswerBody(answer)));
-        focus.addAll(tokens(answer));
+        // Prefer the cited claim sentence; fall back to the full answer when no per-chip claim exists.
+        if (answer != null && answer.contains("##")) {
+            focus.addAll(tokens(directAnswerBody(answer)));
+            focus.addAll(tokens(answer));
+        } else {
+            focus.addAll(tokens(answer));
+        }
 
         String prose = pickProse(body, focus);
         if (prose != null) {

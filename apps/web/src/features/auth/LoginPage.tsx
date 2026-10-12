@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation } from 'react-router'
 import { useAuth } from './use-auth.ts'
 import { AuthForm, Field } from './AuthForm.tsx'
 import { consumeSkipReturnPath, shouldSkipReturnPath } from './auth-session-sync.ts'
 import { homePathFor } from './home-path.ts'
+import { Page } from '../../shared/ui/ui.tsx'
 
 type LocationState = { from?: { pathname?: string; search?: string; hash?: string } }
 
@@ -20,17 +21,25 @@ function resolvePostLoginTarget(state: unknown, roles: string[]) {
 
 export function LoginPage() {
   const { login, user, ready } = useAuth()
-  const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submittedLogin, setSubmittedLogin] = useState(false)
 
-  // Already signed in (e.g. opened /login with a live session) — honor skip-return from logout.
-  if (ready && user && !submittedLogin) {
+  if (ready && user) {
     const target = resolvePostLoginTarget(location.state, user.roles)
     consumeSkipReturnPath()
     return <Navigate to={target} replace state={{}} />
+  }
+
+  if (submittedLogin) {
+    return (
+      <Page narrow className="animate-rise py-14">
+        <div className="surface-panel rounded-2xl p-6 sm:p-8">
+          <p className="animate-pulse-soft text-muted">Signing you in…</p>
+        </div>
+      </Page>
+    )
   }
 
   return (
@@ -40,10 +49,7 @@ export function LoginPage() {
       submitLabel="Log in"
       onSubmit={async (values) => {
         setSubmittedLogin(true)
-        const next = await login(values.email ?? email, values.password ?? password)
-        const target = resolvePostLoginTarget(location.state, next.roles)
-        consumeSkipReturnPath()
-        navigate(target, { replace: true, state: {} })
+        await login(values.email ?? email, values.password ?? password)
       }}
       footer={
         <>
