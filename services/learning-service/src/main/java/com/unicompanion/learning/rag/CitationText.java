@@ -32,6 +32,7 @@ final class CitationText {
     private static final Pattern DIRECT_ANSWER_SECTION = Pattern.compile(
             "(?is)##\\s*(?:Direct answer|Direkte Antwort|Antwort)\\s*(.*?)(?=##\\s|$)"
     );
+    private static final Pattern HYPHENATED = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)+", Pattern.CASE_INSENSITIVE);
     /**
      * Longer labels first so "Failure scope" wins over "Failure".
      */
@@ -252,7 +253,17 @@ final class CitationText {
                 score += 3;
             }
         }
+        for (String term : focus) {
+            if (term.contains("-") && sentence.toLowerCase(Locale.ROOT).contains(term)) {
+                score += 5;
+            }
+        }
         String lower = sentence.toLowerCase(Locale.ROOT);
+        for (String term : focus) {
+            if (term.chars().allMatch(Character::isDigit) && lower.contains(term)) {
+                score += 6;
+            }
+        }
         if (lower.contains(" is a ") || lower.contains(" are ") || lower.contains(" means ")
                 || lower.contains(" defined as ") || lower.contains(" refers to ")
                 || lower.contains(" always ") || lower.contains(" when ")
@@ -276,7 +287,18 @@ final class CitationText {
         if (text == null || text.isBlank()) {
             return out;
         }
-        for (String raw : text.toLowerCase(Locale.ROOT).split("[^a-z0-9]+")) {
+        String lowered = text.toLowerCase(Locale.ROOT);
+        Matcher compounds = HYPHENATED.matcher(lowered);
+        while (compounds.find()) {
+            String compound = compounds.group();
+            out.add(compound);
+            for (String part : compound.split("-")) {
+                if (part.length() >= 3 && !STOP.contains(part)) {
+                    out.add(part);
+                }
+            }
+        }
+        for (String raw : lowered.split("[^a-z0-9-]+")) {
             if (raw.isEmpty()) {
                 continue;
             }

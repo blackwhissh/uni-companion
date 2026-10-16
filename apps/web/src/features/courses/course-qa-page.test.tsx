@@ -208,6 +208,32 @@ From your course materials, consensus keeps replicas consistent.
     expect(screen.queryByText('Sources used')).not.toBeInTheDocument()
   })
 
+  it('disables Ask after a paste is trimmed with a shorten warning', async () => {
+    setAccessToken('student-token')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).endsWith('/materials')) {
+          return json([material])
+        }
+        return json(course)
+      }),
+    )
+
+    renderAt('/courses/course-1/qa', <CourseQaPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use selected materials' }))
+    const field = await screen.findByLabelText('Question')
+    fireEvent.change(field, { target: { value: 'x'.repeat(1990) } })
+    fireEvent.paste(field, {
+      clipboardData: {
+        getData: () => 'y'.repeat(20),
+      },
+    })
+
+    expect(await screen.findByText(/Paste was trimmed/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ask' })).toBeDisabled()
+  })
+
   it('retries a failed question from Try again', async () => {
     setAccessToken('student-token')
     let ragCalls = 0

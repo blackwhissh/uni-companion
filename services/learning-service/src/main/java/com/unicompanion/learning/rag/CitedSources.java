@@ -1,6 +1,7 @@
 package com.unicompanion.learning.rag;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -8,6 +9,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 
 /**
  * Keeps Sources aligned with inline [n] markers in the answer text.
@@ -84,7 +86,7 @@ final class CitedSources {
             return new Result(stripAllCitationGroups(answer), List.of());
         }
 
-        List<Integer> overlapping = new ArrayList<>();
+        List<OverlapHit> overlapping = new ArrayList<>();
         for (int i = 0; i < retrieved.size(); i++) {
             Set<String> chunkTerms = significantTerms(retrieved.get(i).content());
             if (chunkTerms.isEmpty()) {
@@ -92,32 +94,32 @@ final class CitedSources {
             }
             long shared = answerTerms.stream().filter(chunkTerms::contains).count();
             double overlap = (double) shared / Math.min(answerTerms.size(), chunkTerms.size());
-            if (shared >= 2 && overlap >= 0.28) {
-                overlapping.add(i + 1);
+            if (shared >= 2 && (overlap >= 0.22 || shared >= 4)) {
+                overlapping.add(new OverlapHit(i + 1, shared, overlap));
             }
         }
+        overlapping.sort(Comparator.comparingDouble(OverlapHit::overlap).reversed().thenComparingLong(OverlapHit::shared).reversed());
         if (overlapping.isEmpty()) {
             return new Result(stripAllCitationGroups(answer), List.of());
         }
 
         List<ChatModel.RetrievedChunk> selected = overlapping.stream()
-                .map(index -> retrieved.get(index - 1))
+                .map(hit -> retrieved.get(hit.index() - 1))
                 .toList();
-        String withChip = placeVerifiedCitation(stripAllCitationGroups(answer), 1);
-        if (selected.size() == 1) {
-            return new Result(withChip, selected);
-        }
-        // Multiple overlapping passages: chip only the strongest (first) so the UI stays honest.
-        return new Result(withChip, List.of(selected.getFirst()));
+        String withChips = placeVerifiedCitations(stripAllCitationGroups(answer), selected.size());
+        return new Result(withChips, selected);
     }
 
-    private static String placeVerifiedCitation(String answer, int index) {
-        if (answer == null || answer.isBlank()) {
+    private static String placeVerifiedCitations(String answer, int citationCount) {
+        if (answer == null || answer.isBlank() || citationCount < 1) {
             return answer;
         }
-        if (!firstMentionOrder(answer, index).isEmpty()) {
+        if (!firstMentionOrder(answer, citationCount).isEmpty()) {
             return answer;
         }
+        String markers = IntStream.rangeClosed(1, citationCount)
+                .mapToObj(index -> "[" + index + "]")
+                .collect(java.util.stream.Collectors.joining(" "));
         Matcher heading = DIRECT_ANSWER_HEADING.matcher(answer);
         if (heading.find()) {
             int afterHeading = heading.end();
@@ -128,12 +130,13 @@ final class CitedSources {
             int sentenceEnd = findFirstSentenceEnd(answer, contentStart);
             if (sentenceEnd > contentStart) {
                 return answer.substring(0, sentenceEnd)
-                        + " [" + index + "]"
+                        + " "
+                        + markers
                         + answer.substring(sentenceEnd);
             }
-            return answer.substring(0, contentStart) + "[" + index + "] " + answer.substring(contentStart);
+            return answer.substring(0, contentStart) + markers + " " + answer.substring(contentStart);
         }
-        return answer.stripTrailing() + " [" + index + "]";
+        return answer.stripTrailing() + " " + markers;
     }
 
     private static int findFirstSentenceEnd(String text, int from) {
@@ -269,7 +272,18 @@ final class CitedSources {
         if (text == null || text.isBlank()) {
             return out;
         }
-        for (String raw : text.toLowerCase(Locale.ROOT).split("[^a-z0-9]+")) {
+        String lowered = text.toLowerCase(Locale.ROOT);
+        Matcher compounds = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)+").matcher(lowered);
+        while (compounds.find()) {
+            String compound = compounds.group();
+            out.add(compound);
+            for (String part : compound.split("-")) {
+                if (part.length() >= 3 && !STOP.contains(part)) {
+                    out.add(part);
+                }
+            }
+        }
+        for (String raw : lowered.split("[^a-z0-9-]+")) {
             if (raw.isEmpty()) {
                 continue;
             }
@@ -297,5 +311,8 @@ final class CitedSources {
     }
 
     record Result(String answer, List<ChatModel.RetrievedChunk> chunks) {
+    }
+
+    private record OverlapHit(int index, long shared, double overlap) {
     }
 }

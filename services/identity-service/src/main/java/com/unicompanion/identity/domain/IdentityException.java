@@ -29,7 +29,7 @@ public final class IdentityException extends RuntimeException {
     }
 
     public static IdentityException invalidCredentials() {
-        return new IdentityException(Code.INVALID_CREDENTIALS, "Invalid email or password.");
+        return new IdentityException(Code.INVALID_CREDENTIALS, "Invalid username or password.");
     }
 
     public static IdentityException unauthenticated() {
