@@ -111,6 +111,10 @@ export async function generateQuiz(courseId: string, materialIds: string[], forc
   })
 }
 
+export function getQuiz(quizId: string) {
+  return learningFetch<Quiz>(`/api/study/quizzes/${quizId}`)
+}
+
 export async function listQuiz(courseId: string, materialIds: string[]) {
   try {
     return await learningFetch<Quiz>(`/api/study/courses/${courseId}/quizzes?${materialQuery(materialIds)}`)

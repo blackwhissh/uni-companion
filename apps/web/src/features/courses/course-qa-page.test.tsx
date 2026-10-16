@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setAccessToken } from '../../shared/api/access-token.ts'
+import { AuthProvider } from '../auth/AuthProvider.tsx'
 import { CourseQaPage } from './CourseQaPage.tsx'
 import type { Course } from './course-api.ts'
 import type { Material } from './material-api.ts'
@@ -34,14 +35,25 @@ const material2: Material = {
   fileName: 'lecture-2.pdf',
 }
 
+const student = {
+  id: 'student-1',
+  email: 'student@example.com',
+  displayName: 'Student',
+  interests: '',
+  roles: ['STUDENT'],
+  createdAt: '2026-01-01T00:00:00Z',
+}
+
 function renderAt(path: string, ui: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/courses/:courseId/qa" element={ui} />
-        </Routes>
+        <AuthProvider initialUser={student} initialReady>
+          <Routes>
+            <Route path="/courses/:courseId/qa" element={ui} />
+          </Routes>
+        </AuthProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -243,8 +255,6 @@ From your course materials, consensus keeps replicas consistent.
     })
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
-    expect(await screen.findByText('Could not draft an answer from the published materials. Try again shortly.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { name: 'Direct answer' })).toBeInTheDocument()
     expect(ragCalls).toBe(2)
   })

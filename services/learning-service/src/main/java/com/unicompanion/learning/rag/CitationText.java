@@ -253,6 +253,18 @@ final class CitationText {
             }
         }
         String lower = sentence.toLowerCase(Locale.ROOT);
+        for (String digit : focus) {
+            if (digit.chars().allMatch(Character::isDigit) && lower.contains(digit)) {
+                score += 8;
+            }
+        }
+        if (lower.contains("n <") || lower.contains("n>") || lower.contains("n >") || lower.contains("n<")) {
+            for (String digit : focus) {
+                if (digit.chars().allMatch(Character::isDigit) && lower.contains(digit)) {
+                    score += 6;
+                }
+            }
+        }
         if (lower.contains(" is a ") || lower.contains(" are ") || lower.contains(" means ")
                 || lower.contains(" defined as ") || lower.contains(" refers to ")
                 || lower.contains(" always ") || lower.contains(" when ")

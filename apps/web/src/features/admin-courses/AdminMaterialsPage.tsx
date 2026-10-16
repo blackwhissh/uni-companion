@@ -363,7 +363,7 @@ export function AdminMaterialsPage() {
                         <Button
                           type="button"
                           variant="danger"
-                          className="min-w-[5.5rem]"
+                          className="min-w-[5.5rem] whitespace-nowrap"
                           disabled={rowBusy || remove.isPending}
                           onClick={() => requestDelete(material)}
                         >
@@ -393,7 +393,11 @@ export function AdminMaterialsPage() {
 }
 
 function looksLikeDraftTitle(title: string) {
-  return /\b(entwurf|draft|untitled|wip|tmp|temp|test)\b/i.test(title.trim())
+  const trimmed = title.trim()
+  if (/^\[TEST\]/i.test(trimmed)) {
+    return false
+  }
+  return /\b(entwurf|draft|untitled|wip|tmp|temp|test)\b/i.test(trimmed)
 }
 
 function ButtonLinkish({ to, children }: { to: string; children: string }) {

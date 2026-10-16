@@ -311,7 +311,7 @@ export function AdminCoursesPage() {
                         <Button
                           type="button"
                           variant="danger"
-                          className="min-w-[5.5rem]"
+                          className="min-w-[5.5rem] whitespace-nowrap"
                           disabled={remove.isPending}
                           onClick={() => requestDelete(course)}
                         >

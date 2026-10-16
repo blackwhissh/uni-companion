@@ -52,6 +52,7 @@ export function CourseHomePage() {
     },
   })
   const unavailable = course.error instanceof ApiError && course.error.status === 404
+  const courseLoading = course.isLoading && course.data == null
   const enrolled = course.data?.enrolled === true
   const owned = course.data?.owned === true
   const ownerPreview = owned && !enrolled
@@ -111,7 +112,7 @@ export function CourseHomePage() {
       <div className="mt-4">
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Course'}
-          title={course.data?.title ?? 'Course'}
+          title={course.data?.title ?? (courseLoading ? 'Loading course…' : 'Course')}
           description={
             ownerPreview
               ? 'Student preview: published materials only, the same list enrolled students will see.'
@@ -135,9 +136,15 @@ export function CourseHomePage() {
         </p>
       ) : null}
 
+      {courseLoading ? (
+        <p className="mt-6 animate-pulse-soft text-muted" role="status">
+          Loading course…
+        </p>
+      ) : null}
+
       {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
 
-      {ownerPreview && !unavailable ? (
+      {ownerPreview && !unavailable && !courseLoading ? (
         <div className="mt-6 rounded-lg border border-accent/25 bg-accent/5 px-4 py-3 text-sm leading-relaxed text-ink-soft" role="status">
           <span className="font-medium text-ink">Preview as student</span>
           {!coursePublished ? ' — this course is still unpublished, so real students cannot open it yet.' : '.'}{' '}
@@ -145,7 +152,7 @@ export function CourseHomePage() {
         </div>
       ) : null}
 
-      {enrolled || ownerPreview ? (
+      {(enrolled || ownerPreview) && !courseLoading ? (
         <>
           {enrolled ? (
             <p className="mt-3">
@@ -312,7 +319,7 @@ export function CourseHomePage() {
         }}
       />
 
-      {course.data && !enrolled && !owned && !unavailable ? (
+      {course.data && !enrolled && !owned && !unavailable && !courseLoading ? (
         <EmptyState
           title="You are not enrolled yet"
           description="Join this course to see published materials and unlock study modes. Use Enroll above to get started."

@@ -20,6 +20,7 @@ import { loadMaterialSelection, saveMaterialSelection } from './material-selecti
 import { QaSources } from './QaSources.tsx'
 import { QA_SUGGESTED_PROMPTS } from './qa-prompts.ts'
 import { askCourseQuestion } from './rag-api.ts'
+import { useAuth } from '../auth/use-auth.ts'
 import { studyActionError } from './study-ui.ts'
 import { StudyMaterialPicker } from './StudyMaterialPicker.tsx'
 import type { RagAnswer } from './rag-api.ts'
@@ -30,6 +31,7 @@ const MATERIALS_GONE =
 
 export function CourseQaPage() {
   const { courseId = '' } = useParams()
+  const { ready: authReady } = useAuth()
   const course = useQuery({ queryKey: ['courses', courseId], queryFn: () => getCourse(courseId), retry: false })
   const materials = useQuery({
     queryKey: ['materials', courseId],
@@ -185,7 +187,8 @@ export function CourseQaPage() {
   const enrolled = course.data?.enrolled === true
   const insufficient = result != null && result.citations.length === 0
   const overLimit = question.length > QUESTION_MAX
-  const canAsk = !ask.isPending && question.trim().length > 0 && !overLimit && question.length <= QUESTION_MAX
+  const canAsk =
+    authReady && !ask.isPending && question.trim().length > 0 && !overLimit && question.length <= QUESTION_MAX
 
   return (
     <Page>

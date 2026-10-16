@@ -25,8 +25,11 @@ final class AnswerPrompt {
                 })
                 .collect(Collectors.joining("\n\n"));
 
+        String languageLine = QuestionLanguage.instructionLine(question);
+
         return """
                 You are Uni Companion, a study assistant for university courses.
+                %s
                 Answer ONLY using the numbered excerpts below. Do not invent facts.
                 If the excerpts are insufficient, say clearly that you cannot find that in the published materials
                 and suggest what the student might look for — do not invent an answer.
@@ -67,6 +70,6 @@ final class AnswerPrompt {
                 %s
 
                 Question: %s
-                """.formatted(context, question);
+                """.formatted(languageLine, context, question);
     }
 }

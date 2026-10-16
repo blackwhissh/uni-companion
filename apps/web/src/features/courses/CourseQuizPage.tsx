@@ -21,13 +21,14 @@ import { loadMaterialSelection, saveMaterialSelection } from './material-selecti
 import { clearStudyGeneration, loadStudyGeneration, saveStudyGeneration } from './study-generation-storage.ts'
 import { StudyMaterialPicker } from './StudyMaterialPicker.tsx'
 import { StudyVersionControls } from './StudyVersionControls.tsx'
-import { generateQuiz, reportQuizVersion, selectQuizVersion, submitQuiz } from './study-api.ts'
+import { generateQuiz, getQuiz, reportQuizVersion, selectQuizVersion, submitQuiz } from './study-api.ts'
 import type { AnswerReview, Quiz, QuizAttempt } from './study-api.ts'
 import { studyActionError, studyWorkingCopy } from './study-ui.ts'
 
 export function CourseQuizPage() {
   const { courseId = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
+  const quizFromUrlAtMount = useRef(searchParams.get('quiz'))
   const { user } = useAuth()
   const userId = user?.id ?? null
   const course = useQuery({ queryKey: ['courses', courseId], queryFn: () => getCourse(courseId), retry: false })
@@ -49,10 +50,15 @@ export function CourseQuizPage() {
   const [notice, setNotice] = useState<string | null>(() =>
     pendingAtMount.current ? 'Still preparing your shared quiz…' : null,
   )
-  const [picking, setPicking] = useState(() => !pendingAtMount.current)
-  const [blockingForResume, setBlockingForResume] = useState(() => !!pendingAtMount.current)
+  const [picking, setPicking] = useState(
+    () => !pendingAtMount.current && !quizFromUrlAtMount.current,
+  )
+  const [blockingForResume, setBlockingForResume] = useState(
+    () => !!pendingAtMount.current || !!quizFromUrlAtMount.current,
+  )
   const [generateForce, setGenerateForce] = useState(() => pendingAtMount.current?.force === true)
   const resumedGeneration = useRef(false)
+  const resumedQuiz = useRef(false)
 
   useEffect(() => {
     if (!quiz || attempt) {
@@ -60,6 +66,24 @@ export function CourseQuizPage() {
     }
     saveQuizAnswers(quiz.id, answers, userId)
   }, [quiz, answers, attempt, userId])
+
+  const resumeQuiz = useMutation({
+    mutationFn: (quizId: string) => getQuiz(quizId),
+    onSuccess: (next) => {
+      setBlockingForResume(false)
+      setError(null)
+      setNotice(null)
+      setPicking(false)
+      setQuiz(next)
+      setAttempt(null)
+      setAnswers(loadQuizAnswers(next.id, userId))
+    },
+    onError: (err) => {
+      setBlockingForResume(false)
+      setError(err instanceof ApiError ? err.message : 'Could not restore that quiz.')
+      setPicking(true)
+    },
+  })
 
   const generate = useMutation({
     mutationFn: ({ materialIds, force }: { materialIds: string[]; force: boolean }) => {
@@ -104,17 +128,26 @@ export function CourseQuizPage() {
         next.set('quiz', quiz.id)
         setSearchParams(next, { replace: true })
       }
-      return
     }
-    // Drop stale ?quiz= on hard reload / picker so the URL matches the empty state.
-    if (current && !generate.isPending && !blockingForResume) {
-      const next = new URLSearchParams(searchParams)
-      next.delete('quiz')
-      setSearchParams(next, { replace: true })
-    }
-  }, [quiz, searchParams, setSearchParams, generate.isPending, blockingForResume])
+  }, [quiz, searchParams, setSearchParams])
 
   useEffect(() => {
+    const quizId = searchParams.get('quiz')
+    if (
+      !resumedQuiz.current
+      && quizId
+      && !quiz
+      && courseId
+      && course.data?.enrolled === true
+      && !generate.isPending
+      && !pendingAtMount.current
+    ) {
+      resumedQuiz.current = true
+      setBlockingForResume(true)
+      setPicking(false)
+      resumeQuiz.mutate(quizId)
+      return
+    }
     if (resumedGeneration.current || !courseId || course.data?.enrolled !== true) {
       return
     }
@@ -129,7 +162,7 @@ export function CourseQuizPage() {
     setNotice('Still preparing your shared quiz…')
     generate.mutate({ materialIds: pending.materialIds, force: pending.force })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId, course.data?.enrolled])
+  }, [courseId, course.data?.enrolled, searchParams, quiz, generate.isPending, resumeQuiz])
 
   function startGeneration(materialIds: string[], force: boolean) {
     if (generate.isPending) {
@@ -213,8 +246,8 @@ export function CourseQuizPage() {
   const unansweredCount =
     quiz?.questions?.filter((question) => answers[question.id] === undefined).length ?? 0
   const reviewsByQuestion = new Map((attempt?.reviews ?? []).map((review) => [review.questionId, review]))
-  const showPicker = !blockingForResume && !generate.isPending && (picking || !quiz)
-  const showWorking = generate.isPending || blockingForResume
+  const showPicker = !blockingForResume && !generate.isPending && !resumeQuiz.isPending && (picking || !quiz)
+  const showWorking = generate.isPending || blockingForResume || resumeQuiz.isPending
 
   return (
     <Page>

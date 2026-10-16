@@ -80,6 +80,8 @@ final class FlashcardPrompt {
 
                 Match the material language
                 - Write every front and back in the same language as the material excerpts.
+                - State concrete thresholds and rules exactly as the material does — never hedge with "e.g." for numeric cutoffs.
+                - Do not claim algorithmic complexities (such as O(n^2)) unless the excerpt states them explicitly.
                 - If excerpts are mixed, use the dominant language of the excerpts.
                 - Do not default to English when the material is not English.
                 - Keep technical terms, formulas, and proper names as they appear in the material.
