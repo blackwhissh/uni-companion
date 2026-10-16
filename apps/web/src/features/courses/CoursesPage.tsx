@@ -29,12 +29,24 @@ export function CoursesPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [unenrollTarget, setUnenrollTarget] = useState<Course | null>(null)
+  /** Keeps the row in place briefly so a double-click does not hit another course's Enroll after the list reflows. */
+  const [pinnedEnrolledId, setPinnedEnrolledId] = useState<string | null>(null)
   const enroll = useMutation({
     mutationFn: enrollInCourse,
-    onSuccess: async () => {
+    onMutate: (courseId) => {
+      setPinnedEnrolledId(courseId)
+    },
+    onSuccess: async (_data, courseId) => {
       setError(null)
       setNotice('Enrolled.')
+      queryClient.setQueryData<Course[]>(['courses'], (current) =>
+        current?.map((course) => (course.id === courseId ? { ...course, enrolled: true } : course)),
+      )
       await queryClient.invalidateQueries({ queryKey: ['courses'] })
+      window.setTimeout(() => setPinnedEnrolledId((current) => (current === courseId ? null : current)), 1500)
+    },
+    onError: () => {
+      setPinnedEnrolledId(null)
     },
     onError: (err) => {
       setNotice(null)
@@ -54,8 +66,10 @@ export function CoursesPage() {
     },
   })
 
-  const enrolled = courses.data?.filter((course) => course.enrolled) ?? []
-  const available = courses.data?.filter((course) => !course.enrolled) ?? []
+  const enrolled =
+    courses.data?.filter((course) => course.enrolled && course.id !== pinnedEnrolledId) ?? []
+  const available =
+    courses.data?.filter((course) => !course.enrolled || course.id === pinnedEnrolledId) ?? []
 
   return (
     <Page>
@@ -115,7 +129,7 @@ export function CoursesPage() {
               <CourseRow
                 key={course.id}
                 course={course}
-                enrolled={false}
+                enrolled={course.enrolled}
                 pending={
                   (enroll.isPending && enroll.variables === course.id) ||
                   (unenroll.isPending && unenroll.variables === course.id)

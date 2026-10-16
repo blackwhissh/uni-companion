@@ -129,6 +129,29 @@ class CitedSourcesTest {
     }
 
     @Test
+    void recoversMultipleOverlappingPassagesWithDistinctChips() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("Lecture 3", 3, "Insertion sort is used when n < 17 for small arrays."),
+                chunk("Lecture 3", 5, "Quicksort uses median-of-three pivot selection in these exercises.")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        Insertion sort applies when n < 17. Quicksort uses median-of-three pivoting.
+
+                        ## Explanation
+                        Both rules come from the sorting lecture.
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).hasSize(2);
+        assertThat(result.answer()).contains("[1]");
+        assertThat(result.answer()).contains("[2]");
+    }
+
+    @Test
     void keepsValidMembersOfListCitationsWhenAnswerIsGrounded() {
         List<ChatModel.RetrievedChunk> retrieved = List.of(
                 chunk("A", 1, "alpha fact"),

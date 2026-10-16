@@ -21,7 +21,12 @@ import type { Material } from './material-api.ts'
 export function CourseHomePage() {
   const { courseId = '' } = useParams()
   const queryClient = useQueryClient()
-  const course = useQuery({ queryKey: ['courses', courseId], queryFn: () => getCourse(courseId), retry: false })
+  const course = useQuery({
+    queryKey: ['courses', courseId],
+    queryFn: () => getCourse(courseId),
+    retry: false,
+    refetchOnMount: 'always',
+  })
   const materials = useQuery({
     queryKey: ['materials', courseId],
     queryFn: () => listMaterials(courseId),
@@ -41,6 +46,9 @@ export function CourseHomePage() {
     mutationFn: () => enrollInCourse(courseId),
     onSuccess: async () => {
       setActionNotice('Enrolled. Study modes are unlocked.')
+      queryClient.setQueryData(['courses', courseId], (current: typeof course.data) =>
+        current ? { ...current, enrolled: true } : current,
+      )
       await refresh()
     },
   })
@@ -52,7 +60,8 @@ export function CourseHomePage() {
     },
   })
   const unavailable = course.error instanceof ApiError && course.error.status === 404
-  const enrolled = course.data?.enrolled === true
+  const courseLoading = course.isLoading || (course.isFetching && !course.data)
+  const enrolled = course.data?.enrolled === true || enroll.isSuccess
   const owned = course.data?.owned === true
   const ownerPreview = owned && !enrolled
   const coursePublished = course.data?.visibility === 'PUBLISHED'
@@ -108,10 +117,15 @@ export function CourseHomePage() {
       <BackLink to={owned ? `/admin/courses/${courseId}/materials` : '/courses'}>
         {owned ? 'Back to course console' : 'Your courses'}
       </BackLink>
+      {courseLoading ? (
+        <p className="mt-6 animate-pulse-soft text-muted" role="status">
+          Loading course…
+        </p>
+      ) : null}
       <div className="mt-4">
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Course'}
-          title={course.data?.title ?? 'Course'}
+          title={course.data?.title ?? (courseLoading ? 'Loading course…' : 'Course')}
           description={
             ownerPreview
               ? 'Student preview: published materials only, the same list enrolled students will see.'
@@ -312,7 +326,7 @@ export function CourseHomePage() {
         }}
       />
 
-      {course.data && !enrolled && !owned && !unavailable ? (
+      {course.data && !enrolled && !owned && !unavailable && !courseLoading && !enroll.isPending ? (
         <EmptyState
           title="You are not enrolled yet"
           description="Join this course to see published materials and unlock study modes. Use Enroll above to get started."

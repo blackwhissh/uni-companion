@@ -24,7 +24,13 @@ import { studyActionError, studyWorkingCopy } from './study-ui.ts'
 
 export function CourseFlashcardsPage() {
   const { courseId = '' } = useParams()
-  const course = useQuery({ queryKey: ['courses', courseId], queryFn: () => getCourse(courseId), retry: false })
+  const course = useQuery({
+    queryKey: ['courses', courseId],
+    queryFn: () => getCourse(courseId),
+    retry: false,
+    refetchOnMount: 'always',
+  })
+  const courseLoading = course.isLoading || (course.isFetching && !course.data)
   const materials = useQuery({
     queryKey: ['materials', courseId],
     queryFn: () => listMaterials(courseId),
@@ -52,6 +58,7 @@ export function CourseFlashcardsPage() {
     mutationFn: ({ materialIds, force }: { materialIds: string[]; force: boolean }) => {
       setGenerateForce(force)
       setSelectedMaterialIds(materialIds)
+      setNotice(null)
       setPicking(false)
       saveStudyGeneration('flashcards', courseId, {
         materialIds,
@@ -195,7 +202,14 @@ export function CourseFlashcardsPage() {
 
   return (
     <Page>
-      <BackLink to={`/courses/${courseId}`}>{course.data?.title ?? 'Course'}</BackLink>
+      <BackLink to={`/courses/${courseId}`}>
+        {course.data?.title ?? (courseLoading ? 'Loading course…' : 'Course')}
+      </BackLink>
+      {courseLoading ? (
+        <p className="mt-6 animate-pulse-soft text-muted" role="status">
+          Loading course…
+        </p>
+      ) : null}
       <div className="mt-4">
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Flashcards'}
