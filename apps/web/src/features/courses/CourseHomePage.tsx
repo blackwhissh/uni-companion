@@ -60,7 +60,7 @@ export function CourseHomePage() {
     },
   })
   const unavailable = course.error instanceof ApiError && course.error.status === 404
-  const courseLoading = course.isLoading || (course.isFetching && !course.data)
+  const courseLoading = course.isLoading && course.data == null
   const enrolled = course.data?.enrolled === true || enroll.isSuccess
   const owned = course.data?.owned === true
   const ownerPreview = owned && !enrolled
@@ -149,9 +149,15 @@ export function CourseHomePage() {
         </p>
       ) : null}
 
+      {courseLoading ? (
+        <p className="mt-6 animate-pulse-soft text-muted" role="status">
+          Loading course…
+        </p>
+      ) : null}
+
       {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
 
-      {ownerPreview && !unavailable ? (
+      {ownerPreview && !unavailable && !courseLoading ? (
         <div className="mt-6 rounded-lg border border-accent/25 bg-accent/5 px-4 py-3 text-sm leading-relaxed text-ink-soft" role="status">
           <span className="font-medium text-ink">Preview as student</span>
           {!coursePublished ? ' — this course is still unpublished, so real students cannot open it yet.' : '.'}{' '}
@@ -159,7 +165,7 @@ export function CourseHomePage() {
         </div>
       ) : null}
 
-      {enrolled || ownerPreview ? (
+      {(enrolled || ownerPreview) && !courseLoading ? (
         <>
           {enrolled ? (
             <p className="mt-3">

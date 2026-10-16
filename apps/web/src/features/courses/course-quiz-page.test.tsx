@@ -185,6 +185,49 @@ describe('course quiz page', () => {
     expect(generateCalls).toBe(2)
   })
 
+  it('restores an in-progress quiz from ?quiz= after refresh', async () => {
+    setAccessToken('student-token')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const path = String(url)
+        if (path.includes('/quizzes/quiz-1') && !path.includes('/submit')) {
+          return json(
+            {
+              id: 'quiz-1',
+              courseId: 'course-1',
+              version: 1,
+              availableVersions: 1,
+              maxVersions: 3,
+              delivery: 'RESUMED',
+              versions: [{ id: 'quiz-1', version: 1, createdAt: '2026-09-28T20:00:00Z', current: true }],
+              questions: [
+                {
+                  id: 'q-1',
+                  prompt: 'Restored from URL?',
+                  options: ['Yes', 'No', 'Maybe', 'Later'],
+                },
+              ],
+            },
+            200,
+          )
+        }
+        if (path.endsWith('/materials')) {
+          return json([material])
+        }
+        return json(course)
+      }),
+    )
+
+    localStorage.setItem('uc-quiz-answers:student-1:quiz-1', JSON.stringify({ 'q-1': 0 }))
+
+    renderAt('/courses/course-1/quiz?quiz=quiz-1', <CourseQuizPage />)
+
+    expect(await screen.findByText('Restored from URL?')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Yes' })).toBeChecked()
+    expect(screen.queryByRole('button', { name: 'Start quiz' })).not.toBeInTheDocument()
+  })
+
   it('resumes an in-flight quiz generation after refresh instead of showing the picker', async () => {
     setAccessToken('student-token')
     sessionStorage.setItem(

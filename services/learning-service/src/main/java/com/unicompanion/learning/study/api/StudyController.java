@@ -88,6 +88,14 @@ public class StudyController {
         return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result.view());
     }
 
+    @GetMapping("/quizzes/{quizId}")
+    public StudyService.QuizView openQuiz(
+            @PathVariable UUID quizId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return study.openQuiz(quizId, userId(jwt));
+    }
+
     @GetMapping("/courses/{courseId}/quizzes")
     public StudyService.QuizView listQuiz(
             @PathVariable UUID courseId,

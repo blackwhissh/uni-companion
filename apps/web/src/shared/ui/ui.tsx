@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { useEffect } from 'react'
 import { Link } from 'react-router'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'success' | 'warn' | 'danger'
@@ -167,6 +168,20 @@ export function ConfirmDialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCancel()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, onCancel])
+
   if (!open) {
     return null
   }

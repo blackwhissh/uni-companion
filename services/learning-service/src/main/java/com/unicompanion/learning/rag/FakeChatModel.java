@@ -25,6 +25,10 @@ public class FakeChatModel implements ChatModel {
         }
         RetrievedChunk primary = chunks.getFirst();
         String body = truncate(primary.content(), 320);
+        boolean german = QuestionLanguage.isLikelyGerman(question);
+        String directHeading = german ? "## Direkte Antwort" : "## Direct answer";
+        String explanationHeading = german ? "## Erklärung" : "## Explanation";
+        String termsHeading = german ? "## Schlüsselbegriffe" : "## Key terms";
         StringBuilder terms = new StringBuilder();
         for (int i = 0; i < chunks.size(); i++) {
             RetrievedChunk chunk = chunks.get(i);
@@ -37,21 +41,24 @@ public class FakeChatModel implements ChatModel {
             ));
         }
         return """
-                ## Direct answer
+                %s
                 From your course materials: %s [%d]
 
-                ## Explanation
+                %s
                 The published materials support this answer. Source [%d] (%s, page %d) is the closest match to your question: "%s".
 
-                ## Key terms
+                %s
                 %s
                 """.formatted(
+                directHeading,
                 body,
                 1,
+                explanationHeading,
                 1,
                 primary.title(),
                 primary.pageNumber(),
                 question == null ? "" : question.trim(),
+                termsHeading,
                 terms.toString().trim()
         );
     }

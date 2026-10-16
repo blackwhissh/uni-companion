@@ -38,6 +38,7 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -173,6 +174,7 @@ public class StudyService {
                         );
                     }
                     validateFlashcards(drafts);
+                    validateFlashcardsGrounded(drafts, source);
                     UUID deckId = transactions.execute(status ->
                             saveGeneratedDeck(
                                     courseId,
@@ -268,6 +270,30 @@ public class StudyService {
             waitForGeneration("QUIZ", courseId, materialsKey);
         }
         throw unavailable("Quiz generation is still in progress. Try again shortly.");
+    }
+
+    @Transactional
+    public QuizView openQuiz(UUID quizId, UUID userId) {
+        QuizEntity quiz = quizzes.findById(quizId).orElseThrow(StudyService::notFound);
+        requireEnrollment(quiz.getCourseId(), userId);
+        if (!quiz.isActive()) {
+            throw notFound();
+        }
+        List<UUID> materialIds = jdbc.query(
+                "SELECT material_id FROM quiz_materials WHERE quiz_id = ? ORDER BY material_id",
+                (rs, rowNum) -> UUID.fromString(rs.getString("material_id")),
+                quizId
+        );
+        if (materialIds.isEmpty()) {
+            throw notFound();
+        }
+        String materialsKey = materialsKey(materialIds);
+        if (!quiz.getMaterialsKey().equals(materialsKey)) {
+            throw notFound();
+        }
+        saveQuizProgress(new StudyProgressKey(quiz.getCourseId(), userId, materialsKey), quizId);
+        recordDelivery("QUIZ", quiz.getCourseId(), userId, materialsKey, quizId, Delivery.RESUMED);
+        return toQuizView(quiz, Delivery.RESUMED);
     }
 
     @Transactional(readOnly = true)
@@ -962,6 +988,56 @@ public class StudyService {
     }
 
     private static final int MIN_CARD_COUNT = 4;
+
+    static void validateFlashcardsGrounded(
+            List<ChatModel.FlashcardDraft> drafts,
+            List<ChatModel.RetrievedChunk> source
+    ) {
+        if (drafts == null || drafts.isEmpty() || source == null || source.isEmpty()) {
+            return;
+        }
+        String corpus = source.stream()
+                .map(ChatModel.RetrievedChunk::content)
+                .filter(value -> value != null && !value.isBlank())
+                .collect(Collectors.joining("\n"))
+                .toLowerCase(Locale.ROOT);
+        for (ChatModel.FlashcardDraft draft : drafts) {
+            String back = draft.back() == null ? "" : draft.back().trim();
+            String backLower = back.toLowerCase(Locale.ROOT);
+            if (backLower.contains("e.g.") && (backLower.contains("<") || backLower.contains(">"))) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_GATEWAY,
+                        "The generated flashcards did not pass the quality checks."
+                );
+            }
+            if (backLower.contains("o(n") && !corpus.contains("o(n")) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_GATEWAY,
+                        "The generated flashcards did not pass the quality checks."
+                );
+            }
+            Set<String> backTerms = flashcardGroundingTerms(backLower);
+            if (backTerms.size() < 2) {
+                continue;
+            }
+            Set<String> corpusTerms = flashcardGroundingTerms(corpus);
+            long shared = backTerms.stream().filter(corpusTerms::contains).count();
+            double overlap = (double) shared / Math.min(backTerms.size(), corpusTerms.size());
+            if (shared < 2 || overlap < 0.18) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_GATEWAY,
+                        "The generated flashcards did not pass the quality checks."
+                );
+            }
+        }
+    }
+
+    private static Set<String> flashcardGroundingTerms(String text) {
+        return Arrays.stream(text.split("[^a-z0-9]+"))
+                .filter(term -> term.length() >= 4)
+                .filter(term -> !FLASHCARD_STOP_WORDS.contains(term))
+                .collect(Collectors.toSet());
+    }
 
     private static void validateFlashcards(List<ChatModel.FlashcardDraft> drafts) {
         if (drafts == null || drafts.isEmpty()) {

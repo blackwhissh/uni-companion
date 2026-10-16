@@ -2,6 +2,7 @@ import { NavLink, Link, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../features/auth/use-auth.ts'
 import { homePathFor } from '../features/auth/home-path.ts'
+import { markLogoutNavigation } from '../features/auth/auth-session-sync.ts'
 import { Button } from '../shared/ui/ui.tsx'
 
 export function AppHeader() {
@@ -18,6 +19,7 @@ export function AppHeader() {
     }`
 
   async function onLogout() {
+    markLogoutNavigation()
     await logout()
     queryClient.clear()
     navigate('/login', { replace: true, state: {} })
@@ -47,11 +49,11 @@ export function AppHeader() {
                 <span className="sm:hidden">{shortName}</span>
                 <span className="hidden sm:inline">{user.displayName}</span>
               </span>
-              <NavLink to="/courses" className={linkClass}>
+              <NavLink to="/courses" end className={linkClass}>
                 Courses
               </NavLink>
               {isStaff ? (
-                <NavLink to="/admin/courses" className={linkClass}>
+                <NavLink to="/admin/courses" end className={linkClass}>
                   <span className="sm:hidden">Admin</span>
                   <span className="hidden sm:inline">Course console</span>
                 </NavLink>

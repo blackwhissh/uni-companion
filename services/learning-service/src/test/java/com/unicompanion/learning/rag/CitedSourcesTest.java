@@ -129,6 +129,30 @@ class CitedSourcesTest {
     }
 
     @Test
+    void remapsCitationWhenChunkDoesNotSupportNumericClaim() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("Lecture 3", 1, "Quicksort average case is O(n log n). Worst case is O(n^2) with bad pivots."),
+                chunk("Lecture 3", 4, "Insertion sort is preferred when n < 17 because Quicksort overhead dominates.")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        Insertion sort is used when n < 17 [1].
+
+                        ## Explanation
+                        Details follow.
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).hasSize(1);
+        assertThat(result.chunks().getFirst().pageNumber()).isEqualTo(4);
+        assertThat(result.chunks().getFirst().content()).contains("n < 17");
+        assertThat(result.answer()).contains("[1]");
+    }
+
+    @Test
     void recoversMultipleOverlappingPassagesWithDistinctChips() {
         List<ChatModel.RetrievedChunk> retrieved = List.of(
                 chunk("Lecture 3", 3, "Insertion sort is used when n < 17 for small arrays."),
@@ -149,6 +173,27 @@ class CitedSourcesTest {
         assertThat(result.chunks()).hasSize(2);
         assertThat(result.answer()).contains("[1]");
         assertThat(result.answer()).contains("[2]");
+    }
+
+    @Test
+    void stripsCitationsWhenDirectAnswerIsInsufficientEvenIfExplanationMentionsMaterial() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("Lecture 3", 1, "Quicksort uses median-of-three pivoting in these exercises.")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        Heapsort is not covered in the published materials.
+
+                        ## Explanation
+                        Quicksort pivot rules appear on page 1 [1].
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).isEmpty();
+        assertThat(result.answer()).doesNotContain("[1]");
     }
 
     @Test
