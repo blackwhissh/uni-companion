@@ -1,6 +1,7 @@
 package com.unicompanion.learning.rag;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -91,7 +92,7 @@ final class CitedSources {
             return new Result(stripAllCitationGroups(answer), List.of());
         }
 
-        List<Integer> overlapping = new ArrayList<>();
+        List<OverlapHit> overlapping = new ArrayList<>();
         for (int i = 0; i < retrieved.size(); i++) {
             Set<String> chunkTerms = significantTerms(retrieved.get(i).content());
             if (chunkTerms.isEmpty()) {
@@ -99,25 +100,26 @@ final class CitedSources {
             }
             long shared = answerTerms.stream().filter(chunkTerms::contains).count();
             double overlap = (double) shared / Math.min(answerTerms.size(), chunkTerms.size());
-            if (shared >= 2 && overlap >= 0.28) {
-                overlapping.add(i + 1);
+            if (shared >= 2 && (overlap >= 0.22 || shared >= 4)) {
+                overlapping.add(new OverlapHit(i + 1, shared, overlap));
             }
         }
+        overlapping.sort(Comparator.comparingDouble(OverlapHit::overlap).reversed().thenComparingLong(OverlapHit::shared).reversed());
         if (overlapping.isEmpty()) {
             return new Result(stripAllCitationGroups(answer), List.of());
         }
 
         overlapping.sort((a, b) -> Integer.compare(
-                overlapScore(answer, retrieved.get(b - 1).content()),
-                overlapScore(answer, retrieved.get(a - 1).content())
+                overlapScore(answer, retrieved.get(b.index() - 1).content()),
+                overlapScore(answer, retrieved.get(a.index() - 1).content())
         ));
 
         List<ChatModel.RetrievedChunk> selected = overlapping.stream()
-                .map(index -> retrieved.get(index - 1))
+                .map(hit -> retrieved.get(hit.index() - 1))
                 .toList();
-        String stripped = stripAllCitationGroups(answer);
-        String withChips = placeVerifiedCitations(stripped, overlapping.size());
         List<ChatModel.RetrievedChunk> trimmed = selected.size() > 3 ? selected.subList(0, 3) : selected;
+        String stripped = stripAllCitationGroups(answer);
+        String withChips = placeVerifiedCitations(stripped, trimmed.size());
         return new Result(withChips, List.copyOf(trimmed));
     }
 
@@ -421,7 +423,18 @@ final class CitedSources {
         if (text == null || text.isBlank()) {
             return out;
         }
-        for (String raw : text.toLowerCase(Locale.ROOT).split("[^a-z0-9]+")) {
+        String lowered = text.toLowerCase(Locale.ROOT);
+        Matcher compounds = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)+").matcher(lowered);
+        while (compounds.find()) {
+            String compound = compounds.group();
+            out.add(compound);
+            for (String part : compound.split("-")) {
+                if (part.length() >= 3 && !STOP.contains(part)) {
+                    out.add(part);
+                }
+            }
+        }
+        for (String raw : lowered.split("[^a-z0-9-]+")) {
             if (raw.isEmpty()) {
                 continue;
             }
@@ -449,5 +462,8 @@ final class CitedSources {
     }
 
     record Result(String answer, List<ChatModel.RetrievedChunk> chunks) {
+    }
+
+    private record OverlapHit(int index, long shared, double overlap) {
     }
 }

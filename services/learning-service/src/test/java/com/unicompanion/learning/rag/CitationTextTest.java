@@ -91,4 +91,23 @@ class CitationTextTest {
                 .contains("n < 17")
                 .doesNotContain("random pivot in textbooks");
     }
+
+    @Test
+    void prefersMedianOfThreeSentenceWhenAnswerMentionsIt() {
+        String content = """
+                Chapter 4 — Sorting. Insertion sort builds the sorted array one element at a time. \
+                Quicksort chooses a pivot, partitions, and recurses. \
+                In these exercises, Quicksort always uses median-of-three pivoting when n >= 17.
+                """;
+
+        String excerpt = CitationText.excerpt(
+                content,
+                "Which pivot rule is used for quicksort?",
+                "Quicksort uses median-of-three pivoting."
+        );
+
+        assertThat(excerpt)
+                .contains("median-of-three")
+                .doesNotContain("Insertion sort builds");
+    }
 }

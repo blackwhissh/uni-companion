@@ -51,6 +51,7 @@ final class AnswerPrompt {
                 A bullet list of important terms from the answer, each as **Term** — brief definition with a citation when possible.
 
                 Rules:
+                - Treat every question as standalone. There is no chat history — do not label answers as follow-ups or refer to prior turns unless the student explicitly quotes them in this question.
                 - Prefer clarity over length; aim for a readable study note, not an essay.
                 - Use bullet lists when listing steps, properties, or comparisons.
                 - Cite every excerpt you actually rely on with its [n]. Prefer multiple sources when they add distinct facts.

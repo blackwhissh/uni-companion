@@ -89,6 +89,8 @@ final class FlashcardPrompt {
                 Preserve important precision
                 - Do not oversimplify technical concepts to the point of becoming inaccurate.
                 - Preserve important conditions, exceptions, terminology, numbers, and relationships.
+                - When the material states a rule or threshold (for example "use insertion sort when n < 17" or a pivot rule), state it as a rule — not as a vague example ("e.g. …").
+                - Include cards for concrete algorithm rules from the material (pivot choice, cutoffs, load-factor limits) when they appear in the excerpts.
                 - For formulas, include the formula and briefly explain the variables when necessary.
 
                 Avoid redundancy

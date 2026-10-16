@@ -32,7 +32,13 @@ const MATERIALS_GONE =
 export function CourseQaPage() {
   const { courseId = '' } = useParams()
   const { ready: authReady } = useAuth()
-  const course = useQuery({ queryKey: ['courses', courseId], queryFn: () => getCourse(courseId), retry: false })
+  const course = useQuery({
+    queryKey: ['courses', courseId],
+    queryFn: () => getCourse(courseId),
+    retry: false,
+    refetchOnMount: 'always',
+  })
+  const courseLoading = course.isLoading || (course.isFetching && !course.data)
   const materials = useQuery({
     queryKey: ['materials', courseId],
     queryFn: () => listMaterials(courseId),
@@ -188,11 +194,23 @@ export function CourseQaPage() {
   const insufficient = result != null && result.citations.length === 0
   const overLimit = question.length > QUESTION_MAX
   const canAsk =
-    authReady && !ask.isPending && question.trim().length > 0 && !overLimit && question.length <= QUESTION_MAX
+    authReady &&
+    !ask.isPending &&
+    question.trim().length > 0 &&
+    !overLimit &&
+    question.length <= QUESTION_MAX &&
+    !pasteWarning
 
   return (
     <Page>
-      <BackLink to={`/courses/${courseId}`}>{course.data?.title ?? 'Course'}</BackLink>
+      <BackLink to={`/courses/${courseId}`}>
+        {course.data?.title ?? (courseLoading ? 'Loading course…' : 'Course')}
+      </BackLink>
+      {courseLoading ? (
+        <p className="mt-6 animate-pulse-soft text-muted" role="status">
+          Loading course…
+        </p>
+      ) : null}
       <div className="mt-4">
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Q&A'}
