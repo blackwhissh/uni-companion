@@ -25,11 +25,21 @@ export type SearchResult = {
   hits: SearchHit[]
 }
 
-export function askCourseQuestion(courseId: string, question: string, materialIds: string[]) {
+export function askCourseQuestion(
+  courseId: string,
+  question: string,
+  materialIds: string[],
+  language?: 'EN' | 'DE',
+) {
   return withRetry(() =>
     learningFetch<RagAnswer>('/api/rag/query', {
       method: 'POST',
-      body: JSON.stringify({ courseId, question, materialIds }),
+      body: JSON.stringify({
+        courseId,
+        question,
+        materialIds,
+        ...(language ? { language } : {}),
+      }),
     }),
   )
 }
@@ -43,11 +53,11 @@ export function searchLectures(courseId: string, query: string) {
   )
 }
 
-export function summarizeMaterial(courseId: string, materialId: string) {
+export function summarizeMaterial(courseId: string, materialId: string, language: 'EN' | 'DE') {
   return withRetry(() =>
     learningFetch<RagAnswer>('/api/rag/summary', {
       method: 'POST',
-      body: JSON.stringify({ courseId, materialId }),
+      body: JSON.stringify({ courseId, materialId, language }),
     }),
   )
 }

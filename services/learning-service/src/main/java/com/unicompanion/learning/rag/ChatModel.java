@@ -5,9 +5,9 @@ import java.util.UUID;
 
 public interface ChatModel {
 
-    String answer(String question, List<RetrievedChunk> chunks);
+    String answer(String question, List<RetrievedChunk> chunks, ExplanationLanguage language);
 
-    String summarize(String title, List<RetrievedChunk> chunks);
+    String summarize(String title, List<RetrievedChunk> chunks, ExplanationLanguage language);
 
     default List<FlashcardDraft> generateFlashcards(List<RetrievedChunk> chunks, int count) {
         return generateFlashcards(chunks, count, List.of());

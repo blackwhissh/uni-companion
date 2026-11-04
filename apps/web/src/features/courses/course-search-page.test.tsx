@@ -90,9 +90,10 @@ describe('course search page', () => {
         expect(JSON.parse(String(init.body))).toEqual({
           courseId: 'course-1',
           materialId: 'material-shard',
+          language: 'DE',
         })
         return json({
-          answer: 'Short summary of Sharding. Page 2: Sharding partitions data across nodes.',
+          answer: 'Kurze Zusammenfassung von Sharding. Seite 2: Sharding partitions data across nodes.',
           citations: [
             {
               materialId: 'material-shard',
@@ -121,8 +122,9 @@ describe('course search page', () => {
     expect(await screen.findByText('Sharding partitions data across nodes.')).toBeInTheDocument()
     expect(screen.queryByText(/student@example.com/)).not.toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('radio', { name: 'Deutsch' }))
     fireEvent.click(screen.getByRole('button', { name: 'Summarize' }))
-    expect(await screen.findByText(/Short summary of Sharding/)).toBeInTheDocument()
+    expect(await screen.findByText(/Kurze Zusammenfassung von Sharding/)).toBeInTheDocument()
     expect(screen.queryByText(/keep replicas consistent/)).not.toBeInTheDocument()
   })
 })

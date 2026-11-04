@@ -229,6 +229,84 @@ class RagApiTests {
                 .andExpect(content().string(not(containsString("Secret unpublished"))));
     }
 
+    @Test
+    void explainInGermanKeepsTheEnglishSourceSentence() throws Exception {
+        String courseId = createCourse("CS-DE");
+        String materialId = upload(courseId, "Consensus", "consensus.pdf", pdfBytes("Consensus algorithms keep replicas consistent."));
+        publishCourse(courseId);
+        publishMaterial(materialId);
+        enroll(courseId);
+
+        mockMvc.perform(post("/api/rag/query")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","question":"What is consensus?","materialIds":["%s"],"language":"DE"}
+                                """.formatted(courseId, materialId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", containsString("Direkte Antwort")))
+                .andExpect(jsonPath("$.answer", containsString("Consensus algorithms keep replicas consistent.")))
+                .andExpect(jsonPath("$.answer", not(containsString("## Direct answer"))))
+                .andExpect(jsonPath("$.citations[0].excerpt", containsString("Consensus")));
+
+        mockMvc.perform(post("/api/rag/summary")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","materialId":"%s","language":"DE"}
+                                """.formatted(courseId, materialId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", containsString("Kurze Zusammenfassung")))
+                .andExpect(jsonPath("$.answer", containsString("Seite 1")))
+                .andExpect(jsonPath("$.answer", containsString("Consensus algorithms keep replicas consistent.")))
+                .andExpect(jsonPath("$.answer", not(containsString("Short summary"))));
+    }
+
+    @Test
+    void germanQuestionWithoutALanguageChoiceIsExplainedInGerman() throws Exception {
+        String courseId = createCourse("CS-AUTO-DE");
+        String materialId = upload(courseId, "Consensus", "consensus.pdf", pdfBytes("Consensus algorithms keep replicas consistent."));
+        publishCourse(courseId);
+        publishMaterial(materialId);
+        enroll(courseId);
+
+        mockMvc.perform(post("/api/rag/query")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(query(courseId, "Was ist Konsens und warum?", materialId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", containsString("Direkte Antwort")))
+                .andExpect(jsonPath("$.answer", containsString("Consensus algorithms keep replicas consistent.")));
+    }
+
+    @Test
+    void englishExplanationOfAGermanQuestionAndAnUnknownLanguage() throws Exception {
+        String courseId = createCourse("CS-EN");
+        String materialId = upload(courseId, "Consensus", "consensus.pdf", pdfBytes("Consensus algorithms keep replicas consistent."));
+        publishCourse(courseId);
+        publishMaterial(materialId);
+        enroll(courseId);
+
+        mockMvc.perform(post("/api/rag/query")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","question":"Was ist Konsens und warum?","materialIds":["%s"],"language":"EN"}
+                                """.formatted(courseId, materialId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", containsString("## Direct answer")))
+                .andExpect(jsonPath("$.answer", containsString("Consensus algorithms keep replicas consistent.")))
+                .andExpect(jsonPath("$.answer", not(containsString("Direkte Antwort"))));
+
+        mockMvc.perform(post("/api/rag/query")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","question":"What is consensus?","materialIds":["%s"],"language":"FR"}
+                                """.formatted(courseId, materialId)))
+                .andExpect(status().isBadRequest());
+    }
+
     private String createCourse(String code) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/courses")
                         .header("Authorization", ADMIN)
