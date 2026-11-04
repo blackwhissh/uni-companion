@@ -10,7 +10,8 @@ export function AppHeader() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const home = user ? homePathFor(user.roles) : '/'
-  const isStaff = user?.roles.includes('COURSE_ADMIN') || user?.roles.includes('ADMIN')
+  const platformAdmin = user?.roles.includes('ADMIN') === true
+  const courseAdmin = user?.roles.includes('COURSE_ADMIN') === true
   const shortName = user ? shortDisplayName(user.displayName) : ''
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -52,7 +53,13 @@ export function AppHeader() {
               <NavLink to="/courses" end className={linkClass}>
                 Courses
               </NavLink>
-              {isStaff ? (
+              {platformAdmin ? (
+                <NavLink to="/admin" className={linkClass}>
+                  <span className="sm:hidden">Admin</span>
+                  <span className="hidden sm:inline">Admin panel</span>
+                </NavLink>
+              ) : null}
+              {courseAdmin && !platformAdmin ? (
                 <NavLink to="/admin/courses" end className={linkClass}>
                   <span className="sm:hidden">Admin</span>
                   <span className="hidden sm:inline">Course console</span>

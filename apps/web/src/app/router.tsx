@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router'
+import { AdminPanelPage } from '../features/admin/AdminPanelPage.tsx'
 import { AdminCoursesPage } from '../features/admin-courses/AdminCoursesPage.tsx'
 import { AdminMaterialsPage } from '../features/admin-courses/AdminMaterialsPage.tsx'
 import { LoginPage } from '../features/auth/LoginPage.tsx'
@@ -89,9 +90,17 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/admin"
+            element={
+              <RequireRole anyOf={['ADMIN']}>
+                <AdminPanelPage />
+              </RequireRole>
+            }
+          />
+          <Route
             path="/admin/courses"
             element={
-              <RequireRole role="COURSE_ADMIN">
+              <RequireRole anyOf={['COURSE_ADMIN', 'ADMIN']}>
                 <AdminCoursesPage />
               </RequireRole>
             }
@@ -99,7 +108,7 @@ export function AppRouter() {
           <Route
             path="/admin/courses/:courseId/materials"
             element={
-              <RequireRole role="COURSE_ADMIN">
+              <RequireRole anyOf={['COURSE_ADMIN', 'ADMIN']}>
                 <AdminMaterialsPage />
               </RequireRole>
             }

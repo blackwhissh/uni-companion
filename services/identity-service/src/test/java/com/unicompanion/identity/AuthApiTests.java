@@ -16,10 +16,13 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -213,6 +216,97 @@ class AuthApiTests {
                 .andExpect(jsonPath("$.displayName").value("After"))
                 .andExpect(jsonPath("$.interests").value("compilers"))
                 .andExpect(jsonPath("$.email").value("profile@uni.test"));
+    }
+
+    @Test
+    void platformAdminGrantsAndRevokesCourseAdminWithoutExposingInterests() throws Exception {
+        MvcResult registered = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"panel-student@uni.test","password":"password1","displayName":"Panel Student"}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String studentToken = token(registered.getResponse().getContentAsString());
+        String studentId = JsonPath.read(registered.getResponse().getContentAsString(), "$.user.id");
+
+        mockMvc.perform(patch("/api/me/profile")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"displayName":"Panel Student","interests":"private-note"}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/admin/accounts").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        String professorToken = token(mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"professor","password":"professor"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+        mockMvc.perform(get("/api/admin/accounts").header("Authorization", "Bearer " + professorToken))
+                .andExpect(status().isForbidden());
+
+        String adminToken = token(mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"admin","password":"admin"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+
+        String directory = mockMvc.perform(get("/api/admin/accounts").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.email == 'panel-student@uni.test')].displayName").value("Panel Student"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(directory).doesNotContain("private-note").doesNotContain("interests");
+
+        mockMvc.perform(put("/api/admin/accounts/" + studentId + "/course-admin")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseAdmin":true}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles").value(org.hamcrest.Matchers.containsInAnyOrder("COURSE_ADMIN", "STUDENT")));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"panel-student@uni.test","password":"password1"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.roles").value(org.hamcrest.Matchers.containsInAnyOrder("COURSE_ADMIN", "STUDENT")));
+
+        mockMvc.perform(put("/api/admin/accounts/" + studentId + "/course-admin")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseAdmin":false}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles").value(org.hamcrest.Matchers.contains("STUDENT")))
+                .andExpect(jsonPath("$.roles").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("COURSE_ADMIN"))));
+
+        mockMvc.perform(put("/api/admin/accounts/" + UUID.randomUUID() + "/course-admin")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseAdmin":true}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 
     @Test

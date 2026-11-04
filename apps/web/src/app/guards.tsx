@@ -28,7 +28,15 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return children
 }
 
-export function RequireRole({ role, children }: { role: string; children: ReactNode }) {
+export function RequireRole({
+  role,
+  anyOf,
+  children,
+}: {
+  role?: string
+  anyOf?: string[]
+  children: ReactNode
+}) {
   const { user, ready } = useAuth()
   const location = useLocation()
   if (!ready) {
@@ -40,7 +48,8 @@ export function RequireRole({ role, children }: { role: string; children: ReactN
     }
     return <Navigate to="/login" replace state={{ from: location }} />
   }
-  if (!user.roles.includes(role)) {
+  const allowed = anyOf ?? (role ? [role] : [])
+  if (!allowed.some((item) => user.roles.includes(item))) {
     return <NotAllowed />
   }
   return children

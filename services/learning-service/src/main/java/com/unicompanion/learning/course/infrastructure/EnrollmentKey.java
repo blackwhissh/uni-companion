@@ -23,6 +23,10 @@ public class EnrollmentKey implements Serializable {
         this.userId = userId;
     }
 
+    public UUID getCourseId() {
+        return courseId;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {

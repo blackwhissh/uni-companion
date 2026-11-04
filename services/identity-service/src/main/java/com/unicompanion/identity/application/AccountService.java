@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -88,6 +90,23 @@ public class AccountService {
     @Transactional(readOnly = true)
     public AccountView get(UUID id) {
         return users.findById(id).map(AccountView::from).orElseThrow(IdentityException::unauthenticated);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AccountView> listDirectory() {
+        return users.findAll().stream()
+                .map(AccountView::from)
+                .sorted(Comparator.comparing(AccountView::displayName, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(AccountView::email))
+                .toList();
+    }
+
+    @Transactional
+    public AccountView setCourseAdmin(UUID id, boolean courseAdmin) {
+        UserAccount account = users.findById(id).orElseThrow(IdentityException::notFound);
+        account.setCourseAdmin(courseAdmin, Instant.now());
+        log.info("Course admin {} userId={}", courseAdmin ? "granted" : "revoked", id);
+        return AccountView.from(account);
     }
 
     @Transactional

@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "enrollments")
@@ -18,6 +19,10 @@ public class EnrollmentEntity {
     private Instant createdAt;
 
     protected EnrollmentEntity() {
+    }
+
+    public UUID getCourseId() {
+        return id.getCourseId();
     }
 
     public static EnrollmentEntity create(EnrollmentKey id, Instant now) {

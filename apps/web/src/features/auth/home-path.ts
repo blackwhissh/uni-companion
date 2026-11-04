@@ -1,3 +1,9 @@
 export function homePathFor(roles: string[]) {
-  return roles.includes('COURSE_ADMIN') || roles.includes('ADMIN') ? '/admin/courses' : '/courses'
+  if (roles.includes('ADMIN')) {
+    return '/admin'
+  }
+  if (roles.includes('COURSE_ADMIN')) {
+    return '/admin/courses'
+  }
+  return '/courses'
 }
