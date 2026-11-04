@@ -36,8 +36,45 @@ public class RagController {
         return AnswerResponse.from(answer);
     }
 
+    @PostMapping("/search")
+    public SearchResponse search(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SearchRequest request) {
+        RagService.SearchResult result = rag.search(
+                request.courseId(),
+                userId(jwt),
+                request.query(),
+                request.materialIds()
+        );
+        return new SearchResponse(result.hits().stream()
+                .map(hit -> new SearchHitResponse(hit.materialId(), hit.title(), hit.pageNumber(), hit.excerpt()))
+                .toList());
+    }
+
+    @PostMapping("/summary")
+    public AnswerResponse summarize(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SummaryRequest request) {
+        return AnswerResponse.from(rag.summarize(request.courseId(), userId(jwt), request.materialId()));
+    }
+
     private static UUID userId(Jwt jwt) {
         return UUID.fromString(jwt.getSubject());
+    }
+
+    public record SearchRequest(
+            @NotNull UUID courseId,
+            @NotBlank @Size(max = 200, message = "Search must be at most 200 characters.") String query,
+            List<@NotNull UUID> materialIds
+    ) {
+    }
+
+    public record SummaryRequest(
+            @NotNull UUID courseId,
+            @NotNull UUID materialId
+    ) {
+    }
+
+    public record SearchResponse(List<SearchHitResponse> hits) {
+    }
+
+    public record SearchHitResponse(UUID materialId, String title, int pageNumber, String excerpt) {
     }
 
     public record QueryRequest(
