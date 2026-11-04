@@ -64,6 +64,25 @@ public class FakeChatModel implements ChatModel {
     }
 
     @Override
+    public String summarize(String title, List<RetrievedChunk> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return "This lecture has no published text to summarize.";
+        }
+        StringBuilder summary = new StringBuilder("Short summary of ").append(title == null ? "this lecture" : title).append(".");
+        for (int i = 0; i < chunks.size(); i++) {
+            RetrievedChunk chunk = chunks.get(i);
+            summary.append(" Page ")
+                    .append(chunk.pageNumber())
+                    .append(": ")
+                    .append(truncate(chunk.content(), 220))
+                    .append(" [")
+                    .append(i + 1)
+                    .append("].");
+        }
+        return summary.toString();
+    }
+
+    @Override
     public List<FlashcardDraft> generateFlashcards(
             List<RetrievedChunk> chunks,
             int count,

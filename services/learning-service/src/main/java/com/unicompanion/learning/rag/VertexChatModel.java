@@ -78,6 +78,28 @@ public class VertexChatModel implements ChatModel {
     }
 
     @Override
+    public String summarize(String title, List<RetrievedChunk> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return "This lecture has no published text to summarize.";
+        }
+        long started = System.nanoTime();
+        try {
+            String text = generateContent(SummaryPrompt.build(title, chunks), 0.2, 800);
+            log.debug(
+                    "Vertex summary ok titleChars={} chunks={} answerChars={} ({} ms)",
+                    title == null ? 0 : title.length(),
+                    chunks.size(),
+                    text.length(),
+                    (System.nanoTime() - started) / 1_000_000L
+            );
+            return text;
+        } catch (RuntimeException ex) {
+            log.error("Vertex summary failed chunks={}", chunks.size(), ex);
+            throw ex;
+        }
+    }
+
+    @Override
     public List<FlashcardDraft> generateFlashcards(
             List<RetrievedChunk> chunks,
             int count,

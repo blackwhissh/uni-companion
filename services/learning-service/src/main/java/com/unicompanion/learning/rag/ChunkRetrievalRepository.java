@@ -121,6 +121,23 @@ public class ChunkRetrievalRepository {
         );
     }
 
+    public List<UUID> publishedReadyMaterialIds(UUID courseId) {
+        return jdbc.query(
+                """
+                        SELECT m.id
+                        FROM materials m
+                        INNER JOIN courses c ON c.id = m.course_id
+                        WHERE m.course_id = ?
+                          AND m.visibility = 'PUBLISHED'
+                          AND m.processing_status = 'READY'
+                          AND c.visibility = 'PUBLISHED'
+                        ORDER BY m.title ASC
+                        """,
+                (rs, rowNum) -> rs.getObject("id", UUID.class),
+                courseId
+        );
+    }
+
     public int countPublishedReadyMaterials(UUID courseId, List<UUID> materialIds) {
         if (materialIds == null || materialIds.isEmpty()) {
             return 0;

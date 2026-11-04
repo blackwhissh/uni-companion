@@ -26,9 +26,11 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -123,6 +125,108 @@ class RagApiTests {
                 .andExpect(jsonPath("$.citations", hasSize(1)))
                 .andExpect(jsonPath("$.citations[0].materialId").value(consensusId))
                 .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.not(containsString("partitions data"))));
+    }
+
+    @Test
+    void searchRanksTheMatchingLectureAndHidesUnpublishedText() throws Exception {
+        String courseId = createCourse("CS-SEARCH");
+        String consensusId = upload(courseId, "Consensus", "consensus.pdf", pdfBytes("Consensus algorithms keep replicas consistent."));
+        String shardingId = upload(courseId, "Sharding", "sharding.pdf", pdfBytes("Sharding partitions data across nodes."));
+        String secretId = upload(courseId, "Secret draft", "secret.pdf", pdfBytes("Secret unpublished notes stay hidden."));
+        publishCourse(courseId);
+        publishMaterial(consensusId);
+        publishMaterial(shardingId);
+        enroll(courseId);
+
+        mockMvc.perform(post("/api/rag/search")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","query":"Sharding partitions data across nodes."}
+                                """.formatted(courseId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hits[0].materialId").value(shardingId))
+                .andExpect(jsonPath("$.hits[0].title").value("Sharding"))
+                .andExpect(jsonPath("$.hits[0].excerpt", containsString("partitions data")))
+                .andExpect(content().string(not(containsString("Secret unpublished"))));
+
+        mockMvc.perform(post("/api/rag/search")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","query":"consensus","materialIds":["%s"]}
+                                """.formatted(courseId, consensusId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hits", hasSize(1)))
+                .andExpect(jsonPath("$.hits[0].materialId").value(consensusId))
+                .andExpect(content().string(not(containsString("partitions data"))));
+
+        mockMvc.perform(post("/api/rag/search")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","query":"hidden notes","materialIds":["%s"]}
+                                """.formatted(courseId, secretId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(not(containsString("Secret unpublished"))));
+    }
+
+    @Test
+    void searchRejectsABlankQueryAndAnUnenrolledStudent() throws Exception {
+        String courseId = createCourse("CS-SEARCH-DENY");
+        publishCourse(courseId);
+        String materialId = upload(courseId, "Lecture 1", "lecture.pdf", pdfBytes("Consensus algorithms keep replicas consistent."));
+        publishMaterial(materialId);
+
+        mockMvc.perform(post("/api/rag/search")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","query":"consensus"}
+                                """.formatted(courseId)))
+                .andExpect(status().isForbidden());
+
+        enroll(courseId);
+        mockMvc.perform(post("/api/rag/search")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","query":"  "}
+                                """.formatted(courseId)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void summaryUsesOnlyTheChosenLecture() throws Exception {
+        String courseId = createCourse("CS-SUMMARY");
+        String consensusId = upload(courseId, "Consensus", "consensus.pdf", pdfBytes("Consensus algorithms keep replicas consistent."));
+        String shardingId = upload(courseId, "Sharding", "sharding.pdf", pdfBytes("Sharding partitions data across nodes."));
+        String secretId = upload(courseId, "Secret draft", "secret.pdf", pdfBytes("Secret unpublished notes stay hidden."));
+        publishCourse(courseId);
+        publishMaterial(consensusId);
+        publishMaterial(shardingId);
+        enroll(courseId);
+
+        mockMvc.perform(post("/api/rag/summary")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","materialId":"%s"}
+                                """.formatted(courseId, shardingId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", containsString("partitions data")))
+                .andExpect(jsonPath("$.answer", containsString("Page 1")))
+                .andExpect(jsonPath("$.answer", not(containsString("keep replicas consistent"))))
+                .andExpect(content().string(not(containsString("Secret unpublished"))));
+
+        mockMvc.perform(post("/api/rag/summary")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","materialId":"%s"}
+                                """.formatted(courseId, secretId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(not(containsString("Secret unpublished"))));
     }
 
     private String createCourse(String code) throws Exception {

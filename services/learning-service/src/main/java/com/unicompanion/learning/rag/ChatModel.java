@@ -7,6 +7,8 @@ public interface ChatModel {
 
     String answer(String question, List<RetrievedChunk> chunks);
 
+    String summarize(String title, List<RetrievedChunk> chunks);
+
     default List<FlashcardDraft> generateFlashcards(List<RetrievedChunk> chunks, int count) {
         return generateFlashcards(chunks, count, List.of());
     }

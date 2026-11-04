@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -20,6 +21,8 @@ public class RagService {
 
     private static final Logger log = LoggerFactory.getLogger(RagService.class);
     private static final int TOP_K = 4;
+    private static final int SEARCH_LIMIT = 8;
+    private static final int SEARCH_QUERY_MAX = 200;
 
     private final CourseRepository courses;
     private final EnrollmentRepository enrollments;
@@ -111,6 +114,124 @@ public class RagService {
         );
     }
 
+    public SearchResult search(UUID courseId, UUID userId, String query, List<UUID> materialIds) {
+        String trimmed = query == null ? "" : query.trim();
+        if (trimmed.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enter a search.");
+        }
+        if (trimmed.length() > SEARCH_QUERY_MAX) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Search must be at most 200 characters.");
+        }
+        requireEnrolled(courseId, userId);
+        List<UUID> scope = resolveSearchScope(courseId, materialIds);
+        if (scope.isEmpty()) {
+            return new SearchResult(List.of());
+        }
+        List<ChatModel.RetrievedChunk> retrieved;
+        try {
+            retrieved = chunks.findTopK(courseId, scope, embeddings.embed(trimmed), SEARCH_LIMIT);
+        } catch (EmbeddingException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, ex.getMessage(), ex);
+        }
+        log.info(
+                "RAG search course={} user={} materials={} queryChars={} hits={}",
+                courseId,
+                userId,
+                scope.size(),
+                trimmed.length(),
+                retrieved.size()
+        );
+        return new SearchResult(retrieved.stream()
+                .map(chunk -> new SearchHit(
+                        chunk.materialId(),
+                        chunk.title(),
+                        chunk.pageNumber(),
+                        CitationText.excerpt(chunk.content(), trimmed, "")
+                ))
+                .toList());
+    }
+
+    public Answer summarize(UUID courseId, UUID userId, UUID materialId) {
+        requireEnrolled(courseId, userId);
+        if (materialId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a lecture.");
+        }
+        if (chunks.countPublishedReadyMaterials(courseId, List.of(materialId)) != 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Every selected material must be ready, published, and part of this course."
+            );
+        }
+        List<ChatModel.RetrievedChunk> pages = chunks.representativePublished(courseId, List.of(materialId), 6, 4000);
+        if (pages.isEmpty()) {
+            return new Answer("This lecture has no published text to summarize.", List.of());
+        }
+        String title = pages.getFirst().title();
+        String raw;
+        try {
+            raw = chat.summarize(title, pages);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Could not summarize this lecture. Try again shortly.",
+                    ex
+            );
+        }
+        CitedSources.Result grounded = CitedSources.select(raw, pages);
+        log.info(
+                "RAG summary course={} user={} material={} pages={} cited={} answerChars={}",
+                courseId,
+                userId,
+                materialId,
+                pages.size(),
+                grounded.chunks().size(),
+                grounded.answer().length()
+        );
+        return new Answer(
+                grounded.answer(),
+                grounded.chunks().stream()
+                        .map(chunk -> new Citation(
+                                chunk.materialId(),
+                                chunk.title(),
+                                CitationText.sectionHint(chunk.content()),
+                                chunk.pageNumber(),
+                                CitationText.excerpt(chunk.content(), title, grounded.answer())
+                        ))
+                        .toList()
+        );
+    }
+
+    private void requireEnrolled(UUID courseId, UUID userId) {
+        CourseEntity course = courses.findById(courseId).orElseThrow(RagService::notFound);
+        boolean owner = course.getOwnerId().equals(userId);
+        if (!course.isPublished() && !owner) {
+            throw notFound();
+        }
+        if (!enrollments.existsById(new EnrollmentKey(courseId, userId))) {
+            log.warn("RAG denied: user={} not enrolled in course={}", userId, courseId);
+            throw forbidden();
+        }
+    }
+
+    private List<UUID> resolveSearchScope(UUID courseId, List<UUID> materialIds) {
+        if (materialIds == null || materialIds.isEmpty()) {
+            return chunks.publishedReadyMaterialIds(courseId);
+        }
+        if (materialIds.stream().anyMatch(Objects::isNull)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one material.");
+        }
+        int selectedCount = (int) materialIds.stream().distinct().count();
+        if (chunks.countPublishedReadyMaterials(courseId, materialIds) != selectedCount) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Every selected material must be ready, published, and part of this course."
+            );
+        }
+        return materialIds.stream().distinct().toList();
+    }
+
     private static ResponseStatusException notFound() {
         return new ResponseStatusException(HttpStatus.NOT_FOUND);
     }
@@ -129,5 +250,11 @@ public class RagService {
             int pageNumber,
             String excerpt
     ) {
+    }
+
+    public record SearchResult(List<SearchHit> hits) {
+    }
+
+    public record SearchHit(UUID materialId, String title, int pageNumber, String excerpt) {
     }
 }
