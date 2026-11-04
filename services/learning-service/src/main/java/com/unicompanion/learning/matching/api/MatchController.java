@@ -7,6 +7,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,7 +40,7 @@ public class MatchController {
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody OptInRequest request
     ) {
-        return matching.setOptIn(courseId, userId(jwt), request.optedIn(), request.displayName());
+        return matching.setOptIn(courseId, userId(jwt), request.optedIn(), request.displayName(), email(jwt));
     }
 
     @GetMapping("/courses/{courseId}/suggestions")
@@ -56,16 +57,50 @@ public class MatchController {
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody IntentsRequest request
     ) {
-        return matching.setIntents(courseId, userId(jwt), request.intents(), request.displayName());
+        return matching.setIntents(courseId, userId(jwt), request.intents(), request.displayName(), email(jwt));
+    }
+
+    @PostMapping("/courses/{courseId}/contacts")
+    public MatchingService.Suggestions requestContact(
+            @PathVariable UUID courseId,
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody ContactRequestBody request
+    ) {
+        return matching.requestContact(courseId, userId(jwt), request.userId());
+    }
+
+    @PostMapping("/courses/{courseId}/contacts/{requestId}/accept")
+    public MatchingService.Suggestions acceptContact(
+            @PathVariable UUID courseId,
+            @PathVariable UUID requestId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return matching.acceptContact(courseId, userId(jwt), requestId);
+    }
+
+    @PostMapping("/courses/{courseId}/contacts/{requestId}/decline")
+    public MatchingService.Suggestions declineContact(
+            @PathVariable UUID courseId,
+            @PathVariable UUID requestId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return matching.declineContact(courseId, userId(jwt), requestId);
     }
 
     private static UUID userId(Jwt jwt) {
         return UUID.fromString(jwt.getSubject());
     }
 
+    private static String email(Jwt jwt) {
+        return jwt.getClaimAsString("email");
+    }
+
     public record OptInRequest(@NotNull Boolean optedIn, String displayName) {
     }
 
     public record IntentsRequest(@NotNull List<String> intents, String displayName) {
+    }
+
+    public record ContactRequestBody(@NotNull UUID userId) {
     }
 }
