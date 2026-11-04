@@ -6,7 +6,9 @@ public final class IdentityException extends RuntimeException {
         WEAK_PASSWORD,
         EMAIL_TAKEN,
         INVALID_CREDENTIALS,
-        UNAUTHENTICATED
+        UNAUTHENTICATED,
+        FORBIDDEN,
+        NOT_FOUND
     }
 
     private final Code code;
@@ -34,5 +36,13 @@ public final class IdentityException extends RuntimeException {
 
     public static IdentityException unauthenticated() {
         return new IdentityException(Code.UNAUTHENTICATED, "Authentication is required.");
+    }
+
+    public static IdentityException forbidden() {
+        return new IdentityException(Code.FORBIDDEN, "Only a platform admin can do that.");
+    }
+
+    public static IdentityException notFound() {
+        return new IdentityException(Code.NOT_FOUND, "That account does not exist.");
     }
 }

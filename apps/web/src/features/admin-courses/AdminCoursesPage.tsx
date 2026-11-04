@@ -7,6 +7,7 @@ import { useAuth } from '../auth/use-auth.ts'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import {
   Alert,
+  BackLink,
   Button,
   ConfirmDialog,
   EmptyState,
@@ -177,6 +178,11 @@ export function AdminCoursesPage() {
 
   return (
     <Page>
+      {platformAdmin ? (
+        <div className="mb-4">
+          <BackLink to="/admin">Admin panel</BackLink>
+        </div>
+      ) : null}
       <PageHeader
         eyebrow="Admin"
         title="Course console"

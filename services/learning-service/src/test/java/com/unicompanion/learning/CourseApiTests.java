@@ -257,6 +257,26 @@ class CourseApiTests {
     }
 
     @Test
+    void platformAdminSeesEnrollmentCountsAndOtherRolesCannot() throws Exception {
+        String courseId = createCourse("CISS-ADMIN");
+        publish(courseId);
+        mockMvc.perform(post("/api/courses/" + courseId + "/enroll").header("Authorization", STUDENT))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/admin/courses").header("Authorization", STUDENT))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/courses").header("Authorization", ADMIN))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/admin/courses").header("Authorization", PLATFORM_ADMIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.code == 'CISS-ADMIN')].enrollmentCount").value(1))
+                .andExpect(jsonPath("$[?(@.code == 'CISS-ADMIN')].visibility").value("PUBLISHED"))
+                .andExpect(jsonPath("$[?(@.code == 'CISS-ADMIN')].publishedReadyMaterials").value(0))
+                .andExpect(jsonPath("$[?(@.code == 'CISS-ADMIN')].ownerId").value(ADMIN_ID.toString()));
+    }
+
+    @Test
     void studentCannotOpenAnUnpublishedCourse() throws Exception {
         String courseId = createCourse("CISS-HIDE");
 

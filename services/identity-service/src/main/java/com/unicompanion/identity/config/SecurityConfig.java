@@ -51,7 +51,7 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource(IdentityProperties properties) {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(properties.corsAllowedOrigins());
-        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id"));
         config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
