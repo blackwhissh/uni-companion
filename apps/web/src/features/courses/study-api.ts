@@ -167,6 +167,30 @@ export function getCourseProgress(courseId: string) {
   return learningFetch<CourseProgress>(`/api/study/courses/${courseId}/progress`)
 }
 
+export type PlanStep = {
+  date: string
+  kind: 'QUIZ' | 'GAP' | 'REVIEW' | 'EXAM_PASSED'
+  prompt: string | null
+  missCount: number
+}
+
+export type StudyPlan = {
+  examDate: string
+  daysUntilExam: number
+  steps: PlanStep[]
+}
+
+export function getStudyPlan(courseId: string) {
+  return learningFetch<StudyPlan>(`/api/study/courses/${courseId}/plan`)
+}
+
+export function saveStudyPlan(courseId: string, examDate: string) {
+  return learningFetch<StudyPlan>(`/api/study/courses/${courseId}/plan`, {
+    method: 'PUT',
+    body: JSON.stringify({ examDate }),
+  })
+}
+
 export async function submitQuiz(
   quizId: string,
   answers: { questionId: string; selectedIndex: number }[],

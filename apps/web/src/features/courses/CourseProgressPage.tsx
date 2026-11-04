@@ -45,9 +45,14 @@ export function CourseProgressPage() {
           description="Scores come from quizzes you submitted. A question stays on the gap list until your latest answer for that prompt is correct."
           actions={
             enrolled ? (
-              <ButtonLink to={`/courses/${courseId}/quiz`} variant="secondary">
-                Open quiz
-              </ButtonLink>
+              <>
+                <ButtonLink to={`/courses/${courseId}/plan`} variant="secondary">
+                  Study plan
+                </ButtonLink>
+                <ButtonLink to={`/courses/${courseId}/quiz`} variant="secondary">
+                  Open quiz
+                </ButtonLink>
+              </>
             ) : null
           }
         />
