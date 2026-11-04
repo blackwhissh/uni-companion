@@ -73,6 +73,22 @@ describe('material pages', () => {
     let activeCount = 0
     let intents: string[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/contacts')) {
+        return json({
+          discoverable: true,
+          intents,
+          suggestions: [
+            {
+              userId: 'ada',
+              displayName: 'Ada Lovelace',
+              sharedIntents: ['STUDY_GROUP'],
+              contact: 'OUTGOING',
+              requestId: 'req-1',
+            },
+          ],
+          requests: [],
+        })
+      }
       if (String(url).includes('/intents')) {
         const body = JSON.parse(String(init?.body)) as { intents: string[]; displayName: string }
         intents = body.intents
@@ -137,10 +153,90 @@ describe('material pages', () => {
     expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument()
     expect(screen.getByText('Also looking for Study group')).toBeInTheDocument()
     expect(screen.queryByText(/@/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Request contact' }))
+    const requestDialog = await screen.findByRole('alertdialog')
+    expect(within(requestDialog).getByText(/stays hidden until they accept/)).toBeInTheDocument()
+    fireEvent.click(within(requestDialog).getByRole('button', { name: 'Send request' }))
+    expect(await screen.findByText('Waiting for Ada Lovelace to accept.')).toBeInTheDocument()
+    expect(screen.queryByText(/@/)).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8082/api/match/courses/course-1/contacts',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ userId: 'ada' }),
+      }),
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stop sharing' }))
     expect(await screen.findByText(/No students in this course are looking for a study partner yet/)).toBeInTheDocument()
+  })
+
+  it('shows an email only after the student accepts a contact request', async () => {
+    setAccessToken('student-token')
+    let accepted = false
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/accept')) {
+        accepted = true
+        return json({
+          discoverable: true,
+          intents: ['STUDY_GROUP'],
+          suggestions: [
+            {
+              userId: 'ada',
+              displayName: 'Ada Lovelace',
+              sharedIntents: ['STUDY_GROUP'],
+              contact: 'ACCEPTED',
+              requestId: 'req-1',
+              email: 'ada@uni.test',
+            },
+          ],
+          requests: [],
+        })
+      }
+      if (String(url).endsWith('/suggestions')) {
+        return json({
+          discoverable: true,
+          intents: ['STUDY_GROUP'],
+          suggestions: [
+            {
+              userId: 'ada',
+              displayName: 'Ada Lovelace',
+              sharedIntents: ['STUDY_GROUP'],
+              contact: 'INCOMING',
+              requestId: 'req-1',
+            },
+          ],
+          requests: [],
+        })
+      }
+      if (String(url).endsWith('/active-count')) {
+        return json({ optedIn: true, activeCount: 2 })
+      }
+      if (String(url).endsWith('/materials')) {
+        return json([])
+      }
+      return json({ ...course, enrolled: true, owned: false })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAt('/courses/course-1', <CourseHomePage />, {
+      id: 'student-1',
+      email: 'student@uni-companion.test',
+      displayName: 'Student',
+      interests: null,
+      roles: ['STUDENT'],
+      createdAt: '2026-01-01T00:00:00Z',
+    })
+
+    expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument()
+    expect(screen.queryByText('ada@uni.test')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText(/shares your email with Ada Lovelace/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Share email' }))
+    expect(await screen.findByText('Email: ada@uni.test')).toBeInTheDocument()
+    expect(accepted).toBe(true)
   })
 
   it('lets an admin upload a PDF and publish it', async () => {

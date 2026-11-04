@@ -20,19 +20,24 @@ public class MatchOptInEntity {
     @Column(name = "display_name", nullable = false, length = 120)
     private String displayName;
 
+    @Column(name = "contact_email", nullable = false, length = 320)
+    private String contactEmail;
+
     protected MatchOptInEntity() {
     }
 
-    public static MatchOptInEntity create(MatchOptInKey id, Instant createdAt, String displayName) {
+    public static MatchOptInEntity create(MatchOptInKey id, Instant createdAt, String displayName, String contactEmail) {
         MatchOptInEntity entity = new MatchOptInEntity();
         entity.id = id;
         entity.createdAt = createdAt;
         entity.displayName = displayName;
+        entity.contactEmail = contactEmail;
         return entity;
     }
 
-    public void rename(String displayName) {
+    public void updateProfile(String displayName, String contactEmail) {
         this.displayName = displayName;
+        this.contactEmail = contactEmail;
     }
 
     public MatchOptInKey getId() {
@@ -45,5 +50,9 @@ public class MatchOptInEntity {
 
     public String getDisplayName() {
         return displayName;
+    }
+
+    public String getContactEmail() {
+        return contactEmail;
     }
 }

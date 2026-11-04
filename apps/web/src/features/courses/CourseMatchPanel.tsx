@@ -4,8 +4,8 @@ import { Link } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import { Alert, Button, ConfirmDialog, Panel, SectionLabel, StatusPill } from '../../shared/ui/ui.tsx'
 import { useAuth } from '../auth/use-auth.ts'
-import { getMatchStatus, getMatchSuggestions, setMatchIntents, setMatchOptIn } from './match-api.ts'
-import type { CollaborationIntentId } from './match-api.ts'
+import { acceptContact, declineContact, getMatchStatus, getMatchSuggestions, requestContact, setMatchIntents, setMatchOptIn } from './match-api.ts'
+import type { CollaborationIntentId, ContactRelation, ContactRequest, PartnerSuggestion } from './match-api.ts'
 import { COLLABORATION_INTENTS, intentLabel, matchCountLabel } from './match-ui.ts'
 
 export function CourseMatchPanel({ courseId }: { courseId: string }) {
@@ -18,6 +18,7 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
   })
   const [confirmOptIn, setConfirmOptIn] = useState(false)
   const [confirmOptOut, setConfirmOptOut] = useState(false)
+  const [pendingContact, setPendingContact] = useState<PendingContact | null>(null)
   const update = useMutation({
     mutationFn: (optedIn: boolean) => setMatchOptIn(courseId, optedIn, displayName),
     onSuccess: async (next) => {
@@ -30,10 +31,24 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
   const suggestions = useQuery({
     queryKey: ['match-suggestions', courseId],
     queryFn: () => getMatchSuggestions(courseId),
-    enabled: optedIn,
+    enabled: status.isSuccess,
   })
   const saveIntents = useMutation({
     mutationFn: (intents: CollaborationIntentId[]) => setMatchIntents(courseId, intents, displayName),
+    onSuccess: (next) => {
+      queryClient.setQueryData(['match-suggestions', courseId], next)
+    },
+  })
+  const sendContact = useMutation({
+    mutationFn: (action: PendingContact) => {
+      if (action.kind === 'request') {
+        return requestContact(courseId, action.userId)
+      }
+      if (action.kind === 'accept') {
+        return acceptContact(courseId, action.requestId)
+      }
+      return declineContact(courseId, action.requestId)
+    },
     onSuccess: (next) => {
       queryClient.setQueryData(['match-suggestions', courseId], next)
     },
@@ -53,8 +68,8 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
       </div>
       <p className="mt-3 text-sm leading-relaxed text-muted">
         Opt in to be listed to classmates in this course who are also looking for a study partner. They can see your
-        display name and the intents you choose. Your email stays private. You can opt out at any time, and leaving the
-        course removes you immediately.
+        display name and the intents you choose. Your email stays private until you accept a contact request. You can
+        opt out at any time, and leaving the course removes you immediately.
       </p>
       {status.isLoading ? (
         <p className="mt-3 text-sm text-muted" role="status">
@@ -79,6 +94,11 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
       {saveIntents.error instanceof ApiError ? (
         <div className="mt-3">
           <Alert>{saveIntents.error.message}</Alert>
+        </div>
+      ) : null}
+      {sendContact.error instanceof ApiError ? (
+        <div className="mt-3">
+          <Alert>{sendContact.error.message}</Alert>
         </div>
       ) : null}
       <div className="mt-4">
@@ -109,14 +129,14 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
           <SectionLabel>What you want</SectionLabel>
           <fieldset className="mt-3" disabled={saveIntents.isPending || displayName.length === 0}>
             <legend className="text-sm text-muted">
-              Classmates appear when you share an intent. Your email is not shown.
+              Classmates appear when you share an intent. Your email is shared only if you accept a request.
             </legend>
             <div className="mt-3 flex flex-col gap-2">
               {COLLABORATION_INTENTS.map((intent) => (
                 <label key={intent.id} className="flex items-center gap-2 text-sm text-ink">
                   <input
                     type="checkbox"
-                    checked={suggestions.data?.intents.includes(intent.id) ?? false}
+                    checked={suggestions.data?.intents?.includes(intent.id) ?? false}
                     onChange={() => toggleIntent(intent.id)}
                   />
                   {intent.label}
@@ -135,31 +155,67 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
               <Alert>Could not load classmate suggestions.</Alert>
             </div>
           ) : null}
-          {suggestions.data && suggestions.data.intents.length === 0 ? (
+          {suggestions.data && (suggestions.data.intents?.length ?? 0) === 0 ? (
             <p className="mt-4 text-sm text-muted">Choose what you want to work on to see classmates.</p>
           ) : null}
-          {suggestions.data && suggestions.data.intents.length > 0 && suggestions.data.suggestions.length === 0 ? (
+          {suggestions.data && (suggestions.data.intents?.length ?? 0) > 0 && (suggestions.data.suggestions?.length ?? 0) === 0 ? (
             <p className="mt-4 text-sm text-muted">No opted-in classmates share those intents yet.</p>
           ) : null}
-          {suggestions.data && suggestions.data.suggestions.length > 0 ? (
+          {(suggestions.data?.suggestions?.length ?? 0) > 0 ? (
             <ul className="mt-4 flex flex-col gap-2">
-              {suggestions.data.suggestions.map((suggestion) => (
+              {(suggestions.data?.suggestions ?? []).map((suggestion) => (
                 <li key={suggestion.userId} className="rounded-xl border border-line/80 px-4 py-3">
                   <p className="font-medium text-ink">{suggestion.displayName}</p>
                   <p className="mt-1 text-sm text-muted">
                     Also looking for {suggestion.sharedIntents.map((intent) => intentLabel(intent)).join(', ')}
                   </p>
+                  <ContactActions
+                    name={suggestion.displayName}
+                    contact={suggestion.contact ?? 'NONE'}
+                    requestId={suggestion.requestId}
+                    email={suggestion.email}
+                    busy={sendContact.isPending}
+                    onRequest={() => setPendingContact({ kind: 'request', userId: suggestion.userId, name: suggestion.displayName })}
+                    onAccept={() =>
+                      suggestion.requestId
+                        ? setPendingContact({ kind: 'accept', requestId: suggestion.requestId, name: suggestion.displayName })
+                        : undefined
+                    }
+                    onDecline={() =>
+                      suggestion.requestId
+                        ? setPendingContact({ kind: 'decline', requestId: suggestion.requestId, name: suggestion.displayName })
+                        : undefined
+                    }
+                  />
                 </li>
               ))}
             </ul>
           ) : null}
+          <OtherRequests
+            suggestions={suggestions.data?.suggestions ?? []}
+            requests={Array.isArray(suggestions.data?.requests) ? suggestions.data.requests : []}
+            busy={sendContact.isPending}
+            onAccept={(request) => setPendingContact({ kind: 'accept', requestId: request.id, name: request.displayName })}
+            onDecline={(request) => setPendingContact({ kind: 'decline', requestId: request.id, name: request.displayName })}
+          />
         </div>
+      ) : null}
+
+      {!optedIn && acceptedContacts(suggestions.data?.requests).length > 0 ? (
+        <ul className="mt-4 flex flex-col gap-2">
+          {acceptedContacts(suggestions.data?.requests).map((request) => (
+            <li key={request.id} className="rounded-xl border border-line/80 px-4 py-3">
+              <p className="font-medium text-ink">{request.displayName}</p>
+              <p className="mt-1 text-sm text-ink">Email: {request.email}</p>
+            </li>
+          ))}
+        </ul>
       ) : null}
 
       <ConfirmDialog
         open={confirmOptIn}
         title="Opt in to study partners?"
-        body="Classmates who have also opted in can see your display name and shared intents. They cannot see your email. Asking to connect by email comes later, and only if you accept."
+        body="Classmates who have also opted in can see your display name and shared intents. They cannot see your email unless you accept a contact request."
         confirmLabel="Opt in"
         onCancel={() => setConfirmOptIn(false)}
         onConfirm={() => {
@@ -170,7 +226,7 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
       <ConfirmDialog
         open={confirmOptOut}
         title="Stop sharing?"
-        body="You will disappear from this course's study-partner list immediately, including your name and intents."
+        body="You disappear from this course's list immediately. Pending contact requests are removed. Emails you already accepted stay available to both of you."
         confirmLabel="Stop sharing"
         danger
         onCancel={() => setConfirmOptOut(false)}
@@ -179,6 +235,150 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
           update.mutate(false)
         }}
       />
+      <ConfirmDialog
+        open={pendingContact !== null}
+        title={contactTitle(pendingContact)}
+        body={contactBody(pendingContact)}
+        confirmLabel={contactConfirmLabel(pendingContact)}
+        danger={pendingContact?.kind === 'decline'}
+        onCancel={() => setPendingContact(null)}
+        onConfirm={() => {
+          if (pendingContact) {
+            sendContact.mutate(pendingContact)
+          }
+          setPendingContact(null)
+        }}
+      />
     </Panel>
   )
+}
+
+function OtherRequests({
+  suggestions,
+  requests,
+  busy,
+  onAccept,
+  onDecline,
+}: {
+  suggestions: PartnerSuggestion[]
+  requests: ContactRequest[]
+  busy: boolean
+  onAccept: (request: ContactRequest) => void
+  onDecline: (request: ContactRequest) => void
+}) {
+  const listed = new Set(suggestions.map((suggestion) => suggestion.userId))
+  const extras = requests.filter((request) => !listed.has(request.userId) && request.status !== 'DECLINED')
+  if (extras.length === 0) {
+    return null
+  }
+  return (
+    <ul className="mt-4 flex flex-col gap-2">
+      {extras.map((request) => (
+        <li key={request.id} className="rounded-xl border border-line/80 px-4 py-3">
+          <p className="font-medium text-ink">{request.displayName}</p>
+          <ContactActions
+            name={request.displayName}
+            contact={request.status === 'ACCEPTED' ? 'ACCEPTED' : request.direction === 'INCOMING' ? 'INCOMING' : 'OUTGOING'}
+            requestId={request.id}
+            email={request.email}
+            busy={busy}
+            onRequest={() => undefined}
+            onAccept={() => onAccept(request)}
+            onDecline={() => onDecline(request)}
+          />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function ContactActions({
+  name,
+  contact,
+  requestId,
+  email,
+  busy,
+  onRequest,
+  onAccept,
+  onDecline,
+}: {
+  name: string
+  contact: ContactRelation
+  requestId?: string
+  email?: string
+  busy: boolean
+  onRequest: () => void
+  onAccept: () => void
+  onDecline: () => void
+}) {
+  if (contact === 'OUTGOING') {
+    return <p className="mt-2 text-sm text-muted">Waiting for {name} to accept.</p>
+  }
+  if (contact === 'ACCEPTED' && email) {
+    return <p className="mt-2 text-sm text-ink">Email: {email}</p>
+  }
+  if (contact === 'INCOMING' && requestId) {
+    return (
+      <div className="mt-3 flex gap-2">
+        <Button type="button" variant="success" disabled={busy} onClick={onAccept}>
+          Accept
+        </Button>
+        <Button type="button" variant="danger" disabled={busy} onClick={onDecline}>
+          Decline
+        </Button>
+      </div>
+    )
+  }
+  if (contact === 'NONE') {
+    return (
+      <div className="mt-3">
+        <Button type="button" variant="secondary" disabled={busy} onClick={onRequest}>
+          Request contact
+        </Button>
+      </div>
+    )
+  }
+  return null
+}
+
+type PendingContact =
+  | { kind: 'request'; userId: string; name: string }
+  | { kind: 'accept'; requestId: string; name: string }
+  | { kind: 'decline'; requestId: string; name: string }
+
+function acceptedContacts(requests: ContactRequest[] | undefined) {
+  if (!Array.isArray(requests)) {
+    return []
+  }
+  return requests.filter((request) => request.status === 'ACCEPTED' && request.email)
+}
+
+function contactTitle(action: PendingContact | null) {
+  if (action?.kind === 'accept') {
+    return `Share email with ${action.name}?`
+  }
+  if (action?.kind === 'decline') {
+    return `Decline ${action.name}?`
+  }
+  return action ? `Ask ${action.name} to connect?` : ''
+}
+
+function contactBody(action: PendingContact | null) {
+  if (action?.kind === 'accept') {
+    return `This shares your email with ${action.name} and shows you their email.`
+  }
+  if (action?.kind === 'decline') {
+    return 'Your email stays private.'
+  }
+  return action ? `${action.name} will see that you want to connect. Your email stays hidden until they accept.` : ''
+}
+
+function contactConfirmLabel(action: PendingContact | null) {
+  if (action?.kind === 'accept') {
+    return 'Share email'
+  }
+  if (action?.kind === 'decline') {
+    return 'Decline request'
+  }
+  return 'Send request'
 }
