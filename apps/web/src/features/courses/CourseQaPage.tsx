@@ -13,6 +13,7 @@ import {
   Panel,
   SectionLabel,
 } from '../../shared/ui/ui.tsx'
+import { GroundedNote } from '../../shared/ui/GroundedNote.tsx'
 import { StudyMarkdown } from '../../shared/ui/StudyMarkdown.tsx'
 import { getCourse } from './course-api.ts'
 import { listMaterials } from './material-api.ts'
@@ -387,6 +388,7 @@ export function CourseQaPage() {
               ) : null}
 
               <SectionLabel>{insufficient ? 'No supporting passage found' : 'Answer'}</SectionLabel>
+              <GroundedNote className="mt-2" />
               <Panel className={`mt-4 ${insufficient ? 'border-warn/30 bg-amber-50/50' : ''}`}>
                 <StudyMarkdown
                   markdown={result.answer}

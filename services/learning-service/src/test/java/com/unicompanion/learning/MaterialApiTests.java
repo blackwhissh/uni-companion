@@ -68,6 +68,19 @@ class MaterialApiTests {
     private JdbcTemplate jdbc;
 
     @Test
+    void unknownPathIsNotAnInternalError() throws Exception {
+        mockMvc.perform(get("/api/does-not-exist").header("Authorization", ADMIN))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Nothing is available at this address."));
+
+        mockMvc.perform(get("/api/materials/" + UUID.randomUUID()).header("Authorization", ADMIN))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.message").value("That action is not available here."));
+    }
+
+    @Test
     void courseAdminUploadStartsUnpublishedAndUploaded() throws Exception {
         String courseId = createCourse("MAT-UP");
 

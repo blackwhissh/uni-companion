@@ -116,6 +116,7 @@ From your course materials, consensus keeps replicas consistent.
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
     expect(await screen.findByText('You asked')).toBeInTheDocument()
+    expect(screen.getByText(/Drafted from published lecture PDFs/)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Direct answer' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Explanation' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Key terms' })).toBeInTheDocument()
