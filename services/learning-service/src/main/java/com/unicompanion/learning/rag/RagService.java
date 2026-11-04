@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -44,7 +45,7 @@ public class RagService {
         this.chat = chat;
     }
 
-    public Answer query(UUID courseId, UUID userId, String question, List<UUID> materialIds) {
+    public Answer query(UUID courseId, UUID userId, String question, List<UUID> materialIds, String language) {
         String trimmed = question == null ? "" : question.trim();
         if (trimmed.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ask a question.");
@@ -52,6 +53,7 @@ public class RagService {
         if (trimmed.length() > 2000) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Question must be at most 2000 characters.");
         }
+        ExplanationLanguage resolvedLanguage = resolveLanguage(language, trimmed);
         CourseEntity course = courses.findById(courseId).orElseThrow(RagService::notFound);
         boolean owner = course.getOwnerId().equals(userId);
         if (!course.isPublished() && !owner) {
@@ -77,7 +79,7 @@ public class RagService {
         try {
             queryEmbedding = embeddings.embed(trimmed);
             retrieved = chunks.findTopK(courseId, materialIds, queryEmbedding, TOP_K);
-            rawAnswer = chat.answer(trimmed, retrieved);
+            rawAnswer = chat.answer(trimmed, retrieved, resolvedLanguage);
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (EmbeddingException ex) {
@@ -91,10 +93,11 @@ public class RagService {
         }
         CitedSources.Result grounded = CitedSources.select(rawAnswer, retrieved);
         log.info(
-                "RAG query course={} user={} materials={} questionChars={} retrieved={} cited={} answerChars={}",
+                "RAG query course={} user={} materials={} language={} questionChars={} retrieved={} cited={} answerChars={}",
                 courseId,
                 userId,
                 selectedCount,
+                resolvedLanguage,
                 trimmed.length(),
                 retrieved.size(),
                 grounded.chunks().size(),
@@ -151,8 +154,9 @@ public class RagService {
                 .toList());
     }
 
-    public Answer summarize(UUID courseId, UUID userId, UUID materialId) {
+    public Answer summarize(UUID courseId, UUID userId, UUID materialId, String language) {
         requireEnrolled(courseId, userId);
+        ExplanationLanguage resolvedLanguage = resolveLanguage(language, null);
         if (materialId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a lecture.");
         }
@@ -169,7 +173,7 @@ public class RagService {
         String title = pages.getFirst().title();
         String raw;
         try {
-            raw = chat.summarize(title, pages);
+            raw = chat.summarize(title, pages, resolvedLanguage);
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -181,10 +185,11 @@ public class RagService {
         }
         CitedSources.Result grounded = CitedSources.select(raw, pages);
         log.info(
-                "RAG summary course={} user={} material={} pages={} cited={} answerChars={}",
+                "RAG summary course={} user={} material={} language={} pages={} cited={} answerChars={}",
                 courseId,
                 userId,
                 materialId,
+                resolvedLanguage,
                 pages.size(),
                 grounded.chunks().size(),
                 grounded.answer().length()
@@ -201,6 +206,20 @@ public class RagService {
                         ))
                         .toList()
         );
+    }
+
+    private static ExplanationLanguage resolveLanguage(String raw, String question) {
+        if (raw != null && !raw.isBlank()) {
+            return switch (raw.trim().toUpperCase(Locale.ROOT)) {
+                case "EN" -> ExplanationLanguage.EN;
+                case "DE" -> ExplanationLanguage.DE;
+                default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose English or German.");
+            };
+        }
+        if (question != null && QuestionLanguage.isLikelyGerman(question)) {
+            return ExplanationLanguage.DE;
+        }
+        return ExplanationLanguage.EN;
     }
 
     private void requireEnrolled(UUID courseId, UUID userId) {

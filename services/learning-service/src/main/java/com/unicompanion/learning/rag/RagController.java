@@ -31,7 +31,8 @@ public class RagController {
                 request.courseId(),
                 userId(jwt),
                 request.question(),
-                request.materialIds()
+                request.materialIds(),
+                request.language()
         );
         return AnswerResponse.from(answer);
     }
@@ -51,7 +52,12 @@ public class RagController {
 
     @PostMapping("/summary")
     public AnswerResponse summarize(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SummaryRequest request) {
-        return AnswerResponse.from(rag.summarize(request.courseId(), userId(jwt), request.materialId()));
+        return AnswerResponse.from(rag.summarize(
+                request.courseId(),
+                userId(jwt),
+                request.materialId(),
+                request.language()
+        ));
     }
 
     private static UUID userId(Jwt jwt) {
@@ -67,7 +73,8 @@ public class RagController {
 
     public record SummaryRequest(
             @NotNull UUID courseId,
-            @NotNull UUID materialId
+            @NotNull UUID materialId,
+            @Size(max = 2) String language
     ) {
     }
 
@@ -80,7 +87,8 @@ public class RagController {
     public record QueryRequest(
             @NotNull UUID courseId,
             @NotBlank @Size(max = 2000, message = "Question must be at most 2000 characters.") String question,
-            @NotEmpty List<@NotNull UUID> materialIds
+            @NotEmpty List<@NotNull UUID> materialIds,
+            @Size(max = 2) String language
     ) {
     }
 
