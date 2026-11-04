@@ -49,18 +49,13 @@ public class VertexChatModel implements ChatModel {
     }
 
     @Override
-    public String answer(String question, List<RetrievedChunk> chunks) {
+    public String answer(String question, List<RetrievedChunk> chunks, ExplanationLanguage language) {
+        ExplanationLanguage resolved = language == null ? ExplanationLanguage.EN : language;
         if (chunks.isEmpty()) {
-            return """
-                    ## Direct answer
-                    I could not find relevant published material for that question.
-
-                    ## Explanation
-                    Try rephrasing, or ask about a topic that appears in a published lecture PDF for this course.
-                    """;
+            return resolved.noMaterialAnswer();
         }
         long started = System.nanoTime();
-        String prompt = AnswerPrompt.build(question, chunks);
+        String prompt = AnswerPrompt.build(question, chunks, resolved);
         try {
             String text = generateContent(prompt, 0.25, 2048);
             log.debug(
@@ -78,13 +73,16 @@ public class VertexChatModel implements ChatModel {
     }
 
     @Override
-    public String summarize(String title, List<RetrievedChunk> chunks) {
+    public String summarize(String title, List<RetrievedChunk> chunks, ExplanationLanguage language) {
+        ExplanationLanguage resolved = language == null ? ExplanationLanguage.EN : language;
         if (chunks == null || chunks.isEmpty()) {
-            return "This lecture has no published text to summarize.";
+            return resolved == ExplanationLanguage.DE
+                    ? "Diese Vorlesung hat keinen veröffentlichten Text für eine Zusammenfassung."
+                    : "This lecture has no published text to summarize.";
         }
         long started = System.nanoTime();
         try {
-            String text = generateContent(SummaryPrompt.build(title, chunks), 0.2, 800);
+            String text = generateContent(SummaryPrompt.build(title, chunks, resolved), 0.2, 800);
             log.debug(
                     "Vertex summary ok titleChars={} chunks={} answerChars={} ({} ms)",
                     title == null ? 0 : title.length(),

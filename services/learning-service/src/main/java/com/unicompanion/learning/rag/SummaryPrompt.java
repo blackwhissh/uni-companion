@@ -9,7 +9,7 @@ final class SummaryPrompt {
     private SummaryPrompt() {
     }
 
-    static String build(String title, List<ChatModel.RetrievedChunk> chunks) {
+    static String build(String title, List<ChatModel.RetrievedChunk> chunks, ExplanationLanguage language) {
         String pages = IntStream.range(0, chunks.size())
                 .mapToObj(i -> {
                     ChatModel.RetrievedChunk chunk = chunks.get(i);
@@ -20,10 +20,11 @@ final class SummaryPrompt {
         return """
                 You are Uni Companion, a study assistant for university courses.
                 Write a short summary of "%s" in at most 120 words.
+                %s
                 Use only the numbered pages below. Cite them as [1], [2], and so on.
                 Do not invent facts that are not in those pages.
 
                 %s
-                """.formatted(lecture, pages);
+                """.formatted(lecture, language.summaryPromptLine(), pages);
     }
 }

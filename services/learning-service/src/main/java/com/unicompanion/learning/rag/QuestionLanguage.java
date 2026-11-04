@@ -17,13 +17,6 @@ final class QuestionLanguage {
     private QuestionLanguage() {
     }
 
-    static String instructionLine(String question) {
-        if (isLikelyGerman(question)) {
-            return "Detected student question language: German. Write the entire answer (all headings and body text) in German.";
-        }
-        return "Detected student question language: English. Write the entire answer (all headings and body text) in English.";
-    }
-
     static boolean isLikelyGerman(String question) {
         if (question == null || question.isBlank()) {
             return false;

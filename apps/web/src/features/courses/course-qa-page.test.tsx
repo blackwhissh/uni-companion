@@ -129,6 +129,55 @@ From your course materials, consensus keeps replicas consistent.
     expect(document.getElementById('qa-source-1')).toBeTruthy()
   })
 
+  it('asks for a German explanation and still shows the source sentence', async () => {
+    setAccessToken('student-token')
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith('/rag/query') && init?.method === 'POST') {
+        expect(JSON.parse(String(init.body))).toEqual({
+          courseId: 'course-1',
+          question: 'What is consensus?',
+          materialIds: ['material-1'],
+          language: 'DE',
+        })
+        return json({
+          answer: `## Direkte Antwort
+Consensus algorithms keep replicas consistent. [1]
+
+## Erklärung
+Aus den veröffentlichten Materialien.
+
+## Schlüsselbegriffe
+- **Consensus** — keeps replicas consistent [1]
+`,
+          citations: [
+            {
+              materialId: 'material-1',
+              title: 'Lecture 1',
+              pageNumber: 1,
+              excerpt: 'Consensus algorithms keep replicas consistent.',
+            },
+          ],
+        })
+      }
+      if (String(url).endsWith('/materials')) {
+        return json([material])
+      }
+      return json(course)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAt('/courses/course-1/qa', <CourseQaPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use selected materials' }))
+    fireEvent.change(await screen.findByLabelText('Question'), {
+      target: { value: 'What is consensus?' },
+    })
+    fireEvent.click(screen.getByRole('radio', { name: 'Deutsch' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
+
+    expect(await screen.findByRole('heading', { name: 'Direkte Antwort' })).toBeInTheDocument()
+    expect(screen.getByText(/Consensus algorithms keep replicas consistent/)).toBeInTheDocument()
+  })
+
   it('fills a ready-to-use prompt into the question box without asking yet', async () => {
     setAccessToken('student-token')
     const fetchMock = vi.fn(async (url: string) => {

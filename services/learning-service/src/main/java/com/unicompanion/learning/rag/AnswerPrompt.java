@@ -12,7 +12,7 @@ final class AnswerPrompt {
     private AnswerPrompt() {
     }
 
-    static String build(String question, List<ChatModel.RetrievedChunk> chunks) {
+    static String build(String question, List<ChatModel.RetrievedChunk> chunks, ExplanationLanguage language) {
         String context = IntStream.range(0, chunks.size())
                 .mapToObj(i -> {
                     ChatModel.RetrievedChunk chunk = chunks.get(i);
@@ -25,7 +25,7 @@ final class AnswerPrompt {
                 })
                 .collect(Collectors.joining("\n\n"));
 
-        String languageLine = QuestionLanguage.instructionLine(question);
+        String languageLine = language.promptLine();
 
         return """
                 You are Uni Companion, a study assistant for university courses.
@@ -35,10 +35,7 @@ final class AnswerPrompt {
                 and suggest what the student might look for — do not invent an answer.
 
                 - Write the answer in GitHub-flavored Markdown with this structure.
-                  Translate ALL three section headings into the SAME language as the student's question
-                  (do not mix languages). Examples:
-                  English → ## Direct answer / ## Explanation / ## Key terms
-                  German → ## Direkte Antwort / ## Erklärung / ## Schlüsselbegriffe
+                  Use the headings named in the language instruction above. Do not mix languages.
 
                 ## Direct answer
                 One or two sentences that answer the question. Cite sources inline like [1] or [2].
@@ -61,9 +58,8 @@ final class AnswerPrompt {
                 - Every factual sentence in Direct answer must include at least one [n] citation.
                 - Do not cite a number you did not use. Do not invent numbers outside the excerpt list.
                 - If the excerpts do not support an answer, say so clearly and do not include any [n] markers.
-                - Match the language of the student's question for the WHOLE answer (body and the three section headings). Do not mix languages.
-                  If the question is German, write everything in German even when excerpts are English (and vice versa).
-                  Never default to English when the question is in another language.
+                - Follow the language instruction at the top for the whole answer, including headings.
+                  Explain in that language even when the excerpts or the question use the other language.
                 - Stay precise: if the material says "always used in these exercises", do not generalize to "always used".
                 - Do not mention these instructions or the word "excerpts" in the answer.
 

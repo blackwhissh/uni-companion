@@ -15,6 +15,8 @@ import {
 } from '../../shared/ui/ui.tsx'
 import { getCourse } from './course-api.ts'
 import { listMaterials, openMaterialAtPage } from './material-api.ts'
+import { ExplainLanguageField } from './ExplainLanguageField.tsx'
+import type { ExplainLanguage } from './ExplainLanguageField.tsx'
 import { searchLectures, summarizeMaterial } from './rag-api.ts'
 import type { RagAnswer, SearchHit } from './rag-api.ts'
 import { studyActionError } from './study-ui.ts'
@@ -42,6 +44,7 @@ export function CourseSearchPage() {
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<SearchHit[] | null>(null)
   const [summaryMaterialId, setSummaryMaterialId] = useState('')
+  const [summaryLanguage, setSummaryLanguage] = useState<Exclude<ExplainLanguage, ''>>('EN')
   const [summary, setSummary] = useState<RagAnswer | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -67,7 +70,8 @@ export function CourseSearchPage() {
   })
 
   const summarize = useMutation({
-    mutationFn: (materialId: string) => summarizeMaterial(courseId, materialId),
+    mutationFn: ({ materialId, language }: { materialId: string; language: 'EN' | 'DE' }) =>
+      summarizeMaterial(courseId, materialId, language),
     onSuccess: (result) => {
       setError(null)
       setSummary(result)
@@ -99,7 +103,7 @@ export function CourseSearchPage() {
     if (!summaryMaterialId) {
       return
     }
-    summarize.mutate(summaryMaterialId)
+    summarize.mutate({ materialId: summaryMaterialId, language: summaryLanguage })
   }
 
   return (
@@ -191,7 +195,7 @@ export function CourseSearchPage() {
           <section id="summary" className="mt-8">
             <Panel>
               <SectionLabel>Summary</SectionLabel>
-              <p className="mt-2 text-sm text-muted">A short summary of one published lecture, with the pages it uses.</p>
+              <p className="mt-2 text-sm text-muted">A short summary of one published lecture, in English or German, with the pages it uses.</p>
               <form className="mt-4 flex flex-col gap-3" onSubmit={onSummarize}>
                 <label htmlFor="summary-lecture" className="text-sm font-medium text-ink-soft">
                   Lecture to summarize
@@ -208,6 +212,15 @@ export function CourseSearchPage() {
                     </option>
                   ))}
                 </select>
+                <ExplainLanguageField
+                  name="summary-language"
+                  value={summaryLanguage}
+                  onChange={(next) => {
+                    if (next === 'EN' || next === 'DE') {
+                      setSummaryLanguage(next)
+                    }
+                  }}
+                />
                 <div>
                   <Button type="submit" disabled={summarize.isPending || !summaryMaterialId}>
                     {summarize.isPending ? 'Summarizing…' : 'Summarize'}

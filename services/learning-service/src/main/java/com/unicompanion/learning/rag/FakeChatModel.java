@@ -13,65 +13,70 @@ import java.util.List;
 public class FakeChatModel implements ChatModel {
 
     @Override
-    public String answer(String question, List<RetrievedChunk> chunks) {
+    public String answer(String question, List<RetrievedChunk> chunks, ExplanationLanguage language) {
+        ExplanationLanguage resolved = language == null
+                ? (QuestionLanguage.isLikelyGerman(question) ? ExplanationLanguage.DE : ExplanationLanguage.EN)
+                : language;
         if (chunks.isEmpty()) {
-            return """
-                    ## Direct answer
-                    I could not find relevant published material for that question.
-
-                    ## Explanation
-                    Try rephrasing, or ask about a topic that appears in a published lecture PDF for this course.
-                    """;
+            return resolved.noMaterialAnswer();
         }
         RetrievedChunk primary = chunks.getFirst();
         String body = truncate(primary.content(), 320);
-        boolean german = QuestionLanguage.isLikelyGerman(question);
+        boolean german = resolved == ExplanationLanguage.DE;
         String directHeading = german ? "## Direkte Antwort" : "## Direct answer";
         String explanationHeading = german ? "## Erklärung" : "## Explanation";
         String termsHeading = german ? "## Schlüsselbegriffe" : "## Key terms";
+        String lead = german
+                ? "Aus den veröffentlichten Materialien: %s [%d]".formatted(body, 1)
+                : "From your course materials: %s [%d]".formatted(body, 1);
+        String support = german
+                ? "Die veröffentlichten Materialien stützen diese Antwort. Quelle [%d] (%s, Seite %d) passt zu deiner Frage: \"%s\".".formatted(
+                        1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim())
+                : "The published materials support this answer. Source [%d] (%s, page %d) is the closest match to your question: \"%s\".".formatted(
+                        1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim());
         StringBuilder terms = new StringBuilder();
         for (int i = 0; i < chunks.size(); i++) {
             RetrievedChunk chunk = chunks.get(i);
             String snippet = truncate(chunk.content(), 80);
-            terms.append("- **From %s (p.%d)** — %s [%d]%n".formatted(
-                    chunk.title(),
-                    chunk.pageNumber(),
-                    snippet,
-                    i + 1
-            ));
+            String line = german
+                    ? "- **Aus %s (S. %d)** — %s [%d]%n"
+                    : "- **From %s (p.%d)** — %s [%d]%n";
+            terms.append(line.formatted(chunk.title(), chunk.pageNumber(), snippet, i + 1));
         }
         return """
                 %s
-                From your course materials: %s [%d]
+                %s
 
                 %s
-                The published materials support this answer. Source [%d] (%s, page %d) is the closest match to your question: "%s".
+                %s
 
                 %s
                 %s
                 """.formatted(
                 directHeading,
-                body,
-                1,
+                lead,
                 explanationHeading,
-                1,
-                primary.title(),
-                primary.pageNumber(),
-                question == null ? "" : question.trim(),
+                support,
                 termsHeading,
                 terms.toString().trim()
         );
     }
 
     @Override
-    public String summarize(String title, List<RetrievedChunk> chunks) {
+    public String summarize(String title, List<RetrievedChunk> chunks, ExplanationLanguage language) {
         if (chunks == null || chunks.isEmpty()) {
-            return "This lecture has no published text to summarize.";
+            return language == ExplanationLanguage.DE
+                    ? "Diese Vorlesung hat keinen veröffentlichten Text für eine Zusammenfassung."
+                    : "This lecture has no published text to summarize.";
         }
-        StringBuilder summary = new StringBuilder("Short summary of ").append(title == null ? "this lecture" : title).append(".");
+        boolean german = language == ExplanationLanguage.DE;
+        String lecture = title == null ? (german ? "dieser Vorlesung" : "this lecture") : title;
+        StringBuilder summary = new StringBuilder(german ? "Kurze Zusammenfassung von " : "Short summary of ")
+                .append(lecture)
+                .append(".");
         for (int i = 0; i < chunks.size(); i++) {
             RetrievedChunk chunk = chunks.get(i);
-            summary.append(" Page ")
+            summary.append(german ? " Seite " : " Page ")
                     .append(chunk.pageNumber())
                     .append(": ")
                     .append(truncate(chunk.content(), 220))

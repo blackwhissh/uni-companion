@@ -19,6 +19,8 @@ import { listMaterials } from './material-api.ts'
 import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
 import { QaSources } from './QaSources.tsx'
 import { QA_SUGGESTED_PROMPTS } from './qa-prompts.ts'
+import { ExplainLanguageField } from './ExplainLanguageField.tsx'
+import type { ExplainLanguage } from './ExplainLanguageField.tsx'
 import { askCourseQuestion } from './rag-api.ts'
 import { useAuth } from '../auth/use-auth.ts'
 import { studyActionError } from './study-ui.ts'
@@ -47,6 +49,7 @@ export function CourseQaPage() {
     retry: false,
   })
   const [question, setQuestion] = useState(() => (searchParams.get('question') ?? '').slice(0, QUESTION_MAX))
+  const [language, setLanguage] = useState<ExplainLanguage>('')
   const [askedQuestion, setAskedQuestion] = useState<string | null>(null)
   const [result, setResult] = useState<RagAnswer | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -70,8 +73,8 @@ export function CourseQaPage() {
   }, [courseId])
 
   const ask = useMutation({
-    mutationFn: ({ q, materialIds }: { q: string; materialIds: string[] }) =>
-      askCourseQuestion(courseId, q, materialIds),
+    mutationFn: ({ q, materialIds, language: explainIn }: { q: string; materialIds: string[]; language: ExplainLanguage }) =>
+      askCourseQuestion(courseId, q, materialIds, explainIn === '' ? undefined : explainIn),
     onSuccess: (answer, variables) => {
       setError(null)
       setMaterialNotice(null)
@@ -175,7 +178,7 @@ export function CourseQaPage() {
       setError('Select at least one material first.')
       return
     }
-    ask.mutate({ q: trimmed, materialIds: selectedMaterialIds })
+    ask.mutate({ q: trimmed, materialIds: selectedMaterialIds, language })
   }
 
   function onSubmit(event: FormEvent) {
@@ -216,7 +219,7 @@ export function CourseQaPage() {
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Q&A'}
           title="Course Q&A"
-          description="Ask your own question, or start from a ready prompt. Answers stay grounded in published lecture PDFs."
+          description="Ask your own question, or start from a ready prompt. Answers stay grounded in published lecture PDFs and can be written in English or German."
           actions={
             enrolled && readyCount > 0 && !pickingMaterials ? (
               <Button type="button" variant="secondary" disabled={ask.isPending} onClick={() => setPickingMaterials(true)}>
@@ -325,6 +328,8 @@ export function CourseQaPage() {
                       : ''}
                 </span>
               </div>
+
+              <ExplainLanguageField name="qa-language" value={language} onChange={setLanguage} matchQuestion />
 
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Try a prompt</p>

@@ -185,7 +185,7 @@ export function CourseHomePage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <StudyMode
                 title="Q&A"
-                body="Ask questions grounded in published lecture PDFs."
+                body="Ask questions grounded in published lecture PDFs, in English or German."
                 state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/qa` : undefined}
               />
