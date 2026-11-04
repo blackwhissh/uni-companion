@@ -17,11 +17,15 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -36,7 +40,9 @@ class MatchApiTests {
     private static final UUID STUDENT_2_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static final String ADMIN = JwtTestSupport.bearer(ADMIN_ID, "admin@uni-companion.test", "COURSE_ADMIN");
     private static final String STUDENT = JwtTestSupport.bearer(STUDENT_ID, "ada@uni.test", "STUDENT");
+    private static final UUID STUDENT_3_ID = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
     private static final String STUDENT_2 = JwtTestSupport.bearer(STUDENT_2_ID, "alan@uni.test", "STUDENT");
+    private static final String STUDENT_3 = JwtTestSupport.bearer(STUDENT_3_ID, "grace@uni.test", "STUDENT");
 
     @Container
     @ServiceConnection
@@ -53,7 +59,7 @@ class MatchApiTests {
         mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
                         .header("Authorization", STUDENT)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"optedIn\":true}"))
+                        .content("{\"optedIn\":true,\"displayName\":\"Ada\"}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -72,7 +78,7 @@ class MatchApiTests {
         mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
                         .header("Authorization", STUDENT)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"optedIn\":true}"))
+                        .content("{\"optedIn\":true,\"displayName\":\"Ada\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.optedIn").value(true))
                 .andExpect(jsonPath("$.activeCount").value(1));
@@ -80,7 +86,7 @@ class MatchApiTests {
         mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
                         .header("Authorization", STUDENT_2)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"optedIn\":true}"))
+                        .content("{\"optedIn\":true,\"displayName\":\"Ada\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.optedIn").value(true))
                 .andExpect(jsonPath("$.activeCount").value(2));
@@ -109,13 +115,13 @@ class MatchApiTests {
         mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
                         .header("Authorization", STUDENT)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"optedIn\":true}"))
+                        .content("{\"optedIn\":true,\"displayName\":\"Ada\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activeCount").value(1));
         mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
                         .header("Authorization", STUDENT_2)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"optedIn\":true}"))
+                        .content("{\"optedIn\":true,\"displayName\":\"Ada\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activeCount").value(2));
 
@@ -138,6 +144,106 @@ class MatchApiTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.optedIn").value(false))
                 .andExpect(jsonPath("$.activeCount").value(1));
+    }
+
+    @Test
+    void suggestionsListOptedInClassmatesWhoShareAnIntentAndHideEmail() throws Exception {
+        String courseId = publishedCourse("MATCH-INTENT");
+        String otherCourseId = publishedCourse("MATCH-OTHER");
+        enroll(courseId, STUDENT);
+        enroll(courseId, STUDENT_2);
+        enroll(courseId, STUDENT_3);
+        enroll(otherCourseId, STUDENT_2);
+
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"optedIn\":true}"))
+                .andExpect(status().isBadRequest());
+
+        optIn(courseId, STUDENT_2, "Alan");
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/intents")
+                        .header("Authorization", STUDENT_2)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Alan\",\"intents\":[\"STUDY_GROUP\"]}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/suggestions")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.discoverable").value(false))
+                .andExpect(jsonPath("$.suggestions", hasSize(0)))
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("Alan"))));
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/intents")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Ada\",\"intents\":[\"STUDY_GROUP\"]}"))
+                .andExpect(status().isForbidden());
+
+        optIn(courseId, STUDENT, "Ada");
+        optIn(courseId, STUDENT_3, "Grace");
+        optIn(otherCourseId, STUDENT_2, "Alan");
+
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/suggestions")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.discoverable").value(true))
+                .andExpect(jsonPath("$.suggestions", hasSize(0)));
+
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/intents")
+                        .header("Authorization", STUDENT_3)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Grace\",\"intents\":[\"PROJECT\"]}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/intents")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Ada Lovelace\",\"intents\":[\"STUDY_GROUP\",\"THESIS\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intents", contains("STUDY_GROUP", "THESIS")));
+
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/intents")
+                        .header("Authorization", STUDENT_2)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Alan\",\"intents\":[\"THESIS\",\"LANGUAGE\"]}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(put("/api/match/courses/" + otherCourseId + "/intents")
+                        .header("Authorization", STUDENT_2)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Alan\",\"intents\":[\"STUDY_GROUP\"]}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/suggestions")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestions", hasSize(1)))
+                .andExpect(jsonPath("$.suggestions[0].displayName").value("Alan"))
+                .andExpect(jsonPath("$.suggestions[0].sharedIntents", contains("THESIS")))
+                .andExpect(jsonPath("$.suggestions[0].email").doesNotExist())
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("@"))));
+
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/intents")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Ada\",\"intents\":[\"COFFEE\"]}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(delete("/api/courses/" + courseId + "/enroll")
+                        .header("Authorization", STUDENT_2))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/suggestions")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestions", hasSize(0)));
+    }
+
+    private void optIn(String courseId, String bearer, String displayName) throws Exception {
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
+                        .header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"optedIn\":true,\"displayName\":\"" + displayName + "\"}"))
+                .andExpect(status().isOk());
     }
 
     private String publishedCourse(String code) throws Exception {
