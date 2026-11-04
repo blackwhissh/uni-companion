@@ -58,6 +58,15 @@ public class MatchingService {
         return toStatus(courseId, userId);
     }
 
+    @Transactional
+    public void clearOptIn(UUID courseId, UUID userId) {
+        MatchOptInKey key = new MatchOptInKey(courseId, userId);
+        if (optIns.existsById(key)) {
+            optIns.deleteById(key);
+            log.info("Match opt-in cleared course={} user={}", courseId, userId);
+        }
+    }
+
     private MatchStatus toStatus(UUID courseId, UUID userId) {
         boolean optedIn = optIns.existsById(new MatchOptInKey(courseId, userId));
         long activeCount = optIns.countByIdCourseId(courseId);

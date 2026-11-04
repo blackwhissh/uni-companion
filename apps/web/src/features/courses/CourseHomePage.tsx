@@ -10,10 +10,10 @@ import {
   EmptyState,
   Page,
   PageHeader,
-  Panel,
   SectionLabel,
   StatusPill,
 } from '../../shared/ui/ui.tsx'
+import { CourseMatchPanel } from './CourseMatchPanel.tsx'
 import { enrollInCourse, getCourse, unenrollFromCourse } from './course-api.ts'
 import { downloadMaterial, listMaterials, openMaterialPreview } from './material-api.ts'
 import type { Material } from './material-api.ts'
@@ -130,7 +130,7 @@ export function CourseHomePage() {
             ownerPreview
               ? 'Student preview: published materials only, the same list enrolled students will see.'
               : enrolled
-                ? 'Study from published materials. Peer matching will arrive later with an explicit consent step.'
+                ? 'Study from published materials, then check your quiz progress. Study-partner matching stays off until you opt in.'
                 : 'Enroll to unlock materials and study tools for this module.'
           }
           actions={
@@ -182,7 +182,7 @@ export function CourseHomePage() {
 
           <section className="mt-10 animate-rise-delay">
             <SectionLabel>Study modes</SectionLabel>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <StudyMode
                 title="Q&A"
                 body="Ask questions grounded in published lecture PDFs."
@@ -200,6 +200,12 @@ export function CourseHomePage() {
                 body="Check understanding with generated practice questions."
                 state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/quiz` : undefined}
+              />
+              <StudyMode
+                title="Progress"
+                body="See quiz scores and the questions you still miss."
+                state={enrolled ? 'Open' : ownerPreview ? 'Enroll to try' : 'Enroll to open'}
+                to={enrolled ? `/courses/${courseId}/progress` : undefined}
               />
             </div>
           </section>
@@ -294,13 +300,7 @@ export function CourseHomePage() {
 
           {enrolled ? (
             <>
-              <Panel className="mt-10">
-                <SectionLabel>Peer matching</SectionLabel>
-                <p className="mt-3 text-sm leading-relaxed text-muted">
-                  Study-partner matching is not available yet. When it launches, you will see a clear consent screen
-                  before anything about you is shared with classmates.
-                </p>
-              </Panel>
+              <CourseMatchPanel courseId={courseId} />
 
               <div className="mt-10 border-t border-line/70 pt-6">
                 <p className="text-sm text-muted">Need to leave this course?</p>

@@ -14,6 +14,8 @@ import com.unicompanion.learning.study.infrastructure.FlashcardDeckRepository;
 import com.unicompanion.learning.study.infrastructure.FlashcardEntity;
 import com.unicompanion.learning.study.infrastructure.FlashcardRepository;
 import com.unicompanion.learning.study.infrastructure.QuizAttemptEntity;
+import com.unicompanion.learning.study.infrastructure.QuizAttemptItemEntity;
+import com.unicompanion.learning.study.infrastructure.QuizAttemptItemRepository;
 import com.unicompanion.learning.study.infrastructure.QuizAttemptRepository;
 import com.unicompanion.learning.study.infrastructure.QuizEntity;
 import com.unicompanion.learning.study.infrastructure.QuizProgressEntity;
@@ -72,6 +74,7 @@ public class StudyService {
     private final QuizQuestionRepository questions;
     private final QuizProgressRepository quizProgress;
     private final QuizAttemptRepository attempts;
+    private final QuizAttemptItemRepository attemptItems;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
     private final int maxSharedVersions;
@@ -90,6 +93,7 @@ public class StudyService {
             QuizQuestionRepository questions,
             QuizProgressRepository quizProgress,
             QuizAttemptRepository attempts,
+            QuizAttemptItemRepository attemptItems,
             JdbcTemplate jdbc,
             org.springframework.transaction.PlatformTransactionManager transactionManager,
             GeminiProperties gemini,
@@ -108,6 +112,7 @@ public class StudyService {
         this.questions = questions;
         this.quizProgress = quizProgress;
         this.attempts = attempts;
+        this.attemptItems = attemptItems;
         this.jdbc = jdbc;
         this.transactions = new TransactionTemplate(transactionManager);
         this.maxSharedVersions = Math.max(1, maxSharedVersions);
@@ -386,6 +391,9 @@ public class StudyService {
                 .collect(Collectors.toMap(AnswerInput::questionId, AnswerInput::selectedIndex, (a, b) -> b));
         int score = 0;
         List<AnswerReview> reviews = new ArrayList<>();
+        List<QuizAttemptItemEntity> itemEntities = new ArrayList<>();
+        UUID attemptId = UUID.randomUUID();
+        int sortOrder = 0;
         for (QuizQuestionEntity question : quizQuestions) {
             int selected = selectedByQuestion.getOrDefault(question.getId(), -1);
             boolean correct = selected == question.getCorrectIndex();
@@ -404,15 +412,23 @@ public class StudyService {
                     correctOption,
                     question.getExplanation()
             ));
+            itemEntities.add(QuizAttemptItemEntity.create(
+                    UUID.randomUUID(),
+                    attemptId,
+                    question.getPrompt() == null ? "" : question.getPrompt(),
+                    correct,
+                    sortOrder++
+            ));
         }
         QuizAttemptEntity attempt = attempts.save(QuizAttemptEntity.create(
-                UUID.randomUUID(),
+                attemptId,
                 quizId,
                 userId,
                 score,
                 quizQuestions.size(),
                 Instant.now()
         ));
+        attemptItems.saveAll(itemEntities);
         log.info("Quiz attempt quiz={} user={} score={}/{}", quizId, userId, score, quizQuestions.size());
         return new AttemptView(attempt.getId(), attempt.getScore(), attempt.getTotal(), reviews);
     }

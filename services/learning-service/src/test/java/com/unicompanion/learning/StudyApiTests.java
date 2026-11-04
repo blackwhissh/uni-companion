@@ -159,6 +159,78 @@ class StudyApiTests {
     }
 
     @Test
+    void progressShowsOnlyThisStudentsMissesAndClearsThemAfterACorrectRetry() throws Exception {
+        ReadyCourse ready = readyCourse("STDY-PROGRESS");
+        enroll(ready.courseId(), STUDENT);
+        enroll(ready.courseId(), STUDENT_2);
+
+        mockMvc.perform(get("/api/study/courses/" + ready.courseId() + "/progress")
+                        .header("Authorization", STUDENT_3))
+                .andExpect(status().isForbidden());
+
+        MvcResult generated = mockMvc.perform(post("/api/study/courses/" + ready.courseId() + "/quizzes/generate")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(generateBody(ready.materialId())))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String quizId = JsonPath.read(generated.getResponse().getContentAsString(), "$.id");
+        String questionId = JsonPath.read(generated.getResponse().getContentAsString(), "$.questions[0].id");
+        String prompt = JsonPath.read(generated.getResponse().getContentAsString(), "$.questions[0].prompt");
+
+        mockMvc.perform(post("/api/study/quizzes/" + quizId + "/submit")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"answers":[{"questionId":"%s","selectedIndex":1}]}
+                                """.formatted(questionId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.score").value(0));
+
+        mockMvc.perform(post("/api/study/quizzes/" + quizId + "/submit")
+                        .header("Authorization", STUDENT_2)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"answers":[{"questionId":"%s","selectedIndex":1}]}
+                                """.formatted(questionId)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/study/courses/" + ready.courseId() + "/progress")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attemptCount").value(1))
+                .andExpect(jsonPath("$.latestScore").value(0))
+                .andExpect(jsonPath("$.latestTotal").value(1))
+                .andExpect(jsonPath("$.weakTopics", hasSize(1)))
+                .andExpect(jsonPath("$.weakTopics[0].prompt").value(prompt))
+                .andExpect(jsonPath("$.weakTopics[0].missCount").value(1));
+
+        mockMvc.perform(post("/api/study/quizzes/" + quizId + "/submit")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"answers":[{"questionId":"%s","selectedIndex":0}]}
+                                """.formatted(questionId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.score").value(1));
+
+        mockMvc.perform(get("/api/study/courses/" + ready.courseId() + "/progress")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attemptCount").value(2))
+                .andExpect(jsonPath("$.latestScore").value(1))
+                .andExpect(jsonPath("$.bestScore").value(1))
+                .andExpect(jsonPath("$.weakTopics", hasSize(0)))
+                .andExpect(jsonPath("$.attempts", hasSize(2)));
+
+        mockMvc.perform(get("/api/study/courses/" + ready.courseId() + "/progress")
+                        .header("Authorization", STUDENT_2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attemptCount").value(1))
+                .andExpect(jsonPath("$.weakTopics[0].missCount").value(1));
+    }
+
+    @Test
     void versionPoolServesFirstThenNextExistingBeforeNewAiGeneration() throws Exception {
         String courseId = createCourse("STDY-SHARE");
         publishCourse(courseId);

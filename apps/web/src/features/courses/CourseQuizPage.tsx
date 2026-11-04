@@ -7,6 +7,7 @@ import {
   Alert,
   BackLink,
   Button,
+  ButtonLink,
   EmptyState,
   Page,
   PageHeader,
@@ -414,6 +415,11 @@ export function CourseQuizPage() {
                   <p className="mt-2 text-sm text-muted">
                     Review the correct answers and explanations above, or try this quiz again.
                   </p>
+                  <div className="mt-4">
+                    <ButtonLink to={`/courses/${courseId}/progress`} variant="secondary">
+                      View progress
+                    </ButtonLink>
+                  </div>
                 </Panel>
               ) : null}
               <div className="mt-6 flex flex-col gap-2">

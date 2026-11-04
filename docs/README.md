@@ -33,6 +33,7 @@ Entry point for Uni Companion documentation.
 | DOC-REQ | Requirements Specification | [REQUIREMENTS.md](REQUIREMENTS.md) |
 | DOC-ROAD | Product Roadmap | [ROADMAP.md](ROADMAP.md) |
 | DOC-EXEC | Execution Plan | [EXECUTION-PLAN.md](EXECUTION-PLAN.md) |
+| DOC-NEXT | Next development plan | [NEXT.md](NEXT.md) |
 | DOC-TEST | Testing and TDD | [TESTING.md](TESTING.md) |
 | DOC-ARCH | System Architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | DOC-SVC | Service Catalog | [SERVICES.md](SERVICES.md) |

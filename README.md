@@ -36,6 +36,7 @@ Students **enroll → study (RAG / cards / quiz) → match**.
 | [Requirements](docs/REQUIREMENTS.md) | What (normative) |
 | [Roadmap](docs/ROADMAP.md) | Phases A–C |
 | [Execution Plan](docs/EXECUTION-PLAN.md) | How to build Phase A |
+| [Next steps](docs/NEXT.md) | What to build after the current study tools |
 | [Testing / TDD](docs/TESTING.md) | Red→Green→Refactor standards |
 | [Architecture](docs/ARCHITECTURE.md) | System design |
 | [Services](docs/SERVICES.md) | Service catalog |
@@ -146,4 +147,4 @@ To use real Gemini later: put a Vertex service-account JSON at `/opt/uni-compani
 
 ## Current status
 
-Admins upload and publish PDFs from the course console. Enrolled students see only materials that are READY and PUBLISHED. Upload stores page text and 768-d embeddings (Vertex `gemini-embedding-001` when configured). Grounded Q&A uses those vectors. Flashcards and quizzes use bounded shared version pools keyed by the exact material set and generation recipe: existing versions are reused before one batched Vertex call creates a new version.
+Admins upload and publish PDFs from the course console. Enrolled students see only materials that are READY and PUBLISHED. Upload stores page text and 768-d embeddings (Vertex `gemini-embedding-001` when configured). Grounded Q&A uses those vectors. Flashcards and quizzes use bounded shared version pools keyed by the exact material set and generation recipe: existing versions are reused before one batched Vertex call creates a new version. Quiz attempts keep each question outcome so enrolled students can open a progress page of scores and prompts they still miss. Study-partner matching on the course home is an explicit opt-in: classmates see only the live count, and leaving the course removes that opt-in.

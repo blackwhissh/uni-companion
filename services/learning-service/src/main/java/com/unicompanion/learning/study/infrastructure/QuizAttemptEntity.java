@@ -62,4 +62,16 @@ public class QuizAttemptEntity {
     public int getTotal() {
         return total;
     }
+
+    public UUID getQuizId() {
+        return quizId;
+    }
+
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

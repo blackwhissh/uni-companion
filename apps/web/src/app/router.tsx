@@ -6,6 +6,7 @@ import { RegisterPage } from '../features/auth/RegisterPage.tsx'
 import { CourseFlashcardsPage } from '../features/courses/CourseFlashcardsPage.tsx'
 import { CourseHomePage } from '../features/courses/CourseHomePage.tsx'
 import { CourseQaPage } from '../features/courses/CourseQaPage.tsx'
+import { CourseProgressPage } from '../features/courses/CourseProgressPage.tsx'
 import { CourseQuizPage } from '../features/courses/CourseQuizPage.tsx'
 import { CoursesPage } from '../features/courses/CoursesPage.tsx'
 import { ProfilePage } from '../features/profile/ProfilePage.tsx'
@@ -50,6 +51,14 @@ export function AppRouter() {
             element={
               <RequireAuth>
                 <CourseFlashcardsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/courses/:courseId/progress"
+            element={
+              <RequireAuth>
+                <CourseProgressPage />
               </RequireAuth>
             }
           />

@@ -64,6 +64,29 @@ export type QuizAttempt = {
   reviews: AnswerReview[]
 }
 
+export type ProgressAttempt = {
+  id: string
+  score: number
+  total: number
+  createdAt: string
+}
+
+export type WeakTopic = {
+  prompt: string
+  missCount: number
+  lastMissedAt: string | null
+}
+
+export type CourseProgress = {
+  attemptCount: number
+  latestScore: number | null
+  latestTotal: number | null
+  bestScore: number | null
+  bestTotal: number | null
+  attempts: ProgressAttempt[]
+  weakTopics: WeakTopic[]
+}
+
 function materialQuery(materialIds: string[]) {
   return materialIds.map((id) => `materialIds=${encodeURIComponent(id)}`).join('&')
 }
@@ -138,6 +161,10 @@ export function reportQuizVersion(quizId: string) {
     method: 'POST',
     body: JSON.stringify({ reason: 'Student reported a quality issue.' }),
   })
+}
+
+export function getCourseProgress(courseId: string) {
+  return learningFetch<CourseProgress>(`/api/study/courses/${courseId}/progress`)
 }
 
 export async function submitQuiz(

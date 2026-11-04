@@ -1,5 +1,7 @@
 package com.unicompanion.learning.study.api;
 
+import com.unicompanion.learning.study.application.ProgressService;
+import com.unicompanion.learning.study.application.ProgressSummary;
 import com.unicompanion.learning.study.application.StudyService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
@@ -24,9 +26,19 @@ import java.util.UUID;
 public class StudyController {
 
     private final StudyService study;
+    private final ProgressService progress;
 
-    public StudyController(StudyService study) {
+    public StudyController(StudyService study, ProgressService progress) {
         this.study = study;
+        this.progress = progress;
+    }
+
+    @GetMapping("/courses/{courseId}/progress")
+    public ProgressSummary.Result progress(
+            @PathVariable UUID courseId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return progress.view(courseId, userId(jwt));
     }
 
     @PostMapping("/courses/{courseId}/flashcards/generate")
