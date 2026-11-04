@@ -36,7 +36,7 @@ export function ProfilePage() {
       <PageHeader
         eyebrow="Account"
         title="Profile"
-        description="Your display name and study interests appear on your account. Matching is not live yet."
+        description="Your display name is what opted-in classmates can see. Your email stays on your account until you accept a contact request."
       />
 
       {profile.isLoading ? <p className="mt-8 animate-pulse-soft text-muted">Loading profile…</p> : null}

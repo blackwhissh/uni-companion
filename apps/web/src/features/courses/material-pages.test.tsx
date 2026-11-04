@@ -71,11 +71,29 @@ describe('material pages', () => {
     setAccessToken('student-token')
     let optedIn = false
     let activeCount = 0
+    let intents: string[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/intents')) {
+        const body = JSON.parse(String(init?.body)) as { intents: string[]; displayName: string }
+        intents = body.intents
+        return json({
+          discoverable: true,
+          intents,
+          suggestions: intents.includes('STUDY_GROUP')
+            ? [{ userId: 'ada', displayName: 'Ada Lovelace', sharedIntents: ['STUDY_GROUP'] }]
+            : [],
+        })
+      }
+      if (String(url).endsWith('/suggestions')) {
+        return json({ discoverable: optedIn, intents, suggestions: [] })
+      }
       if (String(url).includes('/opt-in')) {
-        const body = JSON.parse(String(init?.body)) as { optedIn: boolean }
+        const body = JSON.parse(String(init?.body)) as { optedIn: boolean; displayName: string }
         optedIn = body.optedIn
         activeCount = optedIn ? 1 : 0
+        if (!optedIn) {
+          intents = []
+        }
         return json({ optedIn, activeCount })
       }
       if (String(url).endsWith('/active-count')) {
@@ -98,10 +116,11 @@ describe('material pages', () => {
     })
 
     expect(await screen.findByText(/No students in this course are looking for a study partner yet/)).toBeInTheDocument()
-    expect(screen.getByText(/Your name and email stay private/)).toBeInTheDocument()
+    expect(screen.getByText(/Your email stays private/)).toBeInTheDocument()
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Opt in to study partners' }))
     const consent = await screen.findByRole('alertdialog')
-    expect(within(consent).getByText(/not your name or email/)).toBeInTheDocument()
+    expect(within(consent).getByText(/They cannot see your email/)).toBeInTheDocument()
     fireEvent.click(within(consent).getByRole('button', { name: 'Opt in' }))
 
     expect(await screen.findByText(/You are the only student in this course looking for a study partner/)).toBeInTheDocument()
@@ -109,9 +128,15 @@ describe('material pages', () => {
       'http://localhost:8082/api/match/courses/course-1/opt-in',
       expect.objectContaining({
         method: 'PUT',
-        body: JSON.stringify({ optedIn: true }),
+        body: JSON.stringify({ optedIn: true, displayName: 'Student' }),
       }),
     )
+    expect(await screen.findByText('Choose what you want to work on to see classmates.')).toBeInTheDocument()
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Study group' }))
+    expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument()
+    expect(screen.getByText('Also looking for Study group')).toBeInTheDocument()
+    expect(screen.queryByText(/@/)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stop sharing' }))

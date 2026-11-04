@@ -17,14 +17,22 @@ public class MatchOptInEntity {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "display_name", nullable = false, length = 120)
+    private String displayName;
+
     protected MatchOptInEntity() {
     }
 
-    public static MatchOptInEntity create(MatchOptInKey id, Instant createdAt) {
+    public static MatchOptInEntity create(MatchOptInKey id, Instant createdAt, String displayName) {
         MatchOptInEntity entity = new MatchOptInEntity();
         entity.id = id;
         entity.createdAt = createdAt;
+        entity.displayName = displayName;
         return entity;
+    }
+
+    public void rename(String displayName) {
+        this.displayName = displayName;
     }
 
     public MatchOptInKey getId() {
@@ -33,5 +41,9 @@ public class MatchOptInEntity {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getDisplayName() {
+        return displayName;
     }
 }
