@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
+import { GroundedNote } from '../../shared/ui/GroundedNote.tsx'
 import {
   Alert,
   BackLink,
@@ -311,6 +312,7 @@ export function CourseFlashcardsPage() {
               {sourceTitles.length > 0 ? (
                 <p className="mt-2 text-sm text-muted">Sources: {sourceTitles.join(' · ')}</p>
               ) : null}
+              <GroundedNote className="mt-2" />
               <StudyVersionControls
                 noun="deck"
                 delivery={deck.delivery}

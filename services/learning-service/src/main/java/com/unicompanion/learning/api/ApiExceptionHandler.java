@@ -10,8 +10,10 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -40,8 +42,7 @@ public class ApiExceptionHandler {
                     status.value(),
                     request.getMethod(),
                     request.getRequestURI(),
-                    reason,
-                    ex
+                    reason
             );
         }
         return ResponseEntity.status(status).body(body(status.name(), reason, request, null));
@@ -81,6 +82,20 @@ public class ApiExceptionHandler {
         log.warn("Upload too large on {} {}", request.getMethod(), request.getRequestURI(), ex);
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(body("UPLOAD_TOO_LARGE", "The uploaded file is too large.", request, null));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<ErrorResponse> missing(HttpServletRequest request) {
+        log.info("No resource {} {}", request.getMethod(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(body("NOT_FOUND", "Nothing is available at this address.", request, null));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    ResponseEntity<ErrorResponse> methodNotAllowed(HttpServletRequest request) {
+        log.info("Method not allowed {} {}", request.getMethod(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(body("METHOD_NOT_ALLOWED", "That action is not available here.", request, null));
     }
 
     @ExceptionHandler(Exception.class)

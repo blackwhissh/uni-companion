@@ -74,7 +74,7 @@ export function CoursesPage() {
       <PageHeader
         eyebrow="Study workspace"
         title="Your courses"
-        description="Enroll in published modules, then open a course to practice with materials and peers."
+        description="Enroll in a published course, then study its lectures, practice, and find classmates."
       />
 
       {courses.isLoading ? (

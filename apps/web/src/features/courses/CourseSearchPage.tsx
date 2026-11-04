@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
+import { GroundedNote } from '../../shared/ui/GroundedNote.tsx'
 import {
   Alert,
   BackLink,
@@ -174,7 +175,9 @@ export function CourseSearchPage() {
               </p>
             ) : null}
             {hits && hits.length > 0 ? (
-              <ul className="mt-4 flex flex-col gap-3">
+              <>
+              <GroundedNote className="mt-4" />
+              <ul className="mt-3 flex flex-col gap-3">
                 {hits.map((hit) => (
                   <li key={`${hit.materialId}-${hit.pageNumber}-${hit.excerpt}`} className="rounded-xl border border-ink/10 px-4 py-3">
                     <p className="text-sm font-medium text-ink">
@@ -189,6 +192,7 @@ export function CourseSearchPage() {
                   </li>
                 ))}
               </ul>
+              </>
             ) : null}
           </Panel>
 
@@ -229,7 +233,8 @@ export function CourseSearchPage() {
               </form>
               {summary ? (
                 <div className="mt-4">
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{summary.answer}</p>
+                  <GroundedNote />
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink">{summary.answer}</p>
                   {summary.citations.length > 0 ? (
                     <ul className="mt-3 flex flex-col gap-2">
                       {summary.citations.map((citation) => (

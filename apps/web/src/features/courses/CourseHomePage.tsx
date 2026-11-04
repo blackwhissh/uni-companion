@@ -181,8 +181,8 @@ export function CourseHomePage() {
           )}
 
           <section className="mt-10 animate-rise-delay">
-            <SectionLabel>Study modes</SectionLabel>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <SectionLabel>From the lectures</SectionLabel>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <StudyMode
                 title="Q&A"
                 body="Ask questions grounded in published lecture PDFs, in English or German."
@@ -201,6 +201,12 @@ export function CourseHomePage() {
                 state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/search#summary` : undefined}
               />
+            </div>
+          </section>
+
+          <section className="mt-8">
+            <SectionLabel>Practice</SectionLabel>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <StudyMode
                 title="Flashcards"
                 body="Drill key ideas extracted from your course pack."
@@ -385,7 +391,7 @@ function StudyMode({
     return (
       <Link
         to={to}
-        className="surface-panel block rounded-2xl p-4 transition duration-300 hover:-translate-y-0.5 hover:border-accent/35"
+        className="surface-panel block h-full rounded-2xl p-4 transition duration-300 hover:-translate-y-0.5 hover:border-accent/35"
       >
         {content}
       </Link>
@@ -393,7 +399,7 @@ function StudyMode({
   }
 
   return (
-    <article className="surface-panel rounded-2xl p-4 transition duration-300 hover:-translate-y-0.5 hover:border-accent/35">
+    <article className="surface-panel h-full rounded-2xl p-4 transition duration-300 hover:-translate-y-0.5 hover:border-accent/35">
       {content}
     </article>
   )

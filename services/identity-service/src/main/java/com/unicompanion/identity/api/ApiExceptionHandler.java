@@ -9,7 +9,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -63,6 +65,20 @@ public class ApiExceptionHandler {
     ResponseEntity<ErrorResponse> unreadable(HttpServletRequest request) {
         log.warn("Invalid JSON on {} {}", request.getMethod(), request.getRequestURI());
         return ResponseEntity.badRequest().body(body("INVALID_JSON", "Request body is not valid JSON.", request, null));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<ErrorResponse> missing(HttpServletRequest request) {
+        log.info("No resource {} {}", request.getMethod(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(body("NOT_FOUND", "Nothing is available at this address.", request, null));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    ResponseEntity<ErrorResponse> methodNotAllowed(HttpServletRequest request) {
+        log.info("Method not allowed {} {}", request.getMethod(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(body("METHOD_NOT_ALLOWED", "That action is not available here.", request, null));
     }
 
     @ExceptionHandler(Exception.class)

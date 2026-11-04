@@ -113,6 +113,22 @@ class AuthApiTests {
     }
 
     @Test
+    void unknownPathIsNotAnInternalError() throws Exception {
+        MvcResult login = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(ADMIN_EMAIL, ADMIN_PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        mockMvc.perform(get("/api/does-not-exist").header("Authorization", "Bearer " + token(login.getResponse().getContentAsString())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Nothing is available at this address."));
+    }
+
+    @Test
     void loginReturnsAJwtThatIncludesTheRole() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)

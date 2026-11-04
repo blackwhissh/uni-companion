@@ -120,6 +120,7 @@ describe('course search page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Search' }))
 
     expect(await screen.findByText('Sharding partitions data across nodes.')).toBeInTheDocument()
+    expect(screen.getByText(/Drafted from published lecture PDFs/)).toBeInTheDocument()
     expect(screen.queryByText(/student@example.com/)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('radio', { name: 'Deutsch' }))
