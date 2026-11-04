@@ -161,7 +161,7 @@ export function CourseHomePage() {
         <div className="mt-6 rounded-lg border border-accent/25 bg-accent/5 px-4 py-3 text-sm leading-relaxed text-ink-soft" role="status">
           <span className="font-medium text-ink">Preview as student</span>
           {!coursePublished ? ' — this course is still unpublished, so real students cannot open it yet.' : '.'}{' '}
-          You are seeing only published, indexed materials. Enroll above to try Q&A, flashcards, and quiz.
+          You are seeing only published, indexed materials. Enroll above to try Q&A, search, summaries, flashcards, and quiz.
         </div>
       ) : null}
 
@@ -188,6 +188,18 @@ export function CourseHomePage() {
                 body="Ask questions grounded in published lecture PDFs."
                 state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/qa` : undefined}
+              />
+              <StudyMode
+                title="Search"
+                body="Find pages across published lectures."
+                state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
+                to={canOpenStudy ? `/courses/${courseId}/search` : undefined}
+              />
+              <StudyMode
+                title="Summary"
+                body="Read a short summary of one published lecture."
+                state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
+                to={canOpenStudy ? `/courses/${courseId}/search#summary` : undefined}
               />
               <StudyMode
                 title="Flashcards"

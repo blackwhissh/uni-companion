@@ -14,12 +14,45 @@ export type RagAnswer = {
   citations: RagCitation[]
 }
 
-export async function askCourseQuestion(courseId: string, question: string, materialIds: string[]) {
-  const request = () =>
+export type SearchHit = {
+  materialId: string
+  title: string
+  pageNumber: number
+  excerpt: string
+}
+
+export type SearchResult = {
+  hits: SearchHit[]
+}
+
+export function askCourseQuestion(courseId: string, question: string, materialIds: string[]) {
+  return withRetry(() =>
     learningFetch<RagAnswer>('/api/rag/query', {
       method: 'POST',
       body: JSON.stringify({ courseId, question, materialIds }),
-    })
+    }),
+  )
+}
+
+export function searchLectures(courseId: string, query: string) {
+  return withRetry(() =>
+    learningFetch<SearchResult>('/api/rag/search', {
+      method: 'POST',
+      body: JSON.stringify({ courseId, query }),
+    }),
+  )
+}
+
+export function summarizeMaterial(courseId: string, materialId: string) {
+  return withRetry(() =>
+    learningFetch<RagAnswer>('/api/rag/summary', {
+      method: 'POST',
+      body: JSON.stringify({ courseId, materialId }),
+    }),
+  )
+}
+
+async function withRetry<T>(request: () => Promise<T>) {
   try {
     return await request()
   } catch (err) {
