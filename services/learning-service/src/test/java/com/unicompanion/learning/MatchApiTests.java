@@ -238,6 +238,139 @@ class MatchApiTests {
                 .andExpect(jsonPath("$.suggestions", hasSize(0)));
     }
 
+    @Test
+    void contactEmailStaysHiddenUntilTheRecipientAccepts() throws Exception {
+        String courseId = publishedCourse("MATCH-CONTACT");
+        enroll(courseId, STUDENT);
+        enroll(courseId, STUDENT_2);
+        enroll(courseId, STUDENT_3);
+
+        mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + STUDENT_2_ID + "\"}"))
+                .andExpect(status().isForbidden());
+
+        optIn(courseId, STUDENT, "Ada");
+        optIn(courseId, STUDENT_2, "Alan");
+        optIn(courseId, STUDENT_3, "Grace");
+        intents(courseId, STUDENT, "Ada", "STUDY_GROUP");
+        intents(courseId, STUDENT_2, "Alan", "STUDY_GROUP");
+        intents(courseId, STUDENT_3, "Grace", "PROJECT");
+
+        MvcResult requested = mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + STUDENT_2_ID + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestions[0].contact").value("OUTGOING"))
+                .andExpect(jsonPath("$.suggestions[0].email").doesNotExist())
+                .andExpect(jsonPath("$.requests[0].email").doesNotExist())
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("@"))))
+                .andReturn();
+        String requestId = JsonPath.read(requested.getResponse().getContentAsString(), "$.suggestions[0].requestId");
+
+        mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts")
+                        .header("Authorization", STUDENT_2)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + STUDENT_ID + "\"}"))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/suggestions")
+                        .header("Authorization", STUDENT_2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestions[0].contact").value("INCOMING"))
+                .andExpect(jsonPath("$.suggestions[0].email").doesNotExist())
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("@"))));
+
+        mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts/" + requestId + "/accept")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts/" + requestId + "/accept")
+                        .header("Authorization", STUDENT_3))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
+                        .header("Authorization", STUDENT_2)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"optedIn\":false}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/suggestions")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestions", hasSize(0)))
+                .andExpect(jsonPath("$.requests", hasSize(0)))
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("@"))));
+
+        optIn(courseId, STUDENT_2, "Alan");
+        intents(courseId, STUDENT_2, "Alan", "STUDY_GROUP");
+        requested = mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + STUDENT_2_ID + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("@"))))
+                .andReturn();
+        requestId = JsonPath.read(requested.getResponse().getContentAsString(), "$.suggestions[0].requestId");
+
+        mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts/" + requestId + "/decline")
+                        .header("Authorization", STUDENT_2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestions[0].contact").value("NONE"))
+                .andExpect(jsonPath("$.suggestions[0].email").doesNotExist())
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("@"))));
+
+        mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + STUDENT_2_ID + "\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts/" + requestId + "/accept")
+                        .header("Authorization", STUDENT_2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestions[0].email").value("ada@uni.test"))
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("alan@uni.test"))));
+
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/suggestions")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestions[0].email").value("alan@uni.test"))
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("ada@uni.test"))));
+
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/suggestions")
+                        .header("Authorization", STUDENT_3))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("ada@uni.test"))))
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("alan@uni.test"))));
+
+        mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + STUDENT_3_ID + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
+                        .header("Authorization", STUDENT_2)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"optedIn\":false}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/suggestions")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requests[0].status").value("ACCEPTED"))
+                .andExpect(jsonPath("$.requests[0].email").value("alan@uni.test"));
+    }
+
+    private void intents(String courseId, String bearer, String displayName, String... selected) throws Exception {
+        String joined = "\"" + String.join("\",\"", selected) + "\"";
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/intents")
+                        .header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"" + displayName + "\",\"intents\":[" + joined + "]}"))
+                .andExpect(status().isOk());
+    }
+
     private void optIn(String courseId, String bearer, String displayName) throws Exception {
         mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
                         .header("Authorization", bearer)

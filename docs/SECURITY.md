@@ -67,7 +67,7 @@ Gemini is an **external processor**. Send only required chunks + question.
 | Transport | HTTPS in non-local deployments |
 | AI disclosure | UI states answers may be wrong (NFR-050) |
 | Copyright | No public material marketplace; admin-sourced canonical files |
-| Matching | Opt-in only. Suggestions show display name and shared intents to other opted-in classmates in that course. Email is not included. |
+| Matching | Opt-in only. Suggestions show display name and shared intents to other opted-in classmates in that course. Email is stored for a contact request and shown only to the two students after accept. |
 
 ## 7. Gemini-specific notes
 
