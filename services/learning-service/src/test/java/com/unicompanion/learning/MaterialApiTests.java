@@ -34,6 +34,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -352,6 +353,107 @@ class MaterialApiTests {
 
         mockMvc.perform(get("/api/courses/" + courseId + "/materials").header("Authorization", STUDENT))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void replacingAPublishedPdfRemovesTheOldTextAndRetiresSavedStudy() throws Exception {
+        String courseId = createCourse("MAT-REPLACE");
+        publishCourse(courseId);
+        enroll(courseId);
+        byte[] original = pdfBytes("Consensus algorithms");
+        String materialId = upload(courseId, "Lecture 1", "lecture.pdf", original);
+        publishMaterial(materialId);
+
+        mockMvc.perform(post("/api/rag/query")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","question":"What does the lecture explain?","materialIds":["%s"]}
+                                """.formatted(courseId, materialId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", containsString("Consensus algorithms")));
+
+        mockMvc.perform(post("/api/study/courses/" + courseId + "/flashcards/generate")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"materialIds\":[\"" + materialId + "\"]}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(multipart("/api/materials/" + materialId + "/file")
+                        .file(new MockMultipartFile("file", "notes.txt", "text/plain", pdfBytes("Byzantine fault tolerance")))
+                        .header("Authorization", ADMIN))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(multipart("/api/materials/" + materialId + "/file")
+                        .file(pdf("replacement.pdf", "Byzantine fault tolerance"))
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(multipart("/api/materials/" + materialId + "/file")
+                        .file(pdf("replacement.pdf", "Byzantine fault tolerance"))
+                        .header("Authorization", OTHER_ADMIN))
+                .andExpect(status().isForbidden());
+
+        byte[] replacement = pdfBytes("Byzantine fault tolerance");
+        mockMvc.perform(multipart("/api/materials/" + materialId + "/file")
+                        .file(new MockMultipartFile("file", "replacement.pdf", "application/pdf", replacement))
+                        .header("Authorization", ADMIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(materialId))
+                .andExpect(jsonPath("$.title").value("Lecture 1"))
+                .andExpect(jsonPath("$.fileName").value("replacement.pdf"))
+                .andExpect(jsonPath("$.visibility").value("PUBLISHED"))
+                .andExpect(jsonPath("$.processingStatus").value("READY"));
+
+        String chunkText = String.join("\n", jdbc.queryForList(
+                "select content from material_chunks where material_id = ?::uuid",
+                String.class,
+                materialId));
+        assertThat(chunkText).contains("Byzantine fault tolerance");
+        assertThat(chunkText).doesNotContain("Consensus algorithms");
+
+        mockMvc.perform(get("/api/materials/" + materialId + "/file").header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", containsString("replacement.pdf")))
+                .andExpect(content().bytes(replacement));
+
+        mockMvc.perform(post("/api/rag/query")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","question":"What does the lecture explain?","materialIds":["%s"]}
+                                """.formatted(courseId, materialId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", containsString("Byzantine fault tolerance")))
+                .andExpect(jsonPath("$.answer", not(containsString("Consensus algorithms"))));
+
+        mockMvc.perform(get("/api/study/courses/" + courseId + "/flashcards")
+                        .param("materialIds", materialId)
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void failedReplacementHidesTheMaterialUntilItCanBeIndexed() throws Exception {
+        String courseId = createCourse("MAT-REPLACE-FAIL");
+        publishCourse(courseId);
+        enroll(courseId);
+        String materialId = upload(courseId, "Lecture 1", "lecture.pdf", pdfBytes("Consensus algorithms"));
+        publishMaterial(materialId);
+
+        mockMvc.perform(multipart("/api/materials/" + materialId + "/file")
+                        .file(new MockMultipartFile("file", "broken.pdf", "application/pdf", "not a pdf".getBytes()))
+                        .header("Authorization", ADMIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visibility").value("PUBLISHED"))
+                .andExpect(jsonPath("$.processingStatus").value("FAILED"));
+
+        Integer chunks = jdbc.queryForObject(
+                "select count(*) from material_chunks where material_id = ?::uuid",
+                Integer.class,
+                materialId);
+        assertThat(chunks).isZero();
+        mockMvc.perform(get("/api/courses/" + courseId + "/materials").header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
     }
 
     private String createCourse(String code) throws Exception {

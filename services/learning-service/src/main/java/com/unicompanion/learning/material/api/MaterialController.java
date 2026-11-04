@@ -65,6 +65,26 @@ public class MaterialController {
         return MaterialResponse.from(accepted);
     }
 
+    @PostMapping(path = "/api/materials/{id}/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public MaterialResponse replace(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "title", required = false) String title
+    ) {
+        materials.replace(
+                id,
+                userId(jwt),
+                title,
+                file.getOriginalFilename(),
+                file.getContentType(),
+                bytes(file),
+                isPlatformAdmin(jwt)
+        );
+        extraction.extract(id);
+        return MaterialResponse.from(materials.get(id));
+    }
+
     @GetMapping("/api/courses/{courseId}/materials")
     public List<MaterialResponse> list(@PathVariable UUID courseId, @AuthenticationPrincipal Jwt jwt) {
         return materials.list(courseId, userId(jwt), isAdmin(jwt)).stream().map(MaterialResponse::from).toList();

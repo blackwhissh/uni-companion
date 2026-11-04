@@ -88,6 +88,15 @@ public class MaterialEntity {
         this.updatedAt = now;
     }
 
+    public void replaceFile(String title, String fileName, String storagePath, Instant now) {
+        this.title = title;
+        this.fileName = fileName;
+        this.storagePath = storagePath;
+        this.processingStatus = ProcessingStatus.UPLOADED;
+        this.failureReason = null;
+        this.updatedAt = now;
+    }
+
     public UUID getId() {
         return id;
     }

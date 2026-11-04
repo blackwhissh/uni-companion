@@ -26,6 +26,12 @@ export function uploadMaterial(courseId: string, file: File, title: string) {
   return learningUpload<Material>(`/api/courses/${courseId}/materials`, body)
 }
 
+export function replaceMaterial(id: string, file: File) {
+  const body = new FormData()
+  body.append('file', file)
+  return learningUpload<Material>(`/api/materials/${id}/file`, body)
+}
+
 export function setMaterialVisibility(id: string, visibility: Material['visibility']) {
   return learningFetch<Material>(`/api/materials/${id}/visibility`, {
     method: 'PATCH',

@@ -22,6 +22,7 @@ import {
   deleteMaterial,
   downloadMaterial,
   listMaterials,
+  replaceMaterial,
   setMaterialVisibility,
   uploadMaterial,
 } from '../courses/material-api.ts'
@@ -49,6 +50,9 @@ export function AdminMaterialsPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [replacing, setReplacing] = useState<Material | null>(null)
+  const [replacement, setReplacement] = useState<File | null>(null)
+  const [replaceKey, setReplaceKey] = useState(0)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<{
     kind: 'publish' | 'unpublish' | 'delete'
@@ -101,6 +105,25 @@ export function AdminMaterialsPage() {
     },
   })
 
+  const replace = useMutation({
+    mutationFn: () => replaceMaterial(replacing?.id ?? '', replacement as File),
+    onSuccess: async (updated) => {
+      setReplacing(null)
+      setReplacement(null)
+      setReplaceKey((current) => current + 1)
+      setError(null)
+      setNotice(
+        updated.processingStatus === 'READY'
+          ? `Replaced “${updated.title}”. Students now study the new PDF.`
+          : `Replaced “${updated.title}”. Students cannot study it until it is Indexed again.`,
+      )
+      await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
+    },
+    onError: (err) => {
+      setError(err instanceof ApiError ? err.message : 'Could not replace the PDF.')
+    },
+  })
+
   const remove = useMutation({
     mutationFn: ({ id }: { id: string; title: string }) => deleteMaterial(id),
     onSuccess: async (_data, variables) => {
@@ -127,6 +150,24 @@ export function AdminMaterialsPage() {
   function closeForm() {
     resetForm()
     setFormOpen(false)
+  }
+
+  function openReplace(material: Material) {
+    setFormOpen(false)
+    resetForm()
+    setReplacing(material)
+    setReplacement(null)
+    setReplaceKey((current) => current + 1)
+    setError(null)
+  }
+
+  function onReplace(event: FormEvent) {
+    event.preventDefault()
+    if (!replacement) {
+      setError('Choose a PDF.')
+      return
+    }
+    replace.mutate()
   }
 
   function requestPublishToggle(material: Material) {
@@ -196,7 +237,7 @@ export function AdminMaterialsPage() {
         <PageHeader
           eyebrow="Materials"
           title={course.data?.title ?? 'Materials'}
-          description="Upload lecture PDFs, wait until they are Indexed, then publish so enrolled students can study. Indexed means the PDF is searchable — it is not student-visible until Published."
+          description="Upload lecture PDFs, wait until they are Indexed, then publish so enrolled students can study. Replace a PDF to drop the old text and index the new file. Indexed means the PDF is searchable — it is not student-visible until Published."
           actions={
             <div className="flex flex-wrap gap-2">
               {course.data?.visibility === 'PUBLISHED' || canManage ? (
@@ -255,7 +296,43 @@ export function AdminMaterialsPage() {
         </Panel>
       ) : null}
 
-      {!formOpen && error ? (
+      {canManage && replacing ? (
+        <Panel className="mt-8 animate-rise">
+          <div className="flex items-center justify-between gap-3">
+            <SectionLabel>Replace PDF</SectionLabel>
+            <Button type="button" variant="ghost" onClick={() => setReplacing(null)}>
+              Cancel
+            </Button>
+          </div>
+          <p className="mt-3 text-sm leading-relaxed text-muted">
+            Replacing “{replacing.title}” removes the old indexed text. Students study the new PDF once it is Indexed
+            again. Saved flashcards and quizzes from this file are retired.
+          </p>
+          <form className="mt-4 flex max-w-md flex-col gap-4" onSubmit={onReplace}>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink-soft">
+              New PDF
+              <input
+                key={replaceKey}
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={(event) => setReplacement(event.target.files?.[0] ?? null)}
+                className="rounded-lg border border-dashed border-line bg-white/60 px-3 py-3 text-base font-normal text-ink file:mr-3 file:rounded-md file:border-0 file:bg-mist file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink"
+              />
+            </label>
+            {error ? <Alert>{error}</Alert> : null}
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={replace.isPending}>
+                Replace file
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setReplacing(null)}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </Panel>
+      ) : null}
+
+      {!formOpen && !replacing && error ? (
         <div className="mt-8">
           <Alert>{error}</Alert>
         </div>
@@ -296,7 +373,7 @@ export function AdminMaterialsPage() {
                     className="absolute inset-0 cursor-pointer rounded-2xl"
                   />
                   <div className="pointer-events-none relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-medium text-ink">{material.title}</p>
                       <p className="mt-1 text-sm text-muted">
                         {material.fileName} · {labelFor(material.processingStatus)} ·{' '}
@@ -332,7 +409,7 @@ export function AdminMaterialsPage() {
                         <p className="mt-2 text-sm text-danger">{material.failureReason}</p>
                       ) : null}
                     </div>
-                    <div className="pointer-events-auto flex flex-wrap gap-2">
+                    <div className="pointer-events-auto flex shrink-0 flex-wrap gap-2">
                       <Button
                         type="button"
                         variant="secondary"
@@ -357,6 +434,11 @@ export function AdminMaterialsPage() {
                           onClick={() => requestPublishToggle(material)}
                         >
                           {material.visibility === 'PUBLISHED' ? 'Unpublish' : 'Publish'}
+                        </Button>
+                      ) : null}
+                      {canManage ? (
+                        <Button type="button" variant="secondary" disabled={replace.isPending} onClick={() => openReplace(material)}>
+                          Replace PDF
                         </Button>
                       ) : null}
                       {canManage ? (

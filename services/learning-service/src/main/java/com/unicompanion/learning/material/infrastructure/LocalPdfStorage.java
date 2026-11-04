@@ -37,6 +37,18 @@ public class LocalPdfStorage {
         return Files.readAllBytes(resolved);
     }
 
+    public void deleteFile(String relativePath) {
+        Path resolved = root.resolve(relativePath).normalize();
+        if (!resolved.startsWith(root.normalize())) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(resolved);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
     public void delete(UUID materialId) {
         Path directory = root.resolve(materialId.toString()).normalize();
         if (!directory.startsWith(root.normalize()) || !Files.exists(directory)) {

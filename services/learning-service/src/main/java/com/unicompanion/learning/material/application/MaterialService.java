@@ -10,6 +10,8 @@ import com.unicompanion.learning.material.infrastructure.LocalPdfStorage;
 import com.unicompanion.learning.material.infrastructure.MaterialChunkRepository;
 import com.unicompanion.learning.material.infrastructure.MaterialEntity;
 import com.unicompanion.learning.material.infrastructure.MaterialRepository;
+import com.unicompanion.learning.study.infrastructure.FlashcardDeckRepository;
+import com.unicompanion.learning.study.infrastructure.QuizRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -34,19 +36,25 @@ public class MaterialService {
     private final MaterialRepository materials;
     private final MaterialChunkRepository chunks;
     private final LocalPdfStorage storage;
+    private final FlashcardDeckRepository decks;
+    private final QuizRepository quizzes;
 
     public MaterialService(
             CourseRepository courses,
             EnrollmentRepository enrollments,
             MaterialRepository materials,
             MaterialChunkRepository chunks,
-            LocalPdfStorage storage
+            LocalPdfStorage storage,
+            FlashcardDeckRepository decks,
+            QuizRepository quizzes
     ) {
         this.courses = courses;
         this.enrollments = enrollments;
         this.materials = materials;
         this.chunks = chunks;
         this.storage = storage;
+        this.decks = decks;
+        this.quizzes = quizzes;
     }
 
     @Transactional
@@ -87,6 +95,59 @@ public class MaterialService {
                 platformAdmin
         );
         return saved;
+    }
+
+    @Transactional
+    public MaterialEntity replace(
+            UUID materialId,
+            UUID userId,
+            String title,
+            String fileName,
+            String contentType,
+            byte[] bytes,
+            boolean platformAdmin
+    ) {
+        MaterialEntity material = materials.findById(materialId).orElseThrow(MaterialService::notFound);
+        CourseEntity course = courses.findById(material.getCourseId()).orElseThrow(MaterialService::notFound);
+        boolean owner = course.getOwnerId().equals(userId);
+        if (!owner && !platformAdmin) {
+            log.warn("Replace denied: user={} material={}", userId, materialId);
+            throw forbidden();
+        }
+        String safeName = fileName(fileName);
+        if (bytes.length == 0 || !safeName.toLowerCase(Locale.ROOT).endsWith(".pdf") || !isPdf(contentType)) {
+            log.warn("Replace rejected: invalid PDF material={} fileName={} contentType={} bytes={}",
+                    materialId, safeName, contentType, bytes.length);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Upload a PDF file.");
+        }
+        String nextTitle = title == null || title.isBlank() ? material.getTitle() : materialTitle(title, safeName);
+        Instant now = Instant.now();
+        String previousPath = material.getStoragePath();
+        String storagePath = storage.store(materialId, safeName, bytes);
+        material.replaceFile(nextTitle, safeName, storagePath, now);
+        materials.saveAndFlush(material);
+        chunks.deleteByMaterialId(materialId);
+        decks.retireForMaterial(materialId, now, "The PDF was replaced.");
+        quizzes.retireForMaterial(materialId, now, "The PDF was replaced.");
+        if (!previousPath.equals(storagePath)) {
+            storage.deleteFile(previousPath);
+        }
+        log.info(
+                "Replaced material id={} course={} fileName={} bytes={} by={} owner={} platformAdmin={}",
+                materialId,
+                course.getId(),
+                safeName,
+                bytes.length,
+                userId,
+                owner,
+                platformAdmin
+        );
+        return material;
+    }
+
+    @Transactional(readOnly = true)
+    public MaterialEntity get(UUID materialId) {
+        return materials.findById(materialId).orElseThrow(MaterialService::notFound);
     }
 
     @Transactional(readOnly = true)
