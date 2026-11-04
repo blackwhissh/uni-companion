@@ -6,6 +6,10 @@ describe('homePathFor', () => {
     expect(homePathFor(['COURSE_ADMIN'])).toBe('/admin/courses')
   })
 
+  it('sends a platform admin to the admin panel', () => {
+    expect(homePathFor(['ADMIN', 'COURSE_ADMIN'])).toBe('/admin')
+  })
+
   it('sends a student to their courses', () => {
     expect(homePathFor(['STUDENT'])).toBe('/courses')
   })

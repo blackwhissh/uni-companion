@@ -77,6 +77,18 @@ public class UserAccount {
         this.updatedAt = now;
     }
 
+    public void setCourseAdmin(boolean granted, Instant now) {
+        if (granted) {
+            this.roles.add(Role.COURSE_ADMIN);
+        } else {
+            this.roles.remove(Role.COURSE_ADMIN);
+            if (this.roles.isEmpty()) {
+                this.roles.add(Role.STUDENT);
+            }
+        }
+        this.updatedAt = now;
+    }
+
     public UUID getId() {
         return id;
     }
