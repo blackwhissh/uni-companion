@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import { useAuth } from '../auth/use-auth.ts'
+import { GroundedNote } from '../../shared/ui/GroundedNote.tsx'
 import {
   Alert,
   BackLink,
@@ -356,6 +357,7 @@ export function CourseQuizPage() {
               <SectionLabel>
                 Shared quiz {quiz.version} of {quiz.availableVersions} · {quiz.questions.length} questions
               </SectionLabel>
+              <GroundedNote className="mt-2" />
               <StudyVersionControls
                 noun="quiz"
                 delivery={quiz.delivery}
