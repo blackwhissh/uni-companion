@@ -287,6 +287,35 @@ describe('material pages', () => {
     expect(await screen.findByText('No materials yet.')).toBeInTheDocument()
   })
 
+  it('replaces a published PDF and tells the admin the new file is indexed', async () => {
+    setAccessToken('admin-token')
+    let materials: Material[] = [{ ...ready, visibility: 'PUBLISHED', fileName: 'lecture.pdf' }]
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/file') && (init?.method ?? 'GET') === 'POST') {
+        const body = init?.body as FormData
+        expect(body.get('file')).toBeInstanceOf(File)
+        materials = [{ ...ready, visibility: 'PUBLISHED', fileName: 'replacement.pdf', processingStatus: 'READY' }]
+        return json(materials[0])
+      }
+      if (String(url).endsWith('/materials')) {
+        return json(materials)
+      }
+      return json(course)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAt('/admin/courses/course-1/materials', <AdminMaterialsPage />)
+
+    expect(await screen.findByText('lecture.pdf · Indexed · Published')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Replace PDF' }))
+    expect(screen.getByText(/removes the old indexed text/)).toBeInTheDocument()
+    const file = new File(['%PDF'], 'replacement.pdf', { type: 'application/pdf' })
+    fireEvent.change(screen.getByLabelText('New PDF'), { target: { files: [file] } })
+    fireEvent.click(screen.getByRole('button', { name: 'Replace file' }))
+    expect(await screen.findByText('replacement.pdf · Indexed · Published')).toBeInTheDocument()
+    expect(screen.getByText(/Students now study the new PDF/)).toBeInTheDocument()
+  })
+
   it('shows an enrolled student only the materials the API returns', async () => {
     setAccessToken('student-token')
     vi.stubGlobal(
