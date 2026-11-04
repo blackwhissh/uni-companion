@@ -1,3 +1,14 @@
+export const COLLABORATION_INTENTS = [
+  { id: 'STUDY_GROUP', label: 'Study group' },
+  { id: 'PROJECT', label: 'Project' },
+  { id: 'THESIS', label: 'Thesis' },
+  { id: 'LANGUAGE', label: 'Language practice' },
+] as const
+
+export function intentLabel(id: string) {
+  return COLLABORATION_INTENTS.find((intent) => intent.id === id)?.label ?? id
+}
+
 /** Honest study-partner count. The number is the live opt-in total for one course. */
 export function matchCountLabel(activeCount: number, optedIn: boolean): string {
   const count = Number.isFinite(activeCount) ? Math.max(0, Math.floor(activeCount)) : 0
