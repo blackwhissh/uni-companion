@@ -7,6 +7,7 @@ import { CourseFlashcardsPage } from '../features/courses/CourseFlashcardsPage.t
 import { CourseHomePage } from '../features/courses/CourseHomePage.tsx'
 import { CourseQaPage } from '../features/courses/CourseQaPage.tsx'
 import { CourseSearchPage } from '../features/courses/CourseSearchPage.tsx'
+import { CoursePlanPage } from '../features/courses/CoursePlanPage.tsx'
 import { CourseProgressPage } from '../features/courses/CourseProgressPage.tsx'
 import { CourseQuizPage } from '../features/courses/CourseQuizPage.tsx'
 import { CoursesPage } from '../features/courses/CoursesPage.tsx'
@@ -60,6 +61,14 @@ export function AppRouter() {
             element={
               <RequireAuth>
                 <CourseFlashcardsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/courses/:courseId/plan"
+            element={
+              <RequireAuth>
+                <CoursePlanPage />
               </RequireAuth>
             }
           />

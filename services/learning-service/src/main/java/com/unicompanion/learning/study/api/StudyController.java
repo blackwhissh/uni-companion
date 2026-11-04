@@ -2,6 +2,8 @@ package com.unicompanion.learning.study.api;
 
 import com.unicompanion.learning.study.application.ProgressService;
 import com.unicompanion.learning.study.application.ProgressSummary;
+import com.unicompanion.learning.study.application.StudyPlan;
+import com.unicompanion.learning.study.application.StudyPlanService;
 import com.unicompanion.learning.study.application.StudyService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
@@ -13,11 +15,13 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,10 +31,12 @@ public class StudyController {
 
     private final StudyService study;
     private final ProgressService progress;
+    private final StudyPlanService plans;
 
-    public StudyController(StudyService study, ProgressService progress) {
+    public StudyController(StudyService study, ProgressService progress, StudyPlanService plans) {
         this.study = study;
         this.progress = progress;
+        this.plans = plans;
     }
 
     @GetMapping("/courses/{courseId}/progress")
@@ -39,6 +45,23 @@ public class StudyController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         return progress.view(courseId, userId(jwt));
+    }
+
+    @GetMapping("/courses/{courseId}/plan")
+    public StudyPlan.Result plan(
+            @PathVariable UUID courseId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return plans.view(courseId, userId(jwt));
+    }
+
+    @PutMapping("/courses/{courseId}/plan")
+    public StudyPlan.Result savePlan(
+            @PathVariable UUID courseId,
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody PlanRequest request
+    ) {
+        return plans.save(courseId, userId(jwt), request.examDate());
     }
 
     @PostMapping("/courses/{courseId}/flashcards/generate")
@@ -159,6 +182,9 @@ public class StudyController {
 
     private static UUID userId(Jwt jwt) {
         return UUID.fromString(jwt.getSubject());
+    }
+
+    public record PlanRequest(@NotNull LocalDate examDate) {
     }
 
     public record GenerateRequest(List<UUID> materialIds) {

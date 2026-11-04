@@ -23,6 +23,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.io.ByteArrayOutputStream;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -35,6 +37,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -461,6 +464,76 @@ class StudyApiTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"reason\":\"Duplicate and unclear cards\"}"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void studyPlanSchedulesAMissedQuestionBeforeTheExam() throws Exception {
+        ReadyCourse ready = readyCourse("STDY-PLAN");
+        LocalDate today = LocalDate.now(ZoneId.of("Europe/Berlin"));
+        LocalDate exam = today.plusDays(2);
+
+        mockMvc.perform(put("/api/study/courses/" + ready.courseId() + "/plan")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"examDate\":\"" + exam + "\"}"))
+                .andExpect(status().isForbidden());
+
+        enroll(ready.courseId(), STUDENT);
+        enroll(ready.courseId(), STUDENT_2);
+
+        mockMvc.perform(get("/api/study/courses/" + ready.courseId() + "/plan")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(put("/api/study/courses/" + ready.courseId() + "/plan")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"examDate\":\"" + today.minusDays(1) + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(put("/api/study/courses/" + ready.courseId() + "/plan")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"examDate\":\"" + exam + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.examDate").value(exam.toString()))
+                .andExpect(jsonPath("$.daysUntilExam").value(2))
+                .andExpect(jsonPath("$.steps[0].kind").value("QUIZ"))
+                .andExpect(jsonPath("$.steps[0].date").value(today.toString()))
+                .andExpect(jsonPath("$.steps[1].kind").value("REVIEW"))
+                .andExpect(jsonPath("$.steps[1].date").value(exam.toString()));
+
+        MvcResult generated = mockMvc.perform(post("/api/study/courses/" + ready.courseId() + "/quizzes/generate")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(generateBody(ready.materialId())))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String quizId = JsonPath.read(generated.getResponse().getContentAsString(), "$.id");
+        String questionId = JsonPath.read(generated.getResponse().getContentAsString(), "$.questions[0].id");
+        String prompt = JsonPath.read(generated.getResponse().getContentAsString(), "$.questions[0].prompt");
+
+        mockMvc.perform(post("/api/study/quizzes/" + quizId + "/submit")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"answers":[{"questionId":"%s","selectedIndex":1}]}
+                                """.formatted(questionId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.score").value(0));
+
+        mockMvc.perform(get("/api/study/courses/" + ready.courseId() + "/plan")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.steps[0].kind").value("GAP"))
+                .andExpect(jsonPath("$.steps[0].date").value(today.toString()))
+                .andExpect(jsonPath("$.steps[0].prompt").value(prompt))
+                .andExpect(jsonPath("$.steps[1].kind").value("REVIEW"))
+                .andExpect(jsonPath("$.steps[1].date").value(exam.toString()));
+
+        mockMvc.perform(get("/api/study/courses/" + ready.courseId() + "/plan")
+                        .header("Authorization", STUDENT_2))
+                .andExpect(status().isNotFound());
     }
 
     private ReadyCourse readyCourse(String code) throws Exception {

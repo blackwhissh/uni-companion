@@ -214,6 +214,12 @@ export function CourseHomePage() {
                 to={canOpenStudy ? `/courses/${courseId}/quiz` : undefined}
               />
               <StudyMode
+                title="Plan"
+                body="Schedule missed quiz questions before an exam date."
+                state={enrolled ? 'Open' : ownerPreview ? 'Enroll to try' : 'Enroll to open'}
+                to={enrolled ? `/courses/${courseId}/plan` : undefined}
+              />
+              <StudyMode
                 title="Progress"
                 body="See quiz scores and the questions you still miss."
                 state={enrolled ? 'Open' : ownerPreview ? 'Enroll to try' : 'Enroll to open'}
