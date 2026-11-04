@@ -17,6 +17,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.util.UUID;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -94,6 +95,46 @@ class MatchApiTests {
                         .header("Authorization", STUDENT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"optedIn\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.optedIn").value(false))
+                .andExpect(jsonPath("$.activeCount").value(1));
+    }
+
+    @Test
+    void unenrollRemovesTheStudentFromTheActiveCount() throws Exception {
+        String courseId = publishedCourse("MATCH-LEAVE");
+        enroll(courseId, STUDENT);
+        enroll(courseId, STUDENT_2);
+
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"optedIn\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activeCount").value(1));
+        mockMvc.perform(put("/api/match/courses/" + courseId + "/opt-in")
+                        .header("Authorization", STUDENT_2)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"optedIn\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activeCount").value(2));
+
+        mockMvc.perform(delete("/api/courses/" + courseId + "/enroll")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/active-count")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/active-count")
+                        .header("Authorization", STUDENT_2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.optedIn").value(true))
+                .andExpect(jsonPath("$.activeCount").value(1));
+
+        enroll(courseId, STUDENT);
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/active-count")
+                        .header("Authorization", STUDENT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.optedIn").value(false))
                 .andExpect(jsonPath("$.activeCount").value(1));

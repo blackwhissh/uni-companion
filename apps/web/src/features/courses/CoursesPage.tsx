@@ -45,10 +45,8 @@ export function CoursesPage() {
       await queryClient.invalidateQueries({ queryKey: ['courses'] })
       window.setTimeout(() => setPinnedEnrolledId((current) => (current === courseId ? null : current)), 1500)
     },
-    onError: () => {
-      setPinnedEnrolledId(null)
-    },
     onError: (err) => {
+      setPinnedEnrolledId(null)
       setNotice(null)
       setError(err instanceof ApiError ? err.message : 'Could not enroll.')
     },

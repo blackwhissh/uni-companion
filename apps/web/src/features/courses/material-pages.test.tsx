@@ -67,22 +67,55 @@ describe('material pages', () => {
     return json({ optedIn, activeCount })
   }
 
-  it('explains that peer matching is not available yet', async () => {
+  it('opts in to study partners only after consent and can opt out again', async () => {
     setAccessToken('student-token')
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string) => {
-        if (String(url).endsWith('/materials')) {
-          return json([{ ...ready, visibility: 'PUBLISHED' }])
-        }
-        return json({ ...course, enrolled: true })
+    let optedIn = false
+    let activeCount = 0
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/opt-in')) {
+        const body = JSON.parse(String(init?.body)) as { optedIn: boolean }
+        optedIn = body.optedIn
+        activeCount = optedIn ? 1 : 0
+        return json({ optedIn, activeCount })
+      }
+      if (String(url).endsWith('/active-count')) {
+        return matchStatus(optedIn, activeCount)
+      }
+      if (String(url).endsWith('/materials')) {
+        return json([{ ...ready, visibility: 'PUBLISHED' }])
+      }
+      return json({ ...course, enrolled: true, owned: false })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAt('/courses/course-1', <CourseHomePage />, {
+      id: 'student-1',
+      email: 'student@uni-companion.test',
+      displayName: 'Student',
+      interests: null,
+      roles: ['STUDENT'],
+      createdAt: '2026-01-01T00:00:00Z',
+    })
+
+    expect(await screen.findByText(/No students in this course are looking for a study partner yet/)).toBeInTheDocument()
+    expect(screen.getByText(/Your name and email stay private/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Opt in to study partners' }))
+    const consent = await screen.findByRole('alertdialog')
+    expect(within(consent).getByText(/not your name or email/)).toBeInTheDocument()
+    fireEvent.click(within(consent).getByRole('button', { name: 'Opt in' }))
+
+    expect(await screen.findByText(/You are the only student in this course looking for a study partner/)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8082/api/match/courses/course-1/opt-in',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ optedIn: true }),
       }),
     )
 
-    renderAt('/courses/course-1', <CourseHomePage />)
-
-    expect(await screen.findByText(/Study-partner matching is not available yet/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Find study partners' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stop sharing' }))
+    expect(await screen.findByText(/No students in this course are looking for a study partner yet/)).toBeInTheDocument()
   })
 
   it('lets an admin upload a PDF and publish it', async () => {

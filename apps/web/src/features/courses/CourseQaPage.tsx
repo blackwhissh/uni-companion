@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useParams } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import {
   Alert,
@@ -31,6 +31,7 @@ const MATERIALS_GONE =
 
 export function CourseQaPage() {
   const { courseId = '' } = useParams()
+  const [searchParams] = useSearchParams()
   const { ready: authReady } = useAuth()
   const course = useQuery({
     queryKey: ['courses', courseId],
@@ -45,7 +46,7 @@ export function CourseQaPage() {
     enabled: course.data?.enrolled === true,
     retry: false,
   })
-  const [question, setQuestion] = useState('')
+  const [question, setQuestion] = useState(() => (searchParams.get('question') ?? '').slice(0, QUESTION_MAX))
   const [askedQuestion, setAskedQuestion] = useState<string | null>(null)
   const [result, setResult] = useState<RagAnswer | null>(null)
   const [error, setError] = useState<string | null>(null)

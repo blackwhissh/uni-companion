@@ -6,6 +6,7 @@ import com.unicompanion.learning.course.infrastructure.CourseRepository;
 import com.unicompanion.learning.course.infrastructure.EnrollmentEntity;
 import com.unicompanion.learning.course.infrastructure.EnrollmentKey;
 import com.unicompanion.learning.course.infrastructure.EnrollmentRepository;
+import com.unicompanion.learning.matching.application.MatchingService;
 import com.unicompanion.learning.material.infrastructure.LocalPdfStorage;
 import com.unicompanion.learning.material.infrastructure.MaterialChunkRepository;
 import com.unicompanion.learning.material.infrastructure.MaterialEntity;
@@ -32,19 +33,22 @@ public class CourseService {
     private final MaterialRepository materials;
     private final MaterialChunkRepository chunks;
     private final LocalPdfStorage storage;
+    private final MatchingService matching;
 
     public CourseService(
             CourseRepository courses,
             EnrollmentRepository enrollments,
             MaterialRepository materials,
             MaterialChunkRepository chunks,
-            LocalPdfStorage storage
+            LocalPdfStorage storage,
+            MatchingService matching
     ) {
         this.courses = courses;
         this.enrollments = enrollments;
         this.materials = materials;
         this.chunks = chunks;
         this.storage = storage;
+        this.matching = matching;
     }
 
     @Transactional
@@ -149,6 +153,7 @@ public class CourseService {
             throw notFound();
         }
         enrollments.deleteById(new EnrollmentKey(courseId, userId));
+        matching.clearOptIn(courseId, userId);
         log.info("Unenrolled user={} from course={}", userId, courseId);
     }
 
