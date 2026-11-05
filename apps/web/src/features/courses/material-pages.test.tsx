@@ -316,6 +316,34 @@ describe('material pages', () => {
     expect(screen.getByText(/Students now study the new PDF/)).toBeInTheDocument()
   })
 
+  it('lets an admin retry a failed PDF without re-uploading', async () => {
+    setAccessToken('admin-token')
+    let materials: Material[] = [
+      {
+        ...ready,
+        processingStatus: 'FAILED',
+        failureReason: 'Temporary embedding quota',
+      },
+    ]
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith('/retry') && init?.method === 'POST') {
+        materials = [{ ...ready, processingStatus: 'READY' }]
+        return json(materials[0])
+      }
+      if (String(url).endsWith('/materials')) {
+        return json(materials)
+      }
+      return json(course)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAt('/admin/courses/course-1/materials', <AdminMaterialsPage />)
+
+    expect(await screen.findByText('Temporary embedding quota')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry indexing' }))
+    expect(await screen.findByText('Indexed “Lecture 1”.')).toBeInTheDocument()
+  })
+
   it('shows an enrolled student only the materials the API returns', async () => {
     setAccessToken('student-token')
     vi.stubGlobal(

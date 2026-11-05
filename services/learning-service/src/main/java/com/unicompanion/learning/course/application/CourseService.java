@@ -102,6 +102,26 @@ public class CourseService {
     }
 
     @Transactional
+    public CourseDetails changeOwner(UUID courseId, UUID nextOwnerId, UUID userId, boolean platformAdmin) {
+        CourseEntity course = courses.findById(courseId).orElseThrow(CourseService::notFound);
+        boolean owner = course.getOwnerId().equals(userId);
+        if (!owner && !platformAdmin) {
+            log.warn("Owner change denied: user={} course={} nextOwner={}", userId, courseId, nextOwnerId);
+            throw forbidden();
+        }
+        course.changeOwner(nextOwnerId, Instant.now());
+        log.info(
+                "Course owner changed id={} nextOwner={} by={} owner={} platformAdmin={}",
+                courseId,
+                nextOwnerId,
+                userId,
+                owner,
+                platformAdmin
+        );
+        return details(course, userId, enrollments.existsById(new EnrollmentKey(courseId, userId)));
+    }
+
+    @Transactional
     public void delete(UUID courseId, UUID userId, boolean platformAdmin) {
         CourseEntity course = courses.findById(courseId).orElseThrow(CourseService::notFound);
         boolean owner = course.getOwnerId().equals(userId);

@@ -34,6 +34,8 @@ export default defineConfig(({ mode }) => {
             proxy: {
               '/api/auth': serviceProxy('http://127.0.0.1:8081'),
               '/api/me': serviceProxy('http://127.0.0.1:8081'),
+              '/api/admin/accounts': serviceProxy('http://127.0.0.1:8081'),
+              '/api/admin/courses': serviceProxy('http://127.0.0.1:8082'),
               '/api/courses': serviceProxy('http://127.0.0.1:8082'),
               '/api/materials': serviceProxy('http://127.0.0.1:8082'),
               '/api/study': serviceProxy('http://127.0.0.1:8082'),
@@ -42,6 +44,18 @@ export default defineConfig(({ mode }) => {
             },
           }
         : {}),
+    },
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              { name: 'katex', test: /node_modules[\\/]katex/ },
+              { name: 'vendor', test: /node_modules/ },
+            ],
+          },
+        },
+      },
     },
     test: {
       environment: 'jsdom',
