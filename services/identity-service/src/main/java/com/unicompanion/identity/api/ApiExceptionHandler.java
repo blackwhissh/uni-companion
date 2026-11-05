@@ -90,7 +90,7 @@ public class ApiExceptionHandler {
     private static HttpStatus status(IdentityException.Code code) {
         return switch (code) {
             case WEAK_PASSWORD -> HttpStatus.BAD_REQUEST;
-            case EMAIL_TAKEN -> HttpStatus.CONFLICT;
+            case EMAIL_TAKEN, ADMIN_ACCOUNT_PROTECTED -> HttpStatus.CONFLICT;
             case INVALID_CREDENTIALS, UNAUTHENTICATED -> HttpStatus.UNAUTHORIZED;
             case FORBIDDEN -> HttpStatus.FORBIDDEN;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;

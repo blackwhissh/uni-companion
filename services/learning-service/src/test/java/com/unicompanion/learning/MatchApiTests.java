@@ -372,6 +372,44 @@ class MatchApiTests {
                 .andExpect(content().string(not(org.hamcrest.Matchers.containsString("alan@uni.test"))));
     }
 
+    @Test
+    void studentCanExportAndPurgePersonalLearningDataWithoutAffectingClassmates() throws Exception {
+        String courseId = publishedCourse("GDPR-DATA");
+        enroll(courseId, STUDENT);
+        enroll(courseId, STUDENT_2);
+        optIn(courseId, STUDENT, "Ada");
+        optIn(courseId, STUDENT_2, "Alan");
+        intents(courseId, STUDENT, "Ada", "STUDY_GROUP");
+        intents(courseId, STUDENT_2, "Alan", "STUDY_GROUP");
+
+        mockMvc.perform(post("/api/match/courses/" + courseId + "/contacts")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + STUDENT_2_ID + "\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/me/data").header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(STUDENT_ID.toString()))
+                .andExpect(jsonPath("$.enrollments[?(@.code == 'GDPR-DATA')]").isNotEmpty())
+                .andExpect(jsonPath("$.matchProfiles[?(@.courseCode == 'GDPR-DATA')].displayName").value("Ada"))
+                .andExpect(jsonPath("$.contacts[0].peerDisplayName").value("Alan"));
+
+        mockMvc.perform(delete("/api/me/data").header("Authorization", STUDENT))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/me/data").header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enrollments", hasSize(0)))
+                .andExpect(jsonPath("$.matchProfiles", hasSize(0)))
+                .andExpect(jsonPath("$.contacts", hasSize(0)));
+
+        mockMvc.perform(get("/api/match/courses/" + courseId + "/active-count")
+                        .header("Authorization", STUDENT_2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activeCount").value(1));
+    }
+
     private void intents(String courseId, String bearer, String displayName, String... selected) throws Exception {
         String joined = "\"" + String.join("\",\"", selected) + "\"";
         mockMvc.perform(put("/api/match/courses/" + courseId + "/intents")

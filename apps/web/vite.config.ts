@@ -33,6 +33,7 @@ export default defineConfig(({ mode }) => {
             allowedHosts: ['.trycloudflare.com'],
             proxy: {
               '/api/auth': serviceProxy('http://127.0.0.1:8081'),
+              '/api/me/data': serviceProxy('http://127.0.0.1:8082'),
               '/api/me': serviceProxy('http://127.0.0.1:8081'),
               '/api/admin/accounts': serviceProxy('http://127.0.0.1:8081'),
               '/api/admin/courses': serviceProxy('http://127.0.0.1:8082'),
