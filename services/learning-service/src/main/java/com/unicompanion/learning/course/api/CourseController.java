@@ -65,6 +65,21 @@ public class CourseController {
         return CourseResponse.from(updated);
     }
 
+    @PatchMapping("/{id}/owner")
+    public CourseResponse changeOwner(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody OwnerRequest request
+    ) {
+        CourseService.CourseDetails updated = courses.changeOwner(
+                id,
+                request.ownerId(),
+                userId(jwt),
+                isPlatformAdmin(jwt)
+        );
+        return CourseResponse.from(updated);
+    }
+
     @PostMapping("/{id}/enroll")
     public ResponseEntity<EnrollmentResponse> enroll(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
         CourseService.EnrollmentResult result = courses.enroll(id, userId(jwt));
@@ -106,6 +121,9 @@ public class CourseController {
     }
 
     public record VisibilityRequest(@NotNull Visibility visibility) {
+    }
+
+    public record OwnerRequest(@NotNull UUID ownerId) {
     }
 
     public record CourseResponse(

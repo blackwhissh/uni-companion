@@ -61,6 +61,11 @@ public class CourseEntity {
         this.updatedAt = now;
     }
 
+    public void changeOwner(UUID ownerId, Instant now) {
+        this.ownerId = ownerId;
+        this.updatedAt = now;
+    }
+
     public UUID getId() {
         return id;
     }

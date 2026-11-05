@@ -23,6 +23,7 @@ import {
   downloadMaterial,
   listMaterials,
   replaceMaterial,
+  retryMaterial,
   setMaterialVisibility,
   uploadMaterial,
 } from '../courses/material-api.ts'
@@ -102,6 +103,24 @@ export function AdminMaterialsPage() {
     onError: (err) => {
       setBusyId(null)
       setError(err instanceof ApiError ? err.message : 'Could not update visibility.')
+    },
+  })
+
+  const retry = useMutation({
+    mutationFn: ({ id }: { id: string; title: string }) => retryMaterial(id),
+    onSuccess: async (updated, variables) => {
+      setError(null)
+      setBusyId(null)
+      setNotice(
+        updated.processingStatus === 'READY'
+          ? `Indexed “${variables.title}”.`
+          : `Retried “${variables.title}”. Check its status below.`,
+      )
+      await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
+    },
+    onError: (err) => {
+      setBusyId(null)
+      setError(err instanceof ApiError ? err.message : 'Could not retry indexing.')
     },
   })
 
@@ -434,6 +453,20 @@ export function AdminMaterialsPage() {
                           onClick={() => requestPublishToggle(material)}
                         >
                           {material.visibility === 'PUBLISHED' ? 'Unpublish' : 'Publish'}
+                        </Button>
+                      ) : null}
+                      {canManage && material.processingStatus === 'FAILED' ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={rowBusy || retry.isPending}
+                          onClick={() => {
+                            setNotice(null)
+                            setBusyId(material.id)
+                            retry.mutate({ id: material.id, title: material.title })
+                          }}
+                        >
+                          Retry indexing
                         </Button>
                       ) : null}
                       {canManage ? (

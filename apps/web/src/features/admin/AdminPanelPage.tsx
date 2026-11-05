@@ -14,8 +14,8 @@ import {
   SectionLabel,
   StatusPill,
 } from '../../shared/ui/ui.tsx'
-import { listAdminAccounts, listAdminCourses, setCourseAdmin } from './admin-api.ts'
-import type { AdminAccount } from './admin-api.ts'
+import { changeCourseOwner, listAdminAccounts, listAdminCourses, setCourseAdmin } from './admin-api.ts'
+import type { AdminAccount, AdminCourse } from './admin-api.ts'
 
 type PendingConfirm = {
   account: AdminAccount
@@ -39,21 +39,38 @@ export function AdminPanelPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<PendingConfirm>(null)
+  const [ownerDrafts, setOwnerDrafts] = useState<Record<string, string>>({})
 
   const updateRole = useMutation({
     mutationFn: ({ id, grant }: { id: string; grant: boolean }) => setCourseAdmin(id, grant),
-    onSuccess: async (account, variables) => {
+      onSuccess: async (account, variables) => {
       setError(null)
       setNotice(
         variables.grant
-          ? `${account.displayName} can open the course console after they log in again.`
-          : `${account.displayName} is no longer a course admin. That takes effect the next time they log in.`,
+          ? `${account.displayName} is now a course admin. They can click Refresh access or log in again to open the course console.`
+          : `${account.displayName} is no longer a course admin. That takes effect when they refresh access or log in again.`,
       )
       await queryClient.invalidateQueries({ queryKey: ['admin', 'accounts'] })
     },
     onError: (err) => {
       setNotice(null)
       setError(err instanceof ApiError ? err.message : 'Could not update that account.')
+    },
+  })
+
+  const updateOwner = useMutation({
+    mutationFn: ({ course, ownerId }: { course: AdminCourse; ownerId: string }) =>
+      changeCourseOwner(course.id, ownerId),
+    onSuccess: async (_data, variables) => {
+      setError(null)
+      const nextOwnerName = namesById.get(variables.ownerId) ?? 'the new owner'
+      setNotice(`Transferred “${variables.course.title}” to ${nextOwnerName}.`)
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'courses'] })
+      await queryClient.invalidateQueries({ queryKey: ['courses'] })
+    },
+    onError: (err) => {
+      setNotice(null)
+      setError(err instanceof ApiError ? err.message : 'Could not change the course owner.')
     },
   })
 
@@ -70,7 +87,8 @@ export function AdminPanelPage() {
   }
 
   const namesById = new Map(accounts.data?.map((account) => [account.id, account.displayName]) ?? [])
-  const courseAdminCount = accounts.data?.filter((account) => account.roles.includes('COURSE_ADMIN')).length ?? 0
+  const courseAdminAccounts = accounts.data?.filter((account) => account.roles.includes('COURSE_ADMIN')) ?? []
+  const courseAdminCount = courseAdminAccounts.length
   const publishedCount = courses.data?.filter((course) => course.visibility === 'PUBLISHED').length ?? 0
 
   return (
@@ -184,13 +202,51 @@ export function AdminPanelPage() {
                     {countLabel(course.publishedReadyMaterials, 'published lecture')}
                     {course.otherMaterials > 0 ? ` · ${countLabel(course.otherMaterials, 'other file')}` : ''}
                   </p>
-                  <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <Link
                       to={`/admin/courses/${course.id}/materials`}
                       className="text-sm font-medium text-ink underline decoration-accent/50 underline-offset-4"
                     >
                       Open materials
                     </Link>
+                    {courseAdminAccounts.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label htmlFor={`owner-${course.id}`} className="text-xs font-medium text-muted">
+                          Owner
+                        </label>
+                        <select
+                          id={`owner-${course.id}`}
+                          aria-label={`Owner for ${course.title}`}
+                          value={ownerDrafts[course.id] ?? course.ownerId}
+                          onChange={(event) =>
+                            setOwnerDrafts((current) => ({ ...current, [course.id]: event.target.value }))
+                          }
+                          className="rounded-lg border border-ink/20 bg-white px-2.5 py-1.5 text-sm text-ink"
+                        >
+                          {courseAdminAccounts.map((candidate) => (
+                            <option key={candidate.id} value={candidate.id}>
+                              {candidate.displayName} ({candidate.email})
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={
+                            updateOwner.isPending ||
+                            (ownerDrafts[course.id] ?? course.ownerId) === course.ownerId
+                          }
+                          onClick={() =>
+                            updateOwner.mutate({
+                              course,
+                              ownerId: ownerDrafts[course.id] ?? course.ownerId,
+                            })
+                          }
+                        >
+                          Transfer owner
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 </li>
               )

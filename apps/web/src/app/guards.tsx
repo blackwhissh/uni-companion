@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router'
 import { useAuth } from '../features/auth/use-auth.ts'
 import { shouldSkipReturnPath } from '../features/auth/auth-session-sync.ts'
-import { Page } from '../shared/ui/ui.tsx'
+import { Button, Page } from '../shared/ui/ui.tsx'
 
 function SessionLoading() {
   return (
@@ -56,17 +57,33 @@ export function RequireRole({
 }
 
 export function NotAllowed() {
+  const { refreshUser } = useAuth()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function onRefreshAccess() {
+    setRefreshing(true)
+    try {
+      await refreshUser()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   return (
     <Page narrow>
       <h1 className="font-display text-2xl font-semibold text-ink">Not allowed</h1>
       <p className="mt-2 text-sm text-muted">
-        You do not have permission to view this page. If you think this is a mistake, ask a course admin for access.
+        You do not have permission to view this page. If a platform admin just granted you access, refresh your
+        session below.
       </p>
-      <p className="mt-6">
+      <div className="mt-6 flex flex-wrap items-center gap-4">
+        <Button type="button" variant="secondary" disabled={refreshing} onClick={() => void onRefreshAccess()}>
+          {refreshing ? 'Refreshing…' : 'Refresh access'}
+        </Button>
         <Link to="/courses" className="font-medium text-ink underline decoration-accent/50 underline-offset-4">
           Back to courses
         </Link>
-      </p>
+      </div>
     </Page>
   )
 }

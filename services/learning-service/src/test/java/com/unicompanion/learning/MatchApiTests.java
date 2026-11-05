@@ -360,6 +360,16 @@ class MatchApiTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requests[0].status").value("ACCEPTED"))
                 .andExpect(jsonPath("$.requests[0].email").value("alan@uni.test"));
+
+        mockMvc.perform(delete("/api/match/courses/" + courseId + "/contacts/" + requestId)
+                        .header("Authorization", STUDENT_3))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/match/courses/" + courseId + "/contacts/" + requestId)
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requests", hasSize(0)))
+                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("alan@uni.test"))));
     }
 
     private void intents(String courseId, String bearer, String displayName, String... selected) throws Exception {

@@ -32,6 +32,12 @@ export function replaceMaterial(id: string, file: File) {
   return learningUpload<Material>(`/api/materials/${id}/file`, body)
 }
 
+export function retryMaterial(id: string) {
+  return learningFetch<Material>(`/api/materials/${id}/retry`, {
+    method: 'POST',
+  })
+}
+
 export function setMaterialVisibility(id: string, visibility: Material['visibility']) {
   return learningFetch<Material>(`/api/materials/${id}/visibility`, {
     method: 'PATCH',

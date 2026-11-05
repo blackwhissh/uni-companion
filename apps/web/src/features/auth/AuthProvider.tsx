@@ -68,12 +68,21 @@ export function AuthProvider({
     setUserState(null)
   }
 
+  async function refreshUser() {
+    const session = await restoreSession()
+    if (session) {
+      applySession(session.token, session.user)
+      return session.user
+    }
+    return null
+  }
+
   function setUser(next: User | null) {
     setUserState(next)
   }
 
   return (
-    <AuthContext.Provider value={{ user, ready, login, register, logout, setUser }}>
+    <AuthContext.Provider value={{ user, ready, login, register, logout, refreshUser, setUser }}>
       {children}
     </AuthContext.Provider>
   )

@@ -469,6 +469,37 @@ class MaterialApiTests {
                 .andExpect(jsonPath("$").isEmpty());
     }
 
+    @Test
+    void ownerCanRetryFailedMaterialWithoutReuploading() throws Exception {
+        String courseId = createCourse("MAT-RETRY");
+        String materialId = upload(courseId, "Lecture 1", "lecture.pdf", pdfBytes("Paxos quorum intersection"));
+
+        mockMvc.perform(post("/api/materials/" + materialId + "/retry")
+                        .header("Authorization", ADMIN))
+                .andExpect(status().isConflict());
+
+        jdbc.update(
+                "update materials set processing_status = 'FAILED', failure_reason = 'Temporary embedding quota' where id = ?::uuid",
+                materialId);
+        jdbc.update("delete from material_chunks where material_id = ?::uuid", materialId);
+
+        mockMvc.perform(post("/api/materials/" + materialId + "/retry")
+                        .header("Authorization", OTHER_ADMIN))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/materials/" + materialId + "/retry")
+                        .header("Authorization", ADMIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.processingStatus").value("READY"))
+                .andExpect(jsonPath("$.failureReason").doesNotExist());
+
+        String chunkText = String.join("\n", jdbc.queryForList(
+                "select content from material_chunks where material_id = ?::uuid",
+                String.class,
+                materialId));
+        assertThat(chunkText).contains("Paxos quorum intersection");
+    }
+
     private String createCourse(String code) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/courses")
                         .header("Authorization", ADMIN)

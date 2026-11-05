@@ -205,6 +205,19 @@ public class MatchingService {
     }
 
     @Transactional
+    public Suggestions removeContact(UUID courseId, UUID userId, UUID requestId) {
+        requireEnrollment(courseId, userId);
+        ContactRequestEntity request = requireRequest(courseId, requestId);
+        if (!request.getRequesterId().equals(userId) && !request.getRecipientId().equals(userId)) {
+            throw forbidden();
+        }
+        contacts.delete(request);
+        contacts.flush();
+        log.info("Contact removed course={} request={} by={}", courseId, requestId, userId);
+        return toSuggestions(courseId, userId);
+    }
+
+    @Transactional
     public void clearOptIn(UUID courseId, UUID userId) {
         MatchOptInKey key = new MatchOptInKey(courseId, userId);
         if (optIns.existsById(key)) {

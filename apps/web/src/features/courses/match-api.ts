@@ -74,3 +74,9 @@ export function declineContact(courseId: string, requestId: string) {
     method: 'POST',
   })
 }
+
+export function removeContact(courseId: string, requestId: string) {
+  return learningFetch<MatchSuggestions>(`/api/match/courses/${courseId}/contacts/${requestId}`, {
+    method: 'DELETE',
+  })
+}

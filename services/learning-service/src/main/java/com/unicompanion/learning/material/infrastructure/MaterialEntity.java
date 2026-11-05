@@ -83,6 +83,12 @@ public class MaterialEntity {
         this.updatedAt = now;
     }
 
+    public void resetForRetry(Instant now) {
+        this.processingStatus = ProcessingStatus.UPLOADED;
+        this.failureReason = null;
+        this.updatedAt = now;
+    }
+
     public void changeVisibility(Visibility visibility, Instant now) {
         this.visibility = visibility;
         this.updatedAt = now;
