@@ -1,5 +1,6 @@
 import { identityFetch } from '../../shared/api/identity-client.ts'
 import { learningFetch } from '../../shared/api/learning-client.ts'
+import type { Course } from '../courses/course-api.ts'
 
 export type AdminAccount = {
   id: string
@@ -35,4 +36,11 @@ export function setCourseAdmin(id: string, courseAdmin: boolean) {
 
 export function listAdminCourses() {
   return learningFetch<AdminCourse[]>('/api/admin/courses')
+}
+
+export function changeCourseOwner(courseId: string, ownerId: string) {
+  return learningFetch<Course>(`/api/courses/${courseId}/owner`, {
+    method: 'PATCH',
+    body: JSON.stringify({ ownerId }),
+  })
 }

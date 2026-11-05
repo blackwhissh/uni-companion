@@ -25,6 +25,13 @@ const accounts = [
     createdAt: '2026-01-01T00:00:00Z',
   },
   {
+    id: 'prof-1',
+    email: 'professor',
+    displayName: 'Professor',
+    roles: ['COURSE_ADMIN'],
+    createdAt: '2026-01-01T12:00:00Z',
+  },
+  {
     id: 'student-1',
     email: 'student',
     displayName: 'Student',
@@ -78,7 +85,10 @@ describe('admin panel', () => {
         return json(courses)
       }
       if (url.endsWith('/course-admin') && init?.method === 'PUT') {
-        return json({ ...accounts[1], roles: ['COURSE_ADMIN', 'STUDENT'] })
+        return json({ ...accounts[2], roles: ['COURSE_ADMIN', 'STUDENT'] })
+      }
+      if (url.endsWith('/owner') && init?.method === 'PATCH') {
+        return json({ ...courses[0], owned: false })
       }
       return json({ code: 'REQUEST_FAILED', message: 'Request failed' }, 500)
     })
@@ -96,10 +106,18 @@ describe('admin panel', () => {
       '/admin/courses/course-1/materials',
     )
 
+    fireEvent.change(screen.getByLabelText('Owner for Distributed Systems'), {
+      target: { value: 'prof-1' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer owner' }))
+    expect(await screen.findByText(/Transferred “Distributed Systems” to Professor/)).toBeInTheDocument()
+    const ownerCall = fetchMock.mock.calls.find((call) => String(call[0]).endsWith('/owner'))
+    expect(ownerCall?.[1]).toMatchObject({ method: 'PATCH', body: JSON.stringify({ ownerId: 'prof-1' }) })
+
     fireEvent.click(screen.getByRole('button', { name: 'Grant course admin' }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Grant course admin' }))
 
-    expect(await screen.findByText(/Student can open the course console/)).toBeInTheDocument()
+    expect(await screen.findByText(/Student is now a course admin/)).toBeInTheDocument()
     const grantCall = fetchMock.mock.calls.find((call) => String(call[0]).endsWith('/course-admin'))
     expect(grantCall?.[1]).toMatchObject({ method: 'PUT', body: JSON.stringify({ courseAdmin: true }) })
   })

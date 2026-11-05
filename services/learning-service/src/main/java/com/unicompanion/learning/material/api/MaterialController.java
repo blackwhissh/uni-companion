@@ -85,6 +85,16 @@ public class MaterialController {
         return MaterialResponse.from(materials.get(id));
     }
 
+    @PostMapping("/api/materials/{id}/retry")
+    public MaterialResponse retry(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        materials.prepareRetry(id, userId(jwt), isPlatformAdmin(jwt));
+        extraction.extract(id);
+        return MaterialResponse.from(materials.get(id));
+    }
+
     @GetMapping("/api/courses/{courseId}/materials")
     public List<MaterialResponse> list(@PathVariable UUID courseId, @AuthenticationPrincipal Jwt jwt) {
         return materials.list(courseId, userId(jwt), isAdmin(jwt)).stream().map(MaterialResponse::from).toList();

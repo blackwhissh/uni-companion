@@ -4,7 +4,7 @@ import { Link } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import { Alert, Button, ConfirmDialog, Panel, SectionLabel, StatusPill } from '../../shared/ui/ui.tsx'
 import { useAuth } from '../auth/use-auth.ts'
-import { acceptContact, declineContact, getMatchStatus, getMatchSuggestions, requestContact, setMatchIntents, setMatchOptIn } from './match-api.ts'
+import { acceptContact, declineContact, getMatchStatus, getMatchSuggestions, removeContact, requestContact, setMatchIntents, setMatchOptIn } from './match-api.ts'
 import type { CollaborationIntentId, ContactRelation, ContactRequest, PartnerSuggestion } from './match-api.ts'
 import { COLLABORATION_INTENTS, intentLabel, matchCountLabel } from './match-ui.ts'
 
@@ -46,6 +46,9 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
       }
       if (action.kind === 'accept') {
         return acceptContact(courseId, action.requestId)
+      }
+      if (action.kind === 'cancel' || action.kind === 'disconnect') {
+        return removeContact(courseId, action.requestId)
       }
       return declineContact(courseId, action.requestId)
     },
@@ -186,6 +189,16 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
                         ? setPendingContact({ kind: 'decline', requestId: suggestion.requestId, name: suggestion.displayName })
                         : undefined
                     }
+                    onCancel={() =>
+                      suggestion.requestId
+                        ? setPendingContact({ kind: 'cancel', requestId: suggestion.requestId, name: suggestion.displayName })
+                        : undefined
+                    }
+                    onDisconnect={() =>
+                      suggestion.requestId
+                        ? setPendingContact({ kind: 'disconnect', requestId: suggestion.requestId, name: suggestion.displayName })
+                        : undefined
+                    }
                   />
                 </li>
               ))}
@@ -197,6 +210,8 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
             busy={sendContact.isPending}
             onAccept={(request) => setPendingContact({ kind: 'accept', requestId: request.id, name: request.displayName })}
             onDecline={(request) => setPendingContact({ kind: 'decline', requestId: request.id, name: request.displayName })}
+            onCancel={(request) => setPendingContact({ kind: 'cancel', requestId: request.id, name: request.displayName })}
+            onDisconnect={(request) => setPendingContact({ kind: 'disconnect', requestId: request.id, name: request.displayName })}
           />
         </div>
       ) : null}
@@ -206,7 +221,17 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
           {acceptedContacts(suggestions.data?.requests).map((request) => (
             <li key={request.id} className="rounded-xl border border-line/80 px-4 py-3">
               <p className="font-medium text-ink">{request.displayName}</p>
-              <p className="mt-1 text-sm text-ink">Email: {request.email}</p>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-ink">Email: {request.email}</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={sendContact.isPending}
+                  onClick={() => setPendingContact({ kind: 'disconnect', requestId: request.id, name: request.displayName })}
+                >
+                  Disconnect
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
@@ -240,7 +265,11 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
         title={contactTitle(pendingContact)}
         body={contactBody(pendingContact)}
         confirmLabel={contactConfirmLabel(pendingContact)}
-        danger={pendingContact?.kind === 'decline'}
+        danger={
+          pendingContact?.kind === 'decline' ||
+          pendingContact?.kind === 'cancel' ||
+          pendingContact?.kind === 'disconnect'
+        }
         onCancel={() => setPendingContact(null)}
         onConfirm={() => {
           if (pendingContact) {
@@ -259,12 +288,16 @@ function OtherRequests({
   busy,
   onAccept,
   onDecline,
+  onCancel,
+  onDisconnect,
 }: {
   suggestions: PartnerSuggestion[]
   requests: ContactRequest[]
   busy: boolean
   onAccept: (request: ContactRequest) => void
   onDecline: (request: ContactRequest) => void
+  onCancel: (request: ContactRequest) => void
+  onDisconnect: (request: ContactRequest) => void
 }) {
   const listed = new Set(suggestions.map((suggestion) => suggestion.userId))
   const extras = requests.filter((request) => !listed.has(request.userId) && request.status !== 'DECLINED')
@@ -285,6 +318,8 @@ function OtherRequests({
             onRequest={() => undefined}
             onAccept={() => onAccept(request)}
             onDecline={() => onDecline(request)}
+            onCancel={() => onCancel(request)}
+            onDisconnect={() => onDisconnect(request)}
           />
         </li>
       ))}
@@ -301,6 +336,8 @@ function ContactActions({
   onRequest,
   onAccept,
   onDecline,
+  onCancel,
+  onDisconnect,
 }: {
   name: string
   contact: ContactRelation
@@ -310,12 +347,32 @@ function ContactActions({
   onRequest: () => void
   onAccept: () => void
   onDecline: () => void
+  onCancel: () => void
+  onDisconnect: () => void
 }) {
   if (contact === 'OUTGOING') {
-    return <p className="mt-2 text-sm text-muted">Waiting for {name} to accept.</p>
+    return (
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted">Waiting for {name} to accept.</p>
+        {requestId ? (
+          <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>
+            Cancel request
+          </Button>
+        ) : null}
+      </div>
+    )
   }
   if (contact === 'ACCEPTED' && email) {
-    return <p className="mt-2 text-sm text-ink">Email: {email}</p>
+    return (
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-ink">Email: {email}</p>
+        {requestId ? (
+          <Button type="button" variant="ghost" disabled={busy} onClick={onDisconnect}>
+            Disconnect
+          </Button>
+        ) : null}
+      </div>
+    )
   }
   if (contact === 'INCOMING' && requestId) {
     return (
@@ -345,6 +402,8 @@ type PendingContact =
   | { kind: 'request'; userId: string; name: string }
   | { kind: 'accept'; requestId: string; name: string }
   | { kind: 'decline'; requestId: string; name: string }
+  | { kind: 'cancel'; requestId: string; name: string }
+  | { kind: 'disconnect'; requestId: string; name: string }
 
 function acceptedContacts(requests: ContactRequest[] | undefined) {
   if (!Array.isArray(requests)) {
@@ -360,6 +419,12 @@ function contactTitle(action: PendingContact | null) {
   if (action?.kind === 'decline') {
     return `Decline ${action.name}?`
   }
+  if (action?.kind === 'cancel') {
+    return `Cancel request to ${action.name}?`
+  }
+  if (action?.kind === 'disconnect') {
+    return `Disconnect from ${action.name}?`
+  }
   return action ? `Ask ${action.name} to connect?` : ''
 }
 
@@ -370,6 +435,12 @@ function contactBody(action: PendingContact | null) {
   if (action?.kind === 'decline') {
     return 'Your email stays private.'
   }
+  if (action?.kind === 'cancel') {
+    return `This removes your pending request to ${action.name}.`
+  }
+  if (action?.kind === 'disconnect') {
+    return `This removes the connection and hides your shared emails in this course.`
+  }
   return action ? `${action.name} will see that you want to connect. Your email stays hidden until they accept.` : ''
 }
 
@@ -379,6 +450,12 @@ function contactConfirmLabel(action: PendingContact | null) {
   }
   if (action?.kind === 'decline') {
     return 'Decline request'
+  }
+  if (action?.kind === 'cancel') {
+    return 'Cancel request'
+  }
+  if (action?.kind === 'disconnect') {
+    return 'Disconnect'
   }
   return 'Send request'
 }

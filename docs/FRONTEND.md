@@ -47,13 +47,17 @@ apps/web/src/
 |---|---|---|---|
 | FE-S01 | All | `/login`, `/register` | UC-001,002 |
 | FE-S02 | Student | `/profile` | UC-003 |
-| FE-S10 | Admin | `/admin/courses` | UC-010,014 |
-| FE-S11 | Admin | `/admin/courses/:id/materials` | UC-012,013,018 |
+| FE-S09 | Platform Admin | `/admin` | UC-005,052 |
+| FE-S10 | Admin | `/admin/courses` | UC-010,014,052 |
+| FE-S11 | Admin | `/admin/courses/:id/materials` | UC-012,013,016,018 |
 | FE-S20 | Student | `/courses` | UC-011 |
-| FE-S21 | Student | `/courses/:id` | UC-015,040,041 |
-| FE-S22 | Student | `/courses/:id/qa` | UC-020 |
+| FE-S21 | Student | `/courses/:id` | UC-015,040,041,042,043,044 |
+| FE-S22 | Student | `/courses/:id/qa` | UC-020,025 |
 | FE-S23 | Student | `/courses/:id/flashcards` | UC-021 |
 | FE-S24 | Student | `/courses/:id/quiz` | UC-022 |
+| FE-S25 | Student | `/courses/:id/search` | UC-023,024,025 |
+| FE-S26 | Student | `/courses/:id/progress` | UC-030 |
+| FE-S27 | Student | `/courses/:id/plan` | UC-031 |
 
 ## 5. UX rules
 

@@ -277,6 +277,35 @@ class CourseApiTests {
     }
 
     @Test
+    void platformAdminOrOwnerCanTransferCourseOwnership() throws Exception {
+        String courseId = createCourse("CISS-HANDOFF");
+
+        mockMvc.perform(patch("/api/courses/" + courseId + "/owner")
+                        .header("Authorization", OTHER_PROF)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ownerId\":\"" + OTHER_ADMIN_ID + "\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/courses/" + courseId + "/owner")
+                        .header("Authorization", PLATFORM_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ownerId\":\"" + OTHER_ADMIN_ID + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.owned").value(false));
+
+        mockMvc.perform(get("/api/courses/" + courseId).header("Authorization", OTHER_PROF))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.owned").value(true));
+
+        mockMvc.perform(patch("/api/courses/" + courseId + "/visibility")
+                        .header("Authorization", OTHER_PROF)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"visibility\":\"PUBLISHED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visibility").value("PUBLISHED"));
+    }
+
+    @Test
     void studentCannotOpenAnUnpublishedCourse() throws Exception {
         String courseId = createCourse("CISS-HIDE");
 

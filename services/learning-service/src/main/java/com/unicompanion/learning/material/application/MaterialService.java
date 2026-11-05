@@ -145,6 +145,32 @@ public class MaterialService {
         return material;
     }
 
+    @Transactional
+    public MaterialEntity prepareRetry(UUID materialId, UUID userId, boolean platformAdmin) {
+        MaterialEntity material = materials.findById(materialId).orElseThrow(MaterialService::notFound);
+        CourseEntity course = courses.findById(material.getCourseId()).orElseThrow(MaterialService::notFound);
+        boolean owner = course.getOwnerId().equals(userId);
+        if (!owner && !platformAdmin) {
+            log.warn("Retry denied: user={} material={}", userId, materialId);
+            throw forbidden();
+        }
+        if (material.getProcessingStatus() != ProcessingStatus.FAILED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a failed PDF can be retried.");
+        }
+        material.resetForRetry(Instant.now());
+        materials.saveAndFlush(material);
+        chunks.deleteByMaterialId(materialId);
+        log.info(
+                "Retrying material id={} course={} by={} owner={} platformAdmin={}",
+                materialId,
+                course.getId(),
+                userId,
+                owner,
+                platformAdmin
+        );
+        return material;
+    }
+
     @Transactional(readOnly = true)
     public MaterialEntity get(UUID materialId) {
         return materials.findById(materialId).orElseThrow(MaterialService::notFound);
