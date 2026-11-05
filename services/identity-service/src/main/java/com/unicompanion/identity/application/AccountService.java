@@ -117,6 +117,18 @@ public class AccountService {
         return AccountView.from(account);
     }
 
+    @Transactional
+    public void deleteAccount(UUID id) {
+        UserAccount account = users.findById(id).orElseThrow(IdentityException::unauthenticated);
+        if (account.getRoles().contains(Role.ADMIN)) {
+            throw IdentityException.adminAccountProtected();
+        }
+        account.getRoles().clear();
+        users.delete(account);
+        users.flush();
+        log.info("Deleted account userId={} email={}", id, account.getEmail());
+    }
+
     private AccountView create(String email, String rawPassword, String displayName, Set<Role> roles) {
         PasswordPolicy.check(rawPassword);
         String normalized = normalizeEmail(email);

@@ -8,7 +8,8 @@ public final class IdentityException extends RuntimeException {
         INVALID_CREDENTIALS,
         UNAUTHENTICATED,
         FORBIDDEN,
-        NOT_FOUND
+        NOT_FOUND,
+        ADMIN_ACCOUNT_PROTECTED
     }
 
     private final Code code;
@@ -44,5 +45,9 @@ public final class IdentityException extends RuntimeException {
 
     public static IdentityException notFound() {
         return new IdentityException(Code.NOT_FOUND, "That account does not exist.");
+    }
+
+    public static IdentityException adminAccountProtected() {
+        return new IdentityException(Code.ADMIN_ACCOUNT_PROTECTED, "Platform admin accounts cannot be deleted.");
     }
 }

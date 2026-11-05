@@ -19,6 +19,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -216,6 +217,45 @@ class AuthApiTests {
                 .andExpect(jsonPath("$.displayName").value("After"))
                 .andExpect(jsonPath("$.interests").value("compilers"))
                 .andExpect(jsonPath("$.email").value("profile@uni.test"));
+    }
+
+    @Test
+    void studentCanDeleteOwnAccountWhilePlatformAdminIsProtected() throws Exception {
+        MvcResult registered = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"delete-me@uni.test","password":"password1","displayName":"Delete Me"}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String studentToken = token(registered.getResponse().getContentAsString());
+
+        String adminToken = token(mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"admin","password":"admin"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+
+        mockMvc.perform(delete("/api/me").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ADMIN_ACCOUNT_PROTECTED"));
+
+        mockMvc.perform(delete("/api/me").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/me").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"delete-me@uni.test","password":"password1"}
+                                """))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

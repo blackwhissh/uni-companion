@@ -1,5 +1,6 @@
 import { getAccessToken, setAccessToken } from '../../shared/api/access-token.ts'
 import { allowTokenRefresh, blockTokenRefresh, identityFetch, tryRefreshAccessToken } from '../../shared/api/identity-client.ts'
+import { learningFetch } from '../../shared/api/learning-client.ts'
 import { clearAllMaterialSelections } from '../courses/material-selection-storage.ts'
 import { clearAllQuizAnswers } from '../courses/quiz-answer-storage.ts'
 import { clearAllStudyGenerations } from '../courses/study-generation-storage.ts'
@@ -50,6 +51,43 @@ export function updateProfile(input: { displayName: string; interests: string })
 
 export function fetchMe() {
   return identityFetch<User>('/api/me')
+}
+
+export type LearningPersonalData = {
+  userId: string
+  exportedAt: string
+  enrollments: unknown[]
+  studyPlans: unknown[]
+  quizAttempts: unknown[]
+  matchProfiles: unknown[]
+  contacts: unknown[]
+}
+
+export async function exportPersonalData() {
+  const [account, studyData] = await Promise.all([
+    fetchMe(),
+    learningFetch<LearningPersonalData>('/api/me/data'),
+  ])
+  return {
+    exportedAt: studyData.exportedAt,
+    account,
+    studyData,
+  }
+}
+
+export async function deleteOwnAccount() {
+  await learningFetch<void>('/api/me/data', { method: 'DELETE' })
+  markLogoutNavigation()
+  broadcastAuthLogout()
+  blockTokenRefresh()
+  try {
+    await identityFetch<void>('/api/me', { method: 'DELETE' }, false)
+  } finally {
+    setAccessToken(null)
+    clearAllQuizAnswers()
+    clearAllMaterialSelections()
+    clearAllStudyGenerations()
+  }
 }
 
 export async function restoreSession(): Promise<AuthResponse | null> {
