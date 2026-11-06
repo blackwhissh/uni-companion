@@ -220,7 +220,7 @@ export function CourseQaPage() {
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Q&A'}
           title="Course Q&A"
-          description="Ask your own question, or start from a ready prompt. Answers stay grounded in published lecture PDFs and can be written in English or German."
+          description="Ask in your own words, or start from a ready prompt. Answers come from the published lectures — English or German — with page citations you can open."
           actions={
             enrolled && readyCount > 0 && !pickingMaterials ? (
               <Button type="button" variant="secondary" disabled={ask.isPending} onClick={() => setPickingMaterials(true)}>
@@ -235,15 +235,15 @@ export function CourseQaPage() {
 
       {course.data && !enrolled && !unavailable ? (
         <EmptyState
-          title="Enroll to ask questions"
-          description="Q&A is only available after you join this course."
+          title="Join to ask questions"
+          description="Join the course first, then you can ask anything from the lectures."
         />
       ) : null}
 
       {enrolled && readyCount === 0 ? (
         <EmptyState
-          title="No published materials yet"
-          description="Once your professor publishes ready lecture PDFs, you can ask grounded questions here."
+          title="No lectures to ask about yet"
+          description="Once your professor publishes the PDFs, come back and ask anything from them."
         />
       ) : null}
 
@@ -373,7 +373,7 @@ export function CourseQaPage() {
             <section className="mt-10 animate-pulse-soft" aria-live="polite">
               <SectionLabel>Working</SectionLabel>
               <Panel className="mt-4">
-                <p className="text-muted">Retrieving published pages and drafting a study-style answer…</p>
+                <p className="text-muted">Looking through the lectures and drafting an answer…</p>
               </Panel>
             </section>
           ) : null}

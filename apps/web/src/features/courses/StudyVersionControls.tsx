@@ -56,18 +56,18 @@ export function StudyVersionControls({ noun, delivery, versions, busy = false, o
 function deliveryMessage(delivery: StudyDelivery, noun: 'deck' | 'quiz') {
   switch (delivery) {
     case 'CREATED':
-      return `A new shared ${noun} was created for this material selection.`
+      return `Fresh ${noun} for the lectures you picked — you’re the first to use this set.`
     case 'REUSED':
-      return `Opening the shared ${noun} for this material selection.`
+      return `Opening the ${noun} already made for these lectures.`
     case 'NEXT_SHARED':
-      return `Opening the next shared ${noun} for this material selection.`
+      return `Opening the next ${noun} for these lectures.`
     case 'CYCLED':
-      return `Back to shared ${noun} 1 for this material selection.`
+      return `Back to ${noun} 1 for these lectures.`
     case 'SELECTED':
-      return `Opening the ${noun} version you selected.`
+      return `Opening the ${noun} version you picked.`
     case 'RESUMED':
-      return `Opening the shared ${noun} saved for this material selection.`
+      return `Picking up the ${noun} you left for these lectures.`
     default:
-      return `Opening the shared ${noun} for this material selection.`
+      return `Opening the ${noun} for these lectures.`
   }
 }

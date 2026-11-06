@@ -81,7 +81,7 @@ describe('course flashcards page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Start flashcards' }))
 
     expect(await screen.findByText('What is consensus?')).toBeInTheDocument()
-    expect(screen.getByText('A new shared deck was created for this material selection.')).toBeInTheDocument()
+    expect(screen.getByText('Fresh deck for the lectures you picked — you’re the first to use this set.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Deck 1' })).toBeDisabled()
     const generateCall = fetchMock.mock.calls.find(
       ([url, init]) => String(url).includes('/flashcards/generate') && init?.method === 'POST',
@@ -112,7 +112,7 @@ describe('course flashcards page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Start flashcards' }))
 
     expect(await screen.findByText('Working')).toBeInTheDocument()
-    expect(screen.getByText(/Preparing a shared deck/)).toBeInTheDocument()
+    expect(screen.getByText(/Putting a deck together/)).toBeInTheDocument()
 
     resolveGenerate(
       json(
@@ -166,7 +166,7 @@ describe('course flashcards page', () => {
     renderAt('/courses/course-1/flashcards', <CourseFlashcardsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Start flashcards' }))
 
-    expect(await screen.findByText('Generation is still running. Wait a moment, then try again.')).toBeInTheDocument()
+    expect(await screen.findByText('Still working on that. Give it a moment, then try again.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('What is consensus?')).toBeInTheDocument()
     expect(generateCalls).toBe(2)

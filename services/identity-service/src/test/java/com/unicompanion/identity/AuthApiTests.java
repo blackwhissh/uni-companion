@@ -117,6 +117,16 @@ class AuthApiTests {
     }
 
     @Test
+    void openApiSpecificationIsPubliclyReadable() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.openapi").value("3.1.0"))
+                .andExpect(jsonPath("$.info.title").value("Uni Companion Identity Service API"))
+                .andExpect(jsonPath("$.paths['/api/auth/login']").exists())
+                .andExpect(jsonPath("$.paths['/api/me'].delete").exists());
+    }
+
+    @Test
     void unknownPathIsNotAnInternalError() throws Exception {
         MvcResult login = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

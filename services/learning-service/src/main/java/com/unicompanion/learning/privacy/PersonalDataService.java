@@ -127,6 +127,25 @@ public class PersonalDataService {
                 userId
         );
 
+        List<PrivateNoteRecord> privateNotes = jdbc.query(
+                """
+                select n.id, n.course_id, c.code, n.title, n.body, n.updated_at
+                from student_notes n
+                join courses c on c.id = n.course_id
+                where n.user_id = ?
+                order by n.updated_at desc
+                """,
+                (rs, rowNum) -> new PrivateNoteRecord(
+                        UUID.fromString(rs.getString("id")),
+                        UUID.fromString(rs.getString("course_id")),
+                        rs.getString("code"),
+                        rs.getString("title"),
+                        rs.getString("body"),
+                        rs.getTimestamp("updated_at").toInstant()
+                ),
+                userId
+        );
+
         return new PersonalDataExport(
                 userId,
                 Instant.now(),
@@ -134,7 +153,8 @@ public class PersonalDataService {
                 studyPlans,
                 quizAttempts,
                 matchProfiles,
-                contacts
+                contacts,
+                privateNotes
         );
     }
 
@@ -142,6 +162,7 @@ public class PersonalDataService {
     public void purgeFor(UUID userId) {
         jdbc.update("delete from contact_requests where requester_id = ? or recipient_id = ?", userId, userId);
         jdbc.update("delete from match_opt_ins where user_id = ?", userId);
+        jdbc.update("delete from student_notes where user_id = ?", userId);
         jdbc.update("delete from study_plans where user_id = ?", userId);
         jdbc.update("delete from quiz_attempts where user_id = ?", userId);
         jdbc.update("delete from quiz_progress where user_id = ?", userId);
@@ -159,7 +180,8 @@ public class PersonalDataService {
             List<StudyPlanRecord> studyPlans,
             List<QuizAttemptRecord> quizAttempts,
             List<MatchProfileRecord> matchProfiles,
-            List<ContactRecord> contacts
+            List<ContactRecord> contacts,
+            List<PrivateNoteRecord> privateNotes
     ) {
     }
 
@@ -206,6 +228,16 @@ public class PersonalDataService {
             String peerDisplayName,
             String status,
             Instant createdAt
+    ) {
+    }
+
+    public record PrivateNoteRecord(
+            UUID noteId,
+            UUID courseId,
+            String courseCode,
+            String title,
+            String body,
+            Instant updatedAt
     ) {
     }
 }

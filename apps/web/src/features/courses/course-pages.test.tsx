@@ -76,10 +76,10 @@ describe('course pages', () => {
       '/courses/course-1',
     )
     expect(screen.queryByRole('button', { name: 'Create course' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Enroll' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Join course' }))
 
     expect(await screen.findByText('Enrolled')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Enroll' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Join course' })).not.toBeInTheDocument()
     expect(String(fetchMock.mock.calls.at(-1)?.[0])).toBe('http://localhost:8082/api/courses')
   })
 
@@ -90,10 +90,10 @@ describe('course pages', () => {
     renderWithQuery(<CoursesPage />, studentUser)
 
     expect(await screen.findByText('Enrolled')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Enroll' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Join course' })).not.toBeInTheDocument()
   })
 
-  it('lets a student unenroll and shows Enroll again', async () => {
+  it('lets a student unenroll and shows Join again', async () => {
     setAccessToken('student-token')
     let joined = true
     vi.stubGlobal(
@@ -109,10 +109,10 @@ describe('course pages', () => {
 
     renderWithQuery(<CoursesPage />, studentUser)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Unenroll' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave' }))
     const dialog = await screen.findByRole('alertdialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Unenroll' }))
-    expect(await screen.findByRole('button', { name: 'Enroll' })).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Leave course' }))
+    expect(await screen.findByRole('button', { name: 'Join course' })).toBeInTheDocument()
     expect(screen.queryByText('Enrolled')).not.toBeInTheDocument()
   })
 
@@ -151,7 +151,7 @@ describe('course pages', () => {
 
     renderWithQuery(<AdminCoursesPage />, professor)
 
-    expect(await screen.findByText('No courses yet.')).toBeInTheDocument()
+    expect(await screen.findByText('No courses yet')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Create course' }))
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Distributed Systems' } })
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'CISS-NEW' } })
@@ -172,7 +172,7 @@ describe('course pages', () => {
     expect(await screen.findByText('CISS-NEW · 2026WS · Unpublished')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete permanently' }))
-    expect(await screen.findByText('No courses yet.')).toBeInTheDocument()
+    expect(await screen.findByText('No courses yet')).toBeInTheDocument()
   })
 })
 
