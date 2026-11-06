@@ -42,7 +42,7 @@ export function CourseProgressPage() {
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Progress'}
           title="Study progress"
-          description="Scores come from quizzes you submitted. A question stays on the gap list until your latest answer for that prompt is correct."
+          description="Your quiz scores live here. A question stays on the “revisit” list until your latest answer for it is right."
           actions={
             enrolled ? (
               <>
@@ -66,13 +66,13 @@ export function CourseProgressPage() {
       {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
       {course.data && !enrolled && !unavailable ? (
         <EmptyState
-          title="Enroll to see progress"
-          description="Quiz scores and missed questions are available after you join this course."
+          title="Join to see your progress"
+          description="Quiz scores and the questions you still miss show up here once you’re in the course."
         />
       ) : null}
       {progress.isError ? (
         <div className="mt-6">
-          <Alert>Could not load your quiz progress.</Alert>
+          <Alert>Couldn’t load your quiz progress. Try again in a moment.</Alert>
         </div>
       ) : null}
       {enrolled && progress.isLoading ? (
@@ -82,8 +82,8 @@ export function CourseProgressPage() {
       ) : null}
       {enrolled && progress.data && !hasAttempts ? (
         <EmptyState
-          title="No quizzes submitted yet"
-          description="Take a quiz on the published materials. Your score and any missed questions will show up here."
+          title="No quizzes yet"
+          description="Take a practice quiz on the lectures. Your score and anything you miss will show up here."
           action={
             <ButtonLink to={`/courses/${courseId}/quiz`} variant="secondary">
               Take a quiz
@@ -106,7 +106,7 @@ export function CourseProgressPage() {
             <SectionLabel>Questions to revisit</SectionLabel>
             {progress.data.weakTopics.length === 0 ? (
               <p className="mt-3 text-sm leading-relaxed text-muted">
-                No open gaps. Your latest answer was correct for every question you have seen.
+                Nice — your latest answer was right for every question you’ve seen.
               </p>
             ) : (
               <ul className="mt-4 flex flex-col gap-3">

@@ -121,7 +121,7 @@ export function CourseSearchPage() {
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Search'}
           title="Search and summaries"
-          description="Search published lectures, then open a short summary of one lecture. Both stay inside the published PDFs."
+          description="Search across the published lectures, or open a short summary of one. Everything stays inside those PDFs."
         />
       </div>
 
@@ -129,15 +129,15 @@ export function CourseSearchPage() {
 
       {course.data && !enrolled && !unavailable ? (
         <EmptyState
-          title="Enroll to search this course"
-          description="Search and summaries are available after you join this course."
+          title="Join to search this course"
+          description="Join first, then you can search the lectures and read summaries."
         />
       ) : null}
 
       {enrolled && !materials.isLoading && readyMaterials.length === 0 ? (
         <EmptyState
-          title="No published materials yet"
-          description="Once your professor publishes ready lecture PDFs, you can search them and read a short summary."
+          title="Nothing to search yet"
+          description="Once your professor publishes the lecture PDFs, you can search them and skim a short summary."
         />
       ) : null}
 
@@ -151,7 +151,7 @@ export function CourseSearchPage() {
 
           <Panel className="mt-8">
             <SectionLabel>Search</SectionLabel>
-            <p className="mt-2 text-sm text-muted">Looks across every published lecture in this course.</p>
+            <p className="mt-2 text-sm text-muted">Looks across every lecture that’s live for this course.</p>
             <form className="mt-4 flex flex-col gap-3" onSubmit={onSearch}>
               <label htmlFor="lecture-search" className="text-sm font-medium text-ink-soft">
                 Search published lectures

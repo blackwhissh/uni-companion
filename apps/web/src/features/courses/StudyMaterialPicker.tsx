@@ -111,7 +111,7 @@ export function StudyMaterialPicker({
             <Button
               type="button"
               disabled={!someSelected || pending}
-              title={!someSelected ? 'Pick at least one material' : undefined}
+              title={!someSelected ? 'Pick at least one lecture' : undefined}
               onClick={() => onConfirm([...selected])}
             >
               {pending ? 'Generating…' : confirmLabel}
@@ -124,7 +124,7 @@ export function StudyMaterialPicker({
           </div>
           {!someSelected ? (
             <p className="text-sm text-muted" role="status">
-              Pick at least one material to continue.
+              Pick at least one lecture to continue.
             </p>
           ) : null}
         </div>

@@ -14,7 +14,7 @@ export function RegisterPage() {
   return (
     <AuthForm
       title="Create an account"
-      subtitle="Join your course cohort. Admins publish materials; you enroll and study."
+      subtitle="Join your courses, study from the published lectures, and meet classmates when you’re ready."
       submitLabel="Create account"
       onSubmit={async (values) => {
         const user = await register(

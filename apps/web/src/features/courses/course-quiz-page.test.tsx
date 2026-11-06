@@ -119,7 +119,7 @@ describe('course quiz page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Start quiz' }))
 
     expect(await screen.findByText('Which statement is supported?')).toBeInTheDocument()
-    expect(screen.getByText('A new shared quiz was created for this material selection.')).toBeInTheDocument()
+    expect(screen.getByText('Fresh quiz for the lectures you picked — you’re the first to use this set.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Quiz 1' })).toBeDisabled()
     const generateCall = fetchMock.mock.calls.find(
       ([url, init]) => String(url).includes('/quizzes/generate') && init?.method === 'POST',
@@ -179,7 +179,7 @@ describe('course quiz page', () => {
     renderAt('/courses/course-1/quiz', <CourseQuizPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Start quiz' }))
 
-    expect(await screen.findByText('Generation is still running. Wait a moment, then try again.')).toBeInTheDocument()
+    expect(await screen.findByText('Still working on that. Give it a moment, then try again.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('Which statement is supported?')).toBeInTheDocument()
     expect(generateCalls).toBe(2)
@@ -253,7 +253,7 @@ describe('course quiz page', () => {
 
     renderAt('/courses/course-1/quiz', <CourseQuizPage />)
 
-    expect(await screen.findByText('Still preparing your shared quiz…')).toBeInTheDocument()
+    expect(await screen.findByText('Still putting your quiz together…')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Start quiz' })).not.toBeInTheDocument()
 
     expect(resolveGenerate).toBeTypeOf('function')

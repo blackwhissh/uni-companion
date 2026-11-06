@@ -77,7 +77,7 @@ export function AdminMaterialsPage() {
     onSuccess: async () => {
       resetForm()
       setFormOpen(false)
-      setNotice('PDF uploaded. Wait until status is Indexed, then publish.')
+      setNotice('PDF uploaded. Wait until it shows Indexed, then publish for students.')
       await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
     },
     onError: (err) => {
@@ -95,8 +95,8 @@ export function AdminMaterialsPage() {
         variables.next === 'PUBLISHED'
           ? courseUnpublished
             ? `Published “${variables.title}”. Students still cannot open the course until you publish the course itself.`
-            : `Published “${variables.title}”. Enrolled students can use it in study modes.`
-          : `Unpublished “${variables.title}”. Students can no longer select it.`,
+            : `Published “${variables.title}”. Students in the course can study from it now.`
+          : `Unpublished “${variables.title}”. Students won’t see it in study modes anymore.`,
       )
       await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
     },
@@ -134,7 +134,7 @@ export function AdminMaterialsPage() {
       setNotice(
         updated.processingStatus === 'READY'
           ? `Replaced “${updated.title}”. Students now study the new PDF.`
-          : `Replaced “${updated.title}”. Students cannot study it until it is Indexed again.`,
+          : `Replaced “${updated.title}”. Students can’t study it until it’s Indexed again.`,
       )
       await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
     },
@@ -200,13 +200,13 @@ export function AdminMaterialsPage() {
         ? `\n\nThis title looks like a draft (“${material.title}”).`
         : ''
       const courseNote = courseUnpublished
-        ? '\n\nNote: this course is still unpublished, so students cannot open the course yet even after you publish the PDF.'
+        ? '\n\nNote: this course is still unpublished, so students can’t open it yet even after you publish the PDF.'
         : ''
       setConfirm({
         kind: 'publish',
         material,
-        title: 'Publish material?',
-        body: `Publish “${material.title}” for enrolled students?${draftNote}${courseNote}`,
+        title: 'Make this lecture available?',
+        body: `Publish “${material.title}” for students in the course?${draftNote}${courseNote}`,
         confirmLabel: 'Publish',
       })
       return
@@ -214,8 +214,8 @@ export function AdminMaterialsPage() {
     setConfirm({
       kind: 'unpublish',
       material,
-      title: 'Unpublish material?',
-      body: `Unpublish “${material.title}”? Students will lose access in study modes.`,
+      title: 'Hide this lecture from students?',
+      body: `Unpublish “${material.title}”? Students won’t be able to pick it in study modes.`,
       confirmLabel: 'Unpublish',
     })
   }
@@ -256,7 +256,7 @@ export function AdminMaterialsPage() {
         <PageHeader
           eyebrow="Materials"
           title={course.data?.title ?? 'Materials'}
-          description="Upload lecture PDFs, wait until they are Indexed, then publish so enrolled students can study. Replace a PDF to drop the old text and index the new file. Indexed means the PDF is searchable — it is not student-visible until Published."
+          description="Upload a lecture PDF, wait until it’s Indexed (searchable), then publish so students can study from it. Replacing a file clears the old text and re-indexes the new one. Indexed alone isn’t enough — students only see lectures you’ve Published."
           actions={
             <div className="flex flex-wrap gap-2">
               {course.data?.visibility === 'PUBLISHED' || canManage ? (
@@ -364,8 +364,8 @@ export function AdminMaterialsPage() {
 
       {materials.data?.length === 0 ? (
         <EmptyState
-          title="No materials yet."
-          description="Use Upload PDF to add a lecture file. Indexed means searchable; Published means students can select it."
+          title="No lectures yet"
+          description="Upload a PDF to get started. Indexed means it’s searchable; Published means students can pick it for study."
         />
       ) : null}
 

@@ -48,7 +48,7 @@ export function CourseFlashcardsPage() {
   const [revealed, setRevealed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(() =>
-    pendingAtMount.current ? 'Still preparing your shared deck…' : null,
+    pendingAtMount.current ? 'Still putting your deck together…' : null,
   )
   const [picking, setPicking] = useState(() => !pendingAtMount.current)
   const [blockingForResume, setBlockingForResume] = useState(() => !!pendingAtMount.current)
@@ -72,7 +72,7 @@ export function CourseFlashcardsPage() {
       clearStudyGeneration('flashcards', courseId)
       setBlockingForResume(false)
       setError(null)
-      setNotice(next.cards.length > 0 ? `This shared deck has ${cardCountLabel(next.cards.length)}.` : null)
+      setNotice(next.cards.length > 0 ? `This deck has ${cardCountLabel(next.cards.length)}.` : null)
       setPicking(false)
       setSelectedMaterialIds(variables.materialIds)
       setDeck(next)
@@ -98,7 +98,7 @@ export function CourseFlashcardsPage() {
     resumedGeneration.current = true
     setBlockingForResume(true)
     setPicking(false)
-    setNotice('Still preparing your shared deck…')
+    setNotice('Still putting your deck together…')
     generate.mutate({ materialIds: pending.materialIds, force: pending.force })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, course.data?.enrolled])
@@ -215,7 +215,7 @@ export function CourseFlashcardsPage() {
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Flashcards'}
           title="Flashcards"
-          description="Choose materials and study a shared deck. Existing versions are reused before a new one is created."
+          description="Pick the lectures you want, then flip through a deck. If someone already made one for that exact set, you’ll get it instead of waiting on a new one."
           actions={
             enrolled && readyCount > 0 && deck && !picking ? (
               <Button type="button" variant="secondary" disabled={generating} onClick={() => setPicking(true)}>
@@ -230,15 +230,15 @@ export function CourseFlashcardsPage() {
 
       {course.data && !enrolled && !unavailable ? (
         <EmptyState
-          title="Enroll to study flashcards"
-          description="Flashcards are only available after you join this course."
+          title="Join to study flashcards"
+          description="Join the course first, then flip through cards from the lectures."
         />
       ) : null}
 
       {enrolled && readyCount === 0 ? (
         <EmptyState
-          title="No published materials yet"
-          description="Once your professor publishes ready lecture PDFs, you can generate flashcards here."
+          title="No lectures for cards yet"
+          description="Once your professor publishes the PDFs, you can build a deck from them here."
         />
       ) : null}
 
@@ -273,10 +273,10 @@ export function CourseFlashcardsPage() {
               <Panel className="mt-4">
                 <p className="text-muted">
                   {blockingForResume && !generate.isPending
-                    ? 'Still preparing your shared deck…'
+                    ? 'Still putting your deck together…'
                     : studyWorkingCopy('deck', generateForce)}
                 </p>
-                <p className="mt-2 text-sm text-muted">You can refresh this page — preparation will continue.</p>
+                <p className="mt-2 text-sm text-muted">Feel free to refresh — we’ll keep working in the background.</p>
               </Panel>
             </section>
           ) : null}
@@ -284,8 +284,8 @@ export function CourseFlashcardsPage() {
           {showPicker ? (
             <StudyMaterialPicker
               materials={readyMaterials}
-              description="Select the lecture PDFs to study. You will resume your deck or receive the first shared version for this exact selection."
-              confirmLabel={deck ? 'Open selected deck' : 'Start flashcards'}
+              description="Choose the lectures to study. If a deck already exists for that exact set, you’ll pick up there; otherwise we’ll make the first one."
+              confirmLabel={deck ? 'Open this deck' : 'Start flashcards'}
               pending={generating}
               initialSelectedIds={selectedMaterialIds}
               onCancel={deck ? () => setPicking(false) : undefined}
@@ -295,8 +295,8 @@ export function CourseFlashcardsPage() {
 
           {deck && cards.length === 0 && !generating && !picking ? (
             <EmptyState
-              title="This deck has no cards"
-              description="Try generating again, or choose a different set of materials."
+              title="This deck came back empty"
+              description="Try again, or pick a different set of lectures."
             />
           ) : null}
 
@@ -304,7 +304,7 @@ export function CourseFlashcardsPage() {
             <section className="mt-8 animate-rise-delay">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <SectionLabel>
-                  Shared deck {deck.version} of {deck.availableVersions} · {cardCountLabel(cards.length)} · Card{' '}
+                  Deck {deck.version} of {deck.availableVersions} · {cardCountLabel(cards.length)} · Card{' '}
                   {index + 1} of {cards.length}
                 </SectionLabel>
                 <p className="text-xs text-muted">Space / Enter flip · ← → navigate · Enter on Next advances</p>
@@ -377,7 +377,7 @@ export function CourseFlashcardsPage() {
 
 function nextDeckLabel(deck: FlashcardDeck) {
   if (deck.version < deck.availableVersions) {
-    return 'Next shared deck'
+    return 'Next deck'
   }
   if (deck.availableVersions < deck.maxVersions) {
     return 'Create another deck'

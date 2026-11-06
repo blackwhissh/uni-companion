@@ -20,8 +20,8 @@ export function HomePage() {
             Uni Companion
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted sm:text-xl">
-            Published lecture PDFs become grounded questions, search, and short summaries. Practice from them, plan
-            around what you still miss, and find classmates in the same course.
+            Study from the lecture PDFs your course already uses — ask questions, search pages, practice what you miss,
+            and find classmates when you want company.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 animate-rise-delay">
             <ButtonLink to={ctaTo} className="!px-5 !py-2.5 !text-base">
@@ -36,15 +36,15 @@ export function HomePage() {
         <div className="mt-16 grid gap-4 sm:grid-cols-3 animate-rise-delay-2">
           <Feature
             title="From the lectures"
-            body="Ask, search, and summarize published PDFs in English or German. Open the cited page when you need the source."
+            body="Ask in English or German, search a page, or read a short summary — always with a link back to the PDF."
           />
           <Feature
             title="Practice"
-            body="Flashcards, quizzes, and a plan that places missed questions on the days before an exam."
+            body="Flip flashcards, take a quiz, and get a day-by-day plan for the questions you still miss before the exam."
           />
           <Feature
             title="Classmates"
-            body="Opt in to see peers who share an intent. An email is shared only after you accept a request."
+            body="Say what you’re looking for and meet people in the same course. Emails stay private until both of you agree."
           />
         </div>
 

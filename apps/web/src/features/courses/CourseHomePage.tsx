@@ -14,6 +14,7 @@ import {
   StatusPill,
 } from '../../shared/ui/ui.tsx'
 import { CourseMatchPanel } from './CourseMatchPanel.tsx'
+import { CourseNotesPanel } from './CourseNotesPanel.tsx'
 import { enrollInCourse, getCourse, unenrollFromCourse } from './course-api.ts'
 import { downloadMaterial, listMaterials, openMaterialPreview } from './material-api.ts'
 import type { Material } from './material-api.ts'
@@ -45,7 +46,7 @@ export function CourseHomePage() {
   const enroll = useMutation({
     mutationFn: () => enrollInCourse(courseId),
     onSuccess: async () => {
-      setActionNotice('Enrolled. Study modes are unlocked.')
+      setActionNotice('You’re in — study tools are unlocked.')
       queryClient.setQueryData(['courses', courseId], (current: typeof course.data) =>
         current ? { ...current, enrolled: true } : current,
       )
@@ -55,7 +56,7 @@ export function CourseHomePage() {
   const unenroll = useMutation({
     mutationFn: () => unenrollFromCourse(courseId),
     onSuccess: async () => {
-      setActionNotice('Unenrolled.')
+      setActionNotice('You’ve left the course.')
       await refresh()
     },
   })
@@ -128,15 +129,15 @@ export function CourseHomePage() {
           title={course.data?.title ?? (courseLoading ? 'Loading course…' : 'Course')}
           description={
             ownerPreview
-              ? 'Student preview: published materials only, the same list enrolled students will see.'
+              ? 'You’re looking at this the way a student would — only the lecture PDFs that are live for the class.'
               : enrolled
-                ? 'Study from published materials, then check your quiz progress. Study-partner matching stays off until you opt in.'
-                : 'Enroll to unlock materials and study tools for this module.'
+                ? 'Open a lecture, ask a question, practice what you miss, or leave yourself a private note. Study partners stay hidden until you opt in.'
+                : 'Join this course to open the lectures and study tools.'
           }
           actions={
             course.data && !enrolled ? (
               <Button type="button" variant="success" disabled={enroll.isPending} onClick={() => enroll.mutate()}>
-                {enroll.isPending ? 'Working…' : owned ? 'Enroll to try study modes' : 'Enroll'}
+                {enroll.isPending ? 'Joining…' : owned ? 'Join to try study modes' : 'Join course'}
               </Button>
             ) : null
           }
@@ -161,7 +162,7 @@ export function CourseHomePage() {
         <div className="mt-6 rounded-lg border border-accent/25 bg-accent/5 px-4 py-3 text-sm leading-relaxed text-ink-soft" role="status">
           <span className="font-medium text-ink">Preview as student</span>
           {!coursePublished ? ' — this course is still unpublished, so real students cannot open it yet.' : '.'}{' '}
-          You are seeing only published, indexed materials. Enroll above to try Q&A, search, summaries, flashcards, and quiz.
+          You’re seeing only the lecture PDFs students will get. Join above if you want to try Q&A, search, flashcards, or a quiz yourself.
         </div>
       ) : null}
 
@@ -185,20 +186,20 @@ export function CourseHomePage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <StudyMode
                 title="Q&A"
-                body="Ask questions grounded in published lecture PDFs, in English or German."
-                state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
+                body="Ask anything from the lectures — in English or German — and get an answer with page citations."
+                state={canOpenStudy ? 'Open' : ownerPreview ? 'Join to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/qa` : undefined}
               />
               <StudyMode
                 title="Search"
-                body="Find pages across published lectures."
-                state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
+                body="Look up a phrase and jump straight to the page it came from."
+                state={canOpenStudy ? 'Open' : ownerPreview ? 'Join to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/search` : undefined}
               />
               <StudyMode
                 title="Summary"
-                body="Read a short summary of one published lecture."
-                state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
+                body="Skim a short overview of one lecture before you dig in."
+                state={canOpenStudy ? 'Open' : ownerPreview ? 'Join to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/search#summary` : undefined}
               />
             </div>
@@ -209,26 +210,26 @@ export function CourseHomePage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <StudyMode
                 title="Flashcards"
-                body="Drill key ideas extracted from your course pack."
-                state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
+                body="Flip through the ideas that matter most from the lectures you pick."
+                state={canOpenStudy ? 'Open' : ownerPreview ? 'Join to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/flashcards` : undefined}
               />
               <StudyMode
                 title="Quiz"
-                body="Check understanding with generated practice questions."
-                state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
+                body="Check how well it sticks with a short practice quiz."
+                state={canOpenStudy ? 'Open' : ownerPreview ? 'Join to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/quiz` : undefined}
               />
               <StudyMode
                 title="Plan"
-                body="Schedule missed quiz questions before an exam date."
-                state={enrolled ? 'Open' : ownerPreview ? 'Enroll to try' : 'Enroll to open'}
+                body="Pick an exam date and get the questions you still miss lined up on the days before."
+                state={enrolled ? 'Open' : ownerPreview ? 'Join to try' : 'Join to open'}
                 to={enrolled ? `/courses/${courseId}/plan` : undefined}
               />
               <StudyMode
                 title="Progress"
-                body="See quiz scores and the questions you still miss."
-                state={enrolled ? 'Open' : ownerPreview ? 'Enroll to try' : 'Enroll to open'}
+                body="See your quiz scores and the questions worth another look."
+                state={enrolled ? 'Open' : ownerPreview ? 'Join to try' : 'Join to open'}
                 to={enrolled ? `/courses/${courseId}/progress` : undefined}
               />
             </div>
@@ -248,11 +249,11 @@ export function CourseHomePage() {
 
             {!materials.isLoading && visibleMaterials.length === 0 ? (
               <EmptyState
-                title="No published materials yet."
+                title="No lectures live yet"
                 description={
                   owned
-                    ? 'Publish at least one indexed PDF in the course console to see what students will get.'
-                    : 'Your course admin has not published lecture PDFs for this module. Check back after they go live.'
+                    ? 'Publish at least one ready PDF in the course console so students have something to study.'
+                    : 'Nothing’s published for this course yet. Check back once your professor goes live with the lectures.'
                 }
               />
             ) : null}
@@ -324,10 +325,11 @@ export function CourseHomePage() {
 
           {enrolled ? (
             <>
+              <CourseNotesPanel courseId={courseId} />
               <CourseMatchPanel courseId={courseId} />
 
               <div className="mt-10 border-t border-line/70 pt-6">
-                <p className="text-sm text-muted">Need to leave this course?</p>
+                <p className="text-sm text-muted">Done with this course for now?</p>
                 <Button
                   type="button"
                   variant="ghost"
@@ -335,7 +337,7 @@ export function CourseHomePage() {
                   disabled={unenroll.isPending}
                   onClick={() => setConfirmUnenroll(true)}
                 >
-                  {unenroll.isPending ? 'Working…' : 'Unenroll from course'}
+                  {unenroll.isPending ? 'Leaving…' : 'Leave course'}
                 </Button>
               </div>
             </>
@@ -345,9 +347,9 @@ export function CourseHomePage() {
 
       <ConfirmDialog
         open={confirmUnenroll}
-        title="Unenroll from course?"
-        body={`Unenroll from “${course.data?.title ?? 'this course'}”? You can join again later.`}
-        confirmLabel="Unenroll"
+        title="Leave this course?"
+        body={`Leave “${course.data?.title ?? 'this course'}”? You can join again whenever you’re ready.`}
+        confirmLabel="Leave course"
         danger
         onCancel={() => setConfirmUnenroll(false)}
         onConfirm={() => {
@@ -358,8 +360,8 @@ export function CourseHomePage() {
 
       {course.data && !enrolled && !owned && !unavailable && !courseLoading && !enroll.isPending ? (
         <EmptyState
-          title="You are not enrolled yet"
-          description="Join this course to see published materials and unlock study modes. Use Enroll above to get started."
+          title="You’re not in this course yet"
+          description="Join above to open the lectures and study tools."
         />
       ) : null}
     </Page>

@@ -36,7 +36,7 @@ export function LoginPage() {
   return (
     <AuthForm
       title="Log in"
-      subtitle="Pick up where you left off — courses, materials, and matching stay with your account."
+      subtitle="Welcome back. Your courses, notes, and practice stay right where you left them."
       submitLabel="Log in"
       onSubmit={async (values) => {
         setSubmittedLogin(true)

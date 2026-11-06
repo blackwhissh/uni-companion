@@ -42,6 +42,7 @@ export default defineConfig(({ mode }) => {
               '/api/study': serviceProxy('http://127.0.0.1:8082'),
               '/api/rag': serviceProxy('http://127.0.0.1:8082'),
               '/api/match': serviceProxy('http://127.0.0.1:8082'),
+              '/api/notes': serviceProxy('http://127.0.0.1:8082'),
             },
           }
         : {}),
