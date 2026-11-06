@@ -64,7 +64,7 @@ export function AdminCoursesPage() {
     onSuccess: async (course) => {
       resetForm()
       setFormOpen(false)
-      setNotice(`Created “${course.title}”. Upload materials, then publish the course when ready.`)
+      setNotice(`Created “${course.title}”. Upload the lectures, then publish when students should see it.`)
       await queryClient.invalidateQueries({ queryKey: ['courses'] })
     },
     onError: (err) => {
@@ -77,7 +77,7 @@ export function AdminCoursesPage() {
     onSuccess: async (_data, courseId) => {
       setError(null)
       const course = courses.data?.find((item) => item.id === courseId)
-      setNotice(course ? `Published “${course.title}”. Students can enroll now.` : 'Course published.')
+      setNotice(course ? `Published “${course.title}”. Students can join now.` : 'Course is live for students.')
       await queryClient.invalidateQueries({ queryKey: ['courses'] })
     },
     onError: (err) => {
@@ -130,8 +130,8 @@ export function AdminCoursesPage() {
     setConfirm({
       kind: 'publish',
       course,
-      title: 'Publish course?',
-      body: `Publish “${course.title}”? Students will be able to enroll and study published materials.`,
+      title: 'Make this course live?',
+      body: `Publish “${course.title}”? Students will be able to join and study any lectures you’ve already published.`,
       confirmLabel: 'Publish',
     })
   }
@@ -140,8 +140,8 @@ export function AdminCoursesPage() {
     setConfirm({
       kind: 'unpublish',
       course,
-      title: 'Unpublish course?',
-      body: `Unpublish “${course.title}”? Students will lose enrollment access until you publish again.`,
+      title: 'Take this course offline?',
+      body: `Unpublish “${course.title}”? Students lose access until you publish again.`,
       confirmLabel: 'Unpublish',
     })
   }
@@ -186,7 +186,7 @@ export function AdminCoursesPage() {
       <PageHeader
         eyebrow="Admin"
         title="Course console"
-        description="Create modules, publish them for enrollment, then upload lecture PDFs students can study from. Professors manage their own courses; platform admins can unpublish or delete any course."
+        description="Create a course, publish it when students should join, then upload the lecture PDFs they’ll study from. Professors manage their own courses; platform admins can step in on any of them."
         actions={
           formOpen ? null : (
             <Button type="button" onClick={() => setFormOpen(true)}>
@@ -249,8 +249,8 @@ export function AdminCoursesPage() {
 
       {courses.data?.length === 0 ? (
         <EmptyState
-          title="No courses yet."
-          description="Use Create course to add your first module. Students only see it after you publish."
+          title="No courses yet"
+          description="Create your first course here. Students only see it after you publish."
         />
       ) : null}
 

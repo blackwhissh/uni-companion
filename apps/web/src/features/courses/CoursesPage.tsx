@@ -38,7 +38,7 @@ export function CoursesPage() {
     },
     onSuccess: async (_data, courseId) => {
       setError(null)
-      setNotice('Enrolled.')
+      setNotice('You’re in — open the course whenever you’re ready.')
       queryClient.setQueryData<Course[]>(['courses'], (current) =>
         current?.map((course) => (course.id === courseId ? { ...course, enrolled: true } : course)),
       )
@@ -55,7 +55,7 @@ export function CoursesPage() {
     mutationFn: unenrollFromCourse,
     onSuccess: async () => {
       setError(null)
-      setNotice('Unenrolled.')
+      setNotice('You’ve left the course. You can join again anytime.')
       await queryClient.invalidateQueries({ queryKey: ['courses'] })
     },
     onError: (err) => {
@@ -74,7 +74,7 @@ export function CoursesPage() {
       <PageHeader
         eyebrow="Study workspace"
         title="Your courses"
-        description="Enroll in a published course, then study its lectures, practice, and find classmates."
+        description="Join a course that’s open for enrollment, then open it to study, practice, and meet classmates."
       />
 
       {courses.isLoading ? (
@@ -93,8 +93,8 @@ export function CoursesPage() {
 
       {courses.isSuccess && courses.data?.length === 0 ? (
         <EmptyState
-          title="No courses yet."
-          description="When a course admin publishes a module, it will show up here so you can enroll and study."
+          title="No courses yet"
+          description="When a professor publishes a course, it’ll show up here so you can join and start studying."
         />
       ) : null}
 
@@ -142,13 +142,13 @@ export function CoursesPage() {
 
       <ConfirmDialog
         open={unenrollTarget !== null}
-        title="Unenroll from course?"
+        title="Leave this course?"
         body={
           unenrollTarget
-            ? `Unenroll from “${unenrollTarget.title}”? You can join again later.`
+            ? `Leave “${unenrollTarget.title}”? You can join again whenever you’re ready.`
             : ''
         }
-        confirmLabel="Unenroll"
+        confirmLabel="Leave course"
         danger
         onCancel={() => setUnenrollTarget(null)}
         onConfirm={() => {
@@ -200,11 +200,11 @@ function CourseRow({
           </ButtonLink>
           {enrolled ? (
             <Button type="button" variant="warn" disabled={pending} onClick={onUnenroll}>
-              {pending ? 'Working…' : 'Unenroll'}
+              {pending ? 'Leaving…' : 'Leave'}
             </Button>
           ) : (
             <Button type="button" variant="success" disabled={pending} onClick={onEnroll}>
-              {pending ? 'Working…' : 'Enroll'}
+              {pending ? 'Joining…' : 'Join course'}
             </Button>
           )}
         </div>

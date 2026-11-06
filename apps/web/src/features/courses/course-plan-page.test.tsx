@@ -92,7 +92,7 @@ describe('course plan page', () => {
 
     expect(await screen.findByRole('heading', { name: 'Study plan' })).toBeInTheDocument()
     fireEvent.change(await screen.findByLabelText('Exam date'), { target: { value: '2026-11-06' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Build plan' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Build my plan' }))
 
     expect(await screen.findByText('2 days until the exam')).toBeInTheDocument()
     expect(screen.getByText(/What is Raft\?/)).toBeInTheDocument()

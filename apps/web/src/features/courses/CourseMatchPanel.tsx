@@ -67,21 +67,21 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
     <Panel className="mt-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SectionLabel>Study partners</SectionLabel>
-        {status.data ? <StatusPill tone={optedIn ? 'ok' : 'neutral'}>{optedIn ? 'Discoverable' : 'Private'}</StatusPill> : null}
+        {status.data ? <StatusPill tone={optedIn ? 'ok' : 'neutral'}>{optedIn ? 'Looking for partners' : 'Not sharing'}</StatusPill> : null}
       </div>
       <p className="mt-3 text-sm leading-relaxed text-muted">
-        Opt in to be listed to classmates in this course who are also looking for a study partner. They can see your
-        display name and the intents you choose. Your email stays private until you accept a contact request. You can
-        opt out at any time, and leaving the course removes you immediately.
+        Looking for someone to study with? Opt in and classmates who’ve done the same can see your name and what you
+        want help with. Your email stays private until you both agree to share it. You can step back anytime — leaving
+        the course takes you off the list right away.
       </p>
       {status.isLoading ? (
         <p className="mt-3 text-sm text-muted" role="status">
-          Loading study-partner status…
+          Checking whether you’re sharing…
         </p>
       ) : null}
       {status.isError ? (
         <div className="mt-3">
-          <Alert>Could not load study-partner status.</Alert>
+          <Alert>Couldn’t check your study-partner settings. Try again in a moment.</Alert>
         </div>
       ) : null}
       {status.data ? (
@@ -107,7 +107,7 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
       <div className="mt-4">
         {optedIn ? (
           <Button type="button" variant="ghost" disabled={update.isPending} onClick={() => setConfirmOptOut(true)}>
-            Stop sharing
+            Step back
           </Button>
         ) : displayName ? (
           <Button
@@ -115,24 +115,25 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
             disabled={update.isPending || !status.data}
             onClick={() => setConfirmOptIn(true)}
           >
-            Opt in to study partners
+            Find study partners
           </Button>
         ) : (
           <p className="text-sm text-muted">
             <Link to="/profile" className="font-medium text-ink underline decoration-accent/50 underline-offset-4">
               Add a display name
             </Link>{' '}
-            before opting in.
+            first — that’s how classmates will recognize you.
           </p>
         )}
       </div>
 
       {optedIn ? (
         <div className="mt-6 border-t border-line/70 pt-5">
-          <SectionLabel>What you want</SectionLabel>
+          <SectionLabel>What you’re looking for</SectionLabel>
           <fieldset className="mt-3" disabled={saveIntents.isPending || displayName.length === 0}>
             <legend className="text-sm text-muted">
-              Classmates appear when you share an intent. Your email is shared only if you accept a request.
+              Tick what you want, and we’ll show people looking for the same thing. Emails stay private until you accept
+              a request.
             </legend>
             <div className="mt-3 flex flex-col gap-2">
               {COLLABORATION_INTENTS.map((intent) => (
@@ -159,10 +160,10 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
             </div>
           ) : null}
           {suggestions.data && (suggestions.data.intents?.length ?? 0) === 0 ? (
-            <p className="mt-4 text-sm text-muted">Choose what you want to work on to see classmates.</p>
+            <p className="mt-4 text-sm text-muted">Pick what you’re after and we’ll show classmates looking for the same.</p>
           ) : null}
           {suggestions.data && (suggestions.data.intents?.length ?? 0) > 0 && (suggestions.data.suggestions?.length ?? 0) === 0 ? (
-            <p className="mt-4 text-sm text-muted">No opted-in classmates share those intents yet.</p>
+            <p className="mt-4 text-sm text-muted">Nobody else is looking for that yet — check back after more people opt in.</p>
           ) : null}
           {(suggestions.data?.suggestions?.length ?? 0) > 0 ? (
             <ul className="mt-4 flex flex-col gap-2">
@@ -239,9 +240,9 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
 
       <ConfirmDialog
         open={confirmOptIn}
-        title="Opt in to study partners?"
-        body="Classmates who have also opted in can see your display name and shared intents. They cannot see your email unless you accept a contact request."
-        confirmLabel="Opt in"
+        title="Show up for study partners?"
+        body="Classmates who’ve also opted in can see your name and what you’re looking for. They won’t see your email unless you accept a contact request."
+        confirmLabel="I’m in"
         onCancel={() => setConfirmOptIn(false)}
         onConfirm={() => {
           setConfirmOptIn(false)
@@ -250,9 +251,9 @@ export function CourseMatchPanel({ courseId }: { courseId: string }) {
       />
       <ConfirmDialog
         open={confirmOptOut}
-        title="Stop sharing?"
-        body="You disappear from this course's list immediately. Pending contact requests are removed. Emails you already accepted stay available to both of you."
-        confirmLabel="Stop sharing"
+        title="Step back from the list?"
+        body="You’ll leave this course’s partner list right away, and any pending requests disappear. Connections you’ve already accepted keep their emails."
+        confirmLabel="Step back"
         danger
         onCancel={() => setConfirmOptOut(false)}
         onConfirm={() => {
@@ -353,10 +354,10 @@ function ContactActions({
   if (contact === 'OUTGOING') {
     return (
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted">Waiting for {name} to accept.</p>
+        <p className="text-sm text-muted">Waiting to hear back from {name}.</p>
         {requestId ? (
           <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>
-            Cancel request
+            Take back request
           </Button>
         ) : null}
       </div>
@@ -390,7 +391,7 @@ function ContactActions({
     return (
       <div className="mt-3">
         <Button type="button" variant="secondary" disabled={busy} onClick={onRequest}>
-          Request contact
+          Say hello
         </Button>
       </div>
     )
@@ -414,48 +415,50 @@ function acceptedContacts(requests: ContactRequest[] | undefined) {
 
 function contactTitle(action: PendingContact | null) {
   if (action?.kind === 'accept') {
-    return `Share email with ${action.name}?`
+    return `Share emails with ${action.name}?`
   }
   if (action?.kind === 'decline') {
-    return `Decline ${action.name}?`
+    return `Pass on ${action.name}'s request?`
   }
   if (action?.kind === 'cancel') {
-    return `Cancel request to ${action.name}?`
+    return `Take back your hello to ${action.name}?`
   }
   if (action?.kind === 'disconnect') {
     return `Disconnect from ${action.name}?`
   }
-  return action ? `Ask ${action.name} to connect?` : ''
+  return action ? `Reach out to ${action.name}?` : ''
 }
 
 function contactBody(action: PendingContact | null) {
   if (action?.kind === 'accept') {
-    return `This shares your email with ${action.name} and shows you their email.`
+    return `You’ll see each other’s email so you can actually get in touch.`
   }
   if (action?.kind === 'decline') {
-    return 'Your email stays private.'
+    return 'Your email stays private, and they won’t see a connection.'
   }
   if (action?.kind === 'cancel') {
-    return `This removes your pending request to ${action.name}.`
+    return `We’ll pull back the request you sent to ${action.name}.`
   }
   if (action?.kind === 'disconnect') {
-    return `This removes the connection and hides your shared emails in this course.`
+    return `You’ll both lose the shared emails for this course. You can always say hello again later.`
   }
-  return action ? `${action.name} will see that you want to connect. Your email stays hidden until they accept.` : ''
+  return action
+    ? `${action.name} will see that you’d like to connect. Your email stays hidden until they accept.`
+    : ''
 }
 
 function contactConfirmLabel(action: PendingContact | null) {
   if (action?.kind === 'accept') {
-    return 'Share email'
+    return 'Share emails'
   }
   if (action?.kind === 'decline') {
-    return 'Decline request'
+    return 'Pass for now'
   }
   if (action?.kind === 'cancel') {
-    return 'Cancel request'
+    return 'Take it back'
   }
   if (action?.kind === 'disconnect') {
     return 'Disconnect'
   }
-  return 'Send request'
+  return 'Say hello'
 }

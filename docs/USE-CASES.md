@@ -281,16 +281,16 @@ F2 Canonical course knowledge base (only PUBLISHED + READY visible to students)
 | **Main flow** | 1. Admin replaces a PDF (optionally unpublish first via UC-018).<br>2. System re-ingests replacement and updates/hides old chunks per policy. |
 | **Postconditions** | Students see/study the intended version when published + ready. |
 
-#### UC-017 — Student private notes upload *(optional later)*
+#### UC-017 — Student private notes
 
 | Field | Content |
 |---|---|
 | **Actors** | A-STU, A-SYS |
-| **Priority / Phase** | Could · Future (not default path) |
-| **Goal** | Let a student add personal notes for private study only |
+| **Priority / Phase** | Should · v1 |
+| **Goal** | Let a student jot personal notes for private study only |
 | **Preconditions** | Enrolled |
-| **Main flow** | 1. Student uploads a personal note PDF.<br>2. System keeps it **private to that student**.<br>3. It does **not** enter the shared course knowledge base unless a Course Admin explicitly promotes it (separate future UC). |
-| **Postconditions** | Private artifact only; no cohort redistribution. |
+| **Main flow** | 1. Student opens the course home and writes a short note (title + text).<br>2. System keeps it **private to that student** — classmates and course admins never see it.<br>3. Notes never enter the shared lecture knowledge base or Q&A retrieval.<br>4. Student can edit or delete a note; leaving the course removes their notes for that course. |
+| **Postconditions** | Private notes only; no cohort redistribution; included in personal data export / account deletion. |
 
 ---
 

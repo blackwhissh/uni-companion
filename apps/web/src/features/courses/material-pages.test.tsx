@@ -131,15 +131,15 @@ describe('material pages', () => {
       createdAt: '2026-01-01T00:00:00Z',
     })
 
-    expect(await screen.findByText(/No students in this course are looking for a study partner yet/)).toBeInTheDocument()
+    expect(await screen.findByText(/Nobody in this course is looking for a study partner yet/)).toBeInTheDocument()
     expect(screen.getByText(/Your email stays private/)).toBeInTheDocument()
     expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Opt in to study partners' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Find study partners' }))
     const consent = await screen.findByRole('alertdialog')
-    expect(within(consent).getByText(/They cannot see your email/)).toBeInTheDocument()
-    fireEvent.click(within(consent).getByRole('button', { name: 'Opt in' }))
+    expect(within(consent).getByText(/won’t see your email/)).toBeInTheDocument()
+    fireEvent.click(within(consent).getByRole('button', { name: 'I’m in' }))
 
-    expect(await screen.findByText(/You are the only student in this course looking for a study partner/)).toBeInTheDocument()
+    expect(await screen.findByText(/You’re the only one looking right now/)).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8082/api/match/courses/course-1/opt-in',
       expect.objectContaining({
@@ -147,17 +147,17 @@ describe('material pages', () => {
         body: JSON.stringify({ optedIn: true, displayName: 'Student' }),
       }),
     )
-    expect(await screen.findByText('Choose what you want to work on to see classmates.')).toBeInTheDocument()
+    expect(await screen.findByText(/Pick what you’re after/)).toBeInTheDocument()
     expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('checkbox', { name: 'Study group' }))
     expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument()
     expect(screen.getByText('Also looking for Study group')).toBeInTheDocument()
     expect(screen.queryByText(/@/)).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Request contact' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Say hello' }))
     const requestDialog = await screen.findByRole('alertdialog')
     expect(within(requestDialog).getByText(/stays hidden until they accept/)).toBeInTheDocument()
-    fireEvent.click(within(requestDialog).getByRole('button', { name: 'Send request' }))
-    expect(await screen.findByText('Waiting for Ada Lovelace to accept.')).toBeInTheDocument()
+    fireEvent.click(within(requestDialog).getByRole('button', { name: 'Say hello' }))
+    expect(await screen.findByText('Waiting to hear back from Ada Lovelace.')).toBeInTheDocument()
     expect(screen.queryByText(/@/)).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8082/api/match/courses/course-1/contacts',
@@ -167,9 +167,9 @@ describe('material pages', () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }))
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stop sharing' }))
-    expect(await screen.findByText(/No students in this course are looking for a study partner yet/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Step back' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Step back' }))
+    expect(await screen.findByText(/Nobody in this course is looking for a study partner yet/)).toBeInTheDocument()
   })
 
   it('shows an email only after the student accepts a contact request', async () => {
@@ -233,8 +233,8 @@ describe('material pages', () => {
     expect(screen.queryByText('ada@uni.test')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
     const dialog = await screen.findByRole('alertdialog')
-    expect(within(dialog).getByText(/shares your email with Ada Lovelace/)).toBeInTheDocument()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Share email' }))
+    expect(within(dialog).getByText(/You’ll see each other’s email/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Share emails' }))
     expect(await screen.findByText('Email: ada@uni.test')).toBeInTheDocument()
     expect(accepted).toBe(true)
   })
@@ -268,7 +268,7 @@ describe('material pages', () => {
 
     renderAt('/admin/courses/course-1/materials', <AdminMaterialsPage />)
 
-    expect(await screen.findByText('No materials yet.')).toBeInTheDocument()
+    expect(await screen.findByText('No lectures yet')).toBeInTheDocument()
     fireEvent.click(await screen.findByRole('button', { name: 'Upload PDF' }))
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Lecture 1' } })
     const file = new File(['%PDF'], 'lecture.pdf', { type: 'application/pdf' })
@@ -284,7 +284,7 @@ describe('material pages', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     const deleteDialog = await screen.findByRole('alertdialog')
     fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete permanently' }))
-    expect(await screen.findByText('No materials yet.')).toBeInTheDocument()
+    expect(await screen.findByText('No lectures yet')).toBeInTheDocument()
   })
 
   it('replaces a published PDF and tells the admin the new file is indexed', async () => {
@@ -461,8 +461,8 @@ describe('material pages', () => {
     expect(await screen.findByText(/Preview as student/)).toBeInTheDocument()
     expect(await screen.findByText('Lecture 1')).toBeInTheDocument()
     expect(screen.queryByText('Draft notes')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Enroll to try study modes' })).toBeInTheDocument()
-    expect(screen.getAllByText('Enroll to try').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Join to try study modes' })).toBeInTheDocument()
+    expect(screen.getAllByText('Join to try').length).toBeGreaterThan(0)
   })
 
   it('offers enroll when the student cannot list materials yet', async () => {
@@ -494,7 +494,7 @@ describe('material pages', () => {
       createdAt: '2026-01-01T00:00:00Z',
     })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Enroll' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Join course' }))
     expect(await screen.findByText('Lecture 1')).toBeInTheDocument()
   })
 
@@ -527,9 +527,9 @@ describe('material pages', () => {
     })
 
     expect(await screen.findByText('Lecture 1')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Unenroll from course' }))
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Unenroll' }))
-    expect(await screen.findByText('You are not enrolled yet')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Leave course' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave course' }))
+    expect(await screen.findByText('You’re not in this course yet')).toBeInTheDocument()
     expect(screen.queryByText('Lecture 1')).not.toBeInTheDocument()
   })
 })

@@ -56,7 +56,7 @@ export function CourseQuizPage() {
   const [attempt, setAttempt] = useState<QuizAttempt | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(() =>
-    pendingAtMount.current ? 'Still preparing your shared quiz…' : null,
+    pendingAtMount.current ? 'Still putting your quiz together…' : null,
   )
   const [picking, setPicking] = useState(
     () => !pendingAtMount.current && !quizFromUrlAtMount.current,
@@ -167,7 +167,7 @@ export function CourseQuizPage() {
     resumedGeneration.current = true
     setBlockingForResume(true)
     setPicking(false)
-    setNotice('Still preparing your shared quiz…')
+    setNotice('Still putting your quiz together…')
     generate.mutate({ materialIds: pending.materialIds, force: pending.force })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, course.data?.enrolled, searchParams, quiz, generate.isPending, resumeQuiz])
@@ -271,7 +271,7 @@ export function CourseQuizPage() {
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Quiz'}
           title="Practice quiz"
-          description="Choose materials and take a shared quiz. Existing versions are reused before a new one is created."
+          description="Pick the lectures you want to practice. If a quiz already exists for that exact set, you’ll pick up there instead of waiting for a new one."
           actions={
             enrolled && readyCount > 0 && quiz && !picking ? (
               <Button type="button" variant="secondary" disabled={generate.isPending} onClick={() => setPicking(true)}>
@@ -286,15 +286,15 @@ export function CourseQuizPage() {
 
       {course.data && !enrolled && !unavailable ? (
         <EmptyState
-          title="Enroll to take quizzes"
-          description="Practice quizzes are only available after you join this course."
+          title="Join to take a quiz"
+          description="Join the course first, then practice with questions from the lectures."
         />
       ) : null}
 
       {enrolled && readyCount === 0 ? (
         <EmptyState
-          title="No published materials yet"
-          description="Once your professor publishes ready lecture PDFs, you can generate a practice quiz here."
+          title="No lectures for a quiz yet"
+          description="Once your professor publishes the PDFs, you can generate a practice quiz here."
         />
       ) : null}
 
@@ -325,10 +325,10 @@ export function CourseQuizPage() {
               <Panel className="mt-4">
                 <p className="text-muted">
                   {blockingForResume && !generate.isPending
-                    ? 'Still preparing your shared quiz…'
+                    ? 'Still putting your quiz together…'
                     : studyWorkingCopy('quiz', generateForce)}
                 </p>
-                <p className="mt-2 text-sm text-muted">You can refresh this page — preparation will continue.</p>
+                <p className="mt-2 text-sm text-muted">Feel free to refresh — we’ll keep working in the background.</p>
               </Panel>
             </section>
           ) : null}
@@ -336,8 +336,8 @@ export function CourseQuizPage() {
           {showPicker ? (
             <StudyMaterialPicker
               materials={readyMaterials}
-              description="Select the lecture PDFs to practice. You will resume your quiz or receive the first shared version for this exact selection."
-              confirmLabel={quiz ? 'Open selected quiz' : 'Start quiz'}
+              description="Choose the lectures to practice. If a quiz already exists for that exact set, you’ll pick up there; otherwise we’ll make the first one."
+              confirmLabel={quiz ? 'Open this quiz' : 'Start quiz'}
               pending={generate.isPending}
               initialSelectedIds={selectedMaterialIds}
               onCancel={quiz ? () => setPicking(false) : undefined}
@@ -347,15 +347,15 @@ export function CourseQuizPage() {
 
           {quiz && quiz.questions.length === 0 && !generate.isPending && !picking ? (
             <EmptyState
-              title="This quiz has no questions"
-              description="Try generating again, or choose a different set of materials."
+              title="This quiz came back empty"
+              description="Try again, or pick a different set of lectures."
             />
           ) : null}
 
           {quiz && quiz.questions.length > 0 && !generate.isPending && !picking ? (
             <section className="mt-8 animate-rise-delay">
               <SectionLabel>
-                Shared quiz {quiz.version} of {quiz.availableVersions} · {quiz.questions.length} questions
+                Quiz {quiz.version} of {quiz.availableVersions} · {quiz.questions.length} questions
               </SectionLabel>
               <GroundedNote className="mt-2" />
               <StudyVersionControls
@@ -478,7 +478,7 @@ export function CourseQuizPage() {
 
 function nextQuizLabel(quiz: Quiz) {
   if (quiz.version < quiz.availableVersions) {
-    return 'Next shared quiz'
+    return 'Next quiz'
   }
   if (quiz.availableVersions < quiz.maxVersions) {
     return 'Create another quiz'

@@ -96,7 +96,7 @@ export function AdminPanelPage() {
       <PageHeader
         eyebrow="Platform"
         title="Admin panel"
-        description="See every account and how each course is doing. A course-admin change takes effect the next time that person logs in."
+        description="Everyone’s accounts and courses in one place. Role changes apply the next time that person signs in."
         actions={<ButtonLink to="/admin/courses" variant="secondary">Course console</ButtonLink>}
       />
 
@@ -129,7 +129,7 @@ export function AdminPanelPage() {
           </div>
         ) : null}
         {accounts.data?.length === 0 ? (
-          <EmptyState title="No accounts yet." description="Accounts appear here after someone registers." />
+          <EmptyState title="No accounts yet" description="People show up here as soon as they create an account." />
         ) : null}
         {accounts.data && accounts.data.length > 0 ? (
           <ul className="mt-4 flex flex-col gap-3">
@@ -178,7 +178,7 @@ export function AdminPanelPage() {
           </div>
         ) : null}
         {courses.data?.length === 0 ? (
-          <EmptyState title="No courses yet." description="Create the first course from the course console." />
+          <EmptyState title="No courses yet" description="Open the course console to create the first one." />
         ) : null}
         {courses.data && courses.data.length > 0 ? (
           <ul className="mt-4 flex flex-col gap-3">

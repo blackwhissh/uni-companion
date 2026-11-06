@@ -73,11 +73,11 @@ describe('profile page privacy controls', () => {
 
     expect(await screen.findByDisplayValue('Ada Lovelace')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Download my data' }))
-    expect(await screen.findByText('Personal data export downloaded.')).toBeInTheDocument()
+    expect(await screen.findByText('Your data file is ready — check your downloads.')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete account' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close my account' }))
     const dialog = await screen.findByRole('alertdialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete account' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close account' }))
 
     expect(await screen.findByRole('heading', { name: 'Login screen' })).toBeInTheDocument()
   })

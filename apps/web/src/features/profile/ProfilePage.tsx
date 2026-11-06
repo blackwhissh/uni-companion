@@ -76,10 +76,10 @@ export function ProfilePage() {
       <PageHeader
         eyebrow="Account"
         title="Profile"
-        description="Your display name is what opted-in classmates can see. Your email stays on your account until you accept a contact request."
+        description="This is how classmates recognize you when you look for a study partner. Your email stays private until you both agree to share it."
       />
 
-      {profile.isLoading ? <p className="mt-8 animate-pulse-soft text-muted">Loading profile…</p> : null}
+      {profile.isLoading ? <p className="mt-8 animate-pulse-soft text-muted">Loading your profile…</p> : null}
 
       {profile.data ? (
         <>
@@ -103,22 +103,22 @@ export function ProfilePage() {
                 hint="e.g. distributed systems, thesis partners, German practice"
               />
               {error ? <Alert>{error}</Alert> : null}
-              {saved ? <p className="text-sm font-medium text-ok">Saved.</p> : null}
+              {saved ? <p className="text-sm font-medium text-ok">All set — profile saved.</p> : null}
               <Button type="submit" disabled={save.isPending}>
-                Save profile
+                Save changes
               </Button>
             </form>
           </Panel>
 
           <Panel className="mt-6">
-            <SectionLabel>Privacy & data</SectionLabel>
+            <SectionLabel>Your data</SectionLabel>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              Download a JSON copy of your profile, course enrollments, study plans, quiz attempts, and study-partner
-              records, or permanently delete your account.
+              Take a copy of what’s stored for you — profile, courses you’ve joined, study plans, quiz history, private
+              notes, and study-partner connections — or close the account for good.
             </p>
             {exported ? (
               <p className="mt-3 text-sm font-medium text-ok" role="status">
-                Personal data export downloaded.
+                Your data file is ready — check your downloads.
               </p>
             ) : null}
             <div className="mt-4 flex flex-wrap gap-3">
@@ -128,7 +128,7 @@ export function ProfilePage() {
                 disabled={downloadData.isPending}
                 onClick={() => downloadData.mutate()}
               >
-                {downloadData.isPending ? 'Preparing export…' : 'Download my data'}
+                {downloadData.isPending ? 'Gathering your data…' : 'Download my data'}
               </Button>
               {!platformAdmin ? (
                 <Button
@@ -137,7 +137,7 @@ export function ProfilePage() {
                   disabled={removeAccount.isPending}
                   onClick={() => setConfirmDelete(true)}
                 >
-                  Delete account
+                  Close my account
                 </Button>
               ) : null}
             </div>
@@ -145,9 +145,9 @@ export function ProfilePage() {
 
           <ConfirmDialog
             open={confirmDelete}
-            title="Delete your account?"
-            body="This permanently removes your account, course enrollments, quiz history, study plans, and study-partner connections. This cannot be undone."
-            confirmLabel="Delete account"
+            title="Close your account for good?"
+            body="This removes your profile, courses you’ve joined, quiz history, study plans, private notes, and study-partner connections. There’s no undo."
+            confirmLabel="Close account"
             danger
             onCancel={() => setConfirmDelete(false)}
             onConfirm={() => {

@@ -18,7 +18,7 @@ describe('study version controls', () => {
       />,
     )
 
-    expect(screen.getByText('Opening the shared deck saved for this material selection.')).toBeInTheDocument()
+    expect(screen.getByText('Picking up the deck you left for these lectures.')).toBeInTheDocument()
   })
 
   it('asks before recording a quality report', () => {

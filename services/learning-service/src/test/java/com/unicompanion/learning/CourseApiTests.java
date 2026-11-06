@@ -306,6 +306,50 @@ class CourseApiTests {
     }
 
     @Test
+    void openApiSpecificationAndPrivateStudentNotesAreEnforced() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.openapi").value("3.1.0"))
+                .andExpect(jsonPath("$.info.title").value("Uni Companion Learning Service API"))
+                .andExpect(jsonPath("$.paths['/api/notes/courses/{courseId}']").exists());
+
+        String courseId = createCourse("CISS-NOTES");
+        publish(courseId);
+
+        mockMvc.perform(get("/api/notes/courses/" + courseId).header("Authorization", STUDENT))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/courses/" + courseId + "/enroll").header("Authorization", STUDENT))
+                .andExpect(status().isCreated());
+
+        MvcResult created = mockMvc.perform(post("/api/notes/courses/" + courseId)
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Raft log invariant","body":"Leader completeness holds across elections."}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.title").value("Raft log invariant"))
+                .andReturn();
+        String noteId = JsonPath.read(created.getResponse().getContentAsString(), "$.id");
+
+        mockMvc.perform(get("/api/notes/courses/" + courseId).header("Authorization", ADMIN))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/me/data").header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.privateNotes[?(@.title == 'Raft log invariant')]").isNotEmpty());
+
+        mockMvc.perform(delete("/api/notes/courses/" + courseId + "/" + noteId)
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/notes/courses/" + courseId).header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
     void studentCannotOpenAnUnpublishedCourse() throws Exception {
         String courseId = createCourse("CISS-HIDE");
 

@@ -71,7 +71,7 @@ describe('course progress page', () => {
 
     renderAt(<CourseProgressPage />)
 
-    expect(await screen.findByText('No quizzes submitted yet')).toBeInTheDocument()
+    expect(await screen.findByText('No quizzes yet')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Take a quiz' })).toHaveAttribute('href', '/courses/course-1/quiz')
   })
 

@@ -66,7 +66,7 @@ export function CoursePlanPage() {
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Plan'}
           title="Study plan"
-          description="Pick an exam date. Missed quiz questions are placed on the days before it, and the list updates when you answer one correctly."
+          description="Pick your exam date. We’ll line up the quiz questions you still miss on the days before — and drop them off the list once you get them right."
         />
       </div>
 
@@ -78,13 +78,13 @@ export function CoursePlanPage() {
       {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
       {course.data && !enrolled && !unavailable ? (
         <EmptyState
-          title="Enroll to build a plan"
-          description="A study plan uses your quiz gaps after you join this course."
+          title="Join to build a plan"
+          description="A study plan uses the quiz questions you still miss — join the course first."
         />
       ) : null}
       {plan.isError && !missing ? (
         <div className="mt-6">
-          <Alert>Could not load your study plan.</Alert>
+          <Alert>Couldn’t load your study plan. Try again in a moment.</Alert>
         </div>
       ) : null}
 
@@ -103,7 +103,7 @@ export function CoursePlanPage() {
           {error ? <Alert>{error}</Alert> : null}
           <div>
             <Button type="submit" disabled={save.isPending || !(examDate || shown?.examDate)}>
-              {save.isPending ? 'Saving…' : 'Build plan'}
+              {save.isPending ? 'Building…' : 'Build my plan'}
             </Button>
           </div>
         </form>
