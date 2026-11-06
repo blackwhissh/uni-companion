@@ -258,7 +258,7 @@ export function CourseQaPage() {
           {pickingMaterials ? (
             <StudyMaterialPicker
               materials={readyMaterials}
-              description="Select the published lecture PDFs that Q&A should search. Your choice stays active for this session."
+              description="Choose which lectures to ask about. We’ll keep this set until you change it."
               confirmLabel="Use selected materials"
               initialSelectedIds={selectedMaterialIds}
               onCancel={selectedMaterialIds.length > 0 ? () => setPickingMaterials(false) : undefined}
@@ -283,7 +283,7 @@ export function CourseQaPage() {
             </p>
             {selectedMaterialIds.length === 0 ? (
               <p className="mt-2 text-sm text-muted" role="status">
-                Pick at least one material to ask a question.
+                Pick at least one lecture to ask about.
               </p>
             ) : null}
             <form className="mt-4 flex flex-col gap-4" onSubmit={onSubmit}>
