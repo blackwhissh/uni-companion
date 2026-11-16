@@ -156,11 +156,14 @@ From your course materials, consensus keeps replicas consistent.
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
     expect(await screen.findByText('What is consensus?')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Direct answer' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Explanation' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Key terms' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'The result' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Walk through it' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Remember' })).toBeInTheDocument()
+    expect(screen.getByText(/Consensus algorithms keep replicas consistent/)).toBeInTheDocument()
     expect(screen.getByText('Sources used')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show passage' })).toBeInTheDocument()
     expect(screen.getByText('Explain simpler')).toBeInTheDocument()
+    expect(screen.getByText('One-sentence result')).toBeInTheDocument()
   })
 
   it('sends a German-language chat when Deutsch is selected and the chat is restarted', async () => {
@@ -232,7 +235,7 @@ Aus den veröffentlichten Materialien.
       target: { value: 'What is consensus?' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
-    expect(await screen.findByRole('heading', { name: 'Direkte Antwort' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Das Ergebnis' })).toBeInTheDocument()
   })
 
   it('fills a starter into the composer without sending yet when clicked after focus', async () => {
@@ -250,8 +253,9 @@ Aus den veröffentlichten Materialien.
 
     renderAt('/courses/course-1/qa', <CourseQaPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Start studying' }))
-    expect(await screen.findByText('Start anywhere')).toBeInTheDocument()
-    // Starters send immediately — assert Key terms chip exists and sending works via follow-up fill path
+    expect(await screen.findByText('Ask for a result')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Give me the result' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Walk through the steps' })).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Your message'), {
       target: { value: 'What are the most important key terms here, with short definitions I can memorize?' },
     })
@@ -444,7 +448,7 @@ Aus den veröffentlichten Materialien.
 
     expect(await screen.findByText(/Could not draft an answer/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByRole('heading', { name: 'Direct answer' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'The result' })).toBeInTheDocument()
     expect(messageCalls).toBe(2)
   })
 })

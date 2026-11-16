@@ -31,41 +31,33 @@ public class FakeChatModel implements ChatModel {
             return resolved.noMaterialAnswer();
         }
         RetrievedChunk primary = chunks.getFirst();
-        String body = truncate(primary.content(), 320);
+        String claim = truncate(primary.content(), 280);
         boolean german = resolved == ExplanationLanguage.DE;
         boolean followUp = history != null && !history.isEmpty();
         String directHeading = german ? "## Direkte Antwort" : "## Direct answer";
         String explanationHeading = german ? "## Erklärung" : "## Explanation";
         String termsHeading = german ? "## Schlüsselbegriffe" : "## Key terms";
-        String lead = german
-                ? "Aus den veröffentlichten Materialien: %s [%d]".formatted(body, 1)
-                : "From your course materials: %s [%d]".formatted(body, 1);
-        String support;
+        StringBuilder steps = new StringBuilder();
         if (followUp) {
-            support = german
-                    ? "Folgefrage in diesem Lerngespräch. Quelle [%d] (%s, Seite %d) passt zu: \"%s\".".formatted(
-                            1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim())
-                    : "Follow-up in this study chat. Source [%d] (%s, page %d) matches: \"%s\".".formatted(
-                            1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim());
-        } else {
-            support = german
-                    ? "Die veröffentlichten Materialien stützen diese Antwort. Quelle [%d] (%s, Seite %d) passt zu deiner Frage: \"%s\".".formatted(
-                            1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim())
-                    : "The published materials support this answer. Source [%d] (%s, page %d) is the closest match to your question: \"%s\".".formatted(
-                            1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim());
+            steps.append(german
+                    ? "Folgefrage. Dieselbe Aussage, kürzer gesagt.\n"
+                    : "Follow-up. Same result, in fewer words.\n");
         }
-        StringBuilder terms = new StringBuilder();
         for (int i = 0; i < chunks.size(); i++) {
             RetrievedChunk chunk = chunks.get(i);
-            String snippet = truncate(chunk.content(), 80);
-            String line = german
-                    ? "- **Aus %s (S. %d)** — %s [%d]%n"
-                    : "- **From %s (p.%d)** — %s [%d]%n";
-            terms.append(line.formatted(chunk.title(), chunk.pageNumber(), snippet, i + 1));
+            String step = truncate(chunk.content(), 180);
+            steps.append(german
+                    ? "%d. Die Vorlesung sagt: %s [%d]%n".formatted(i + 1, step, i + 1)
+                    : "%d. The lecture states: %s [%d]%n".formatted(i + 1, step, i + 1));
         }
+        steps.append(german
+                ? "**Ergebnis:** Das ist der Satz, den du wiedergeben kannst — %s [1]".formatted(claim)
+                : "**Result:** That sentence is what you should be able to repeat — %s [1]".formatted(claim));
+        String term = termLabel(claim);
+        String termLine = "- **%s** — %s [1]".formatted(term, claim);
         return """
                 %s
-                %s
+                %s [1]
 
                 %s
                 %s
@@ -74,12 +66,22 @@ public class FakeChatModel implements ChatModel {
                 %s
                 """.formatted(
                 directHeading,
-                lead,
+                claim,
                 explanationHeading,
-                support,
+                steps.toString().trim(),
                 termsHeading,
-                terms.toString().trim()
+                termLine
         );
+    }
+
+    private static String termLabel(String claim) {
+        String bare = claim.replaceAll("[.!?]+$", "").trim();
+        if (bare.isEmpty()) {
+            return "Term";
+        }
+        String[] words = bare.split("\\s+");
+        int count = words.length >= 4 ? 2 : Math.min(words.length, 3);
+        return String.join(" ", java.util.Arrays.copyOf(words, count));
     }
 
     @Override
