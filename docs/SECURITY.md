@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document ID | DOC-SEC |
-| Version | 0.1.0 |
+| Version | 0.2.0 |
 | Status | Draft |
-| Last updated | 2026-09-27 |
+| Last updated | 2026-11-16 |
 | Owner | Tech lead |
 
 ## 1. Purpose
@@ -36,10 +36,10 @@ Baseline security and privacy controls for Uni Companion. Not a full DPIA.
 
 ```text
 Browser → identity-service / learning-service
-learning-service → PostgreSQL, local disk, Gemini API
+learning-service → PostgreSQL, local disk, Gemini API, optional Moodle REST
 ```
 
-Gemini is an **external processor**. Send only required chunks + question.
+Gemini is an **external processor**. Send only required chunks + question. Moodle (when enabled) is another external system; download URLs get the token appended at request time only.
 
 ## 5. Access control matrix (Phase A)
 
@@ -68,6 +68,7 @@ Gemini is an **external processor**. Send only required chunks + question.
 | AI disclosure | UI states answers may be wrong (NFR-050) |
 | Copyright | No public material marketplace; admin-sourced canonical files |
 | Matching | Opt-in only. Suggestions show display name and shared intents to other opted-in classmates in that course. Email is stored for a contact request and shown only to the two students after accept. |
+| LMS token | Moodle webservice token only in env (`LMS_MOODLE_TOKEN`); never on material rows or in git. Sync stays off until `LMS_MOODLE_ENABLED=true`. |
 
 ## 7. Gemini-specific notes
 
