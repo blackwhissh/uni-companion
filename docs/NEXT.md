@@ -11,9 +11,10 @@
 
 ## 1. Where the product is
 
-Full grounded study platform with Phase A hardening and OpenTelemetry on `main`. Streaming study chat is in PR #18. This increment adds Playwright browser smoke:
+Full grounded study platform with Phase A hardening, OpenTelemetry, streaming study chat, and Playwright browser smoke:
 
-- Specs: landing + student login → courses workspace (+ bad-credentials)
+- SSE study chat: `POST /api/rag/chat/sessions/{id}/messages/stream` (`token` → `done` / `error`)
+- Playwright smoke: landing + student login → courses (+ bad-credentials)
 - Runner: `bash scripts/e2e-smoke.sh` (Postgres + identity + learning/fake + Vite QA proxy)
 - CI job `Playwright smoke` gates deploy with backend/frontend tests
 - University-email verification is skipped for now
@@ -22,9 +23,8 @@ Full grounded study platform with Phase A hardening and OpenTelemetry on `main`.
 
 | Order | Capability |
 |---|---|
-| 1 | Merge streaming study chat (PR #18) if not already on main |
-| 2 | Remaining P1 (audit log, idempotency, readiness/liveness, FE error catalog) |
-| 3 | LMS sync |
+| 1 | Remaining P1 (audit log, idempotency, readiness/liveness, FE error catalog) |
+| 2 | LMS sync |
 | — | University-email verification (deferred; revisit for campus rollout) |
 
 ## 3. Done when

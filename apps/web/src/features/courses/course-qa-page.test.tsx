@@ -90,22 +90,21 @@ describe('course study chat page', () => {
         })
         return json(emptySession())
       }
-      if (String(url).includes('/rag/chat/sessions/session-1/messages') && init?.method === 'POST') {
+      if (String(url).includes('/rag/chat/sessions/session-1/messages/stream') && init?.method === 'POST') {
         expect(JSON.parse(String(init.body))).toEqual({ question: 'What is consensus?' })
-        return json(
-          emptySession({
-            messages: [
-              {
-                id: 'm1',
-                role: 'USER',
-                content: 'What is consensus?',
-                citations: [],
-                createdAt: '2026-11-16T00:00:01Z',
-              },
-              {
-                id: 'm2',
-                role: 'ASSISTANT',
-                content: `## Direct answer
+        const session = emptySession({
+          messages: [
+            {
+              id: 'm1',
+              role: 'USER',
+              content: 'What is consensus?',
+              citations: [],
+              createdAt: '2026-11-16T00:00:01Z',
+            },
+            {
+              id: 'm2',
+              role: 'ASSISTANT',
+              content: `## Direct answer
 Consensus algorithms keep replicas consistent. [1]
 
 ## Explanation
@@ -114,20 +113,30 @@ From your course materials, consensus keeps replicas consistent.
 ## Key terms
 - **Consensus** — keeps replicas consistent [1]
 `,
-                citations: [
-                  {
-                    materialId: 'material-1',
-                    title: 'Lecture 1',
-                    sectionHint: 'Chapter 1 — Consensus',
-                    pageNumber: 1,
-                    excerpt: 'Consensus algorithms keep replicas consistent.',
-                  },
-                ],
-                createdAt: '2026-11-16T00:00:02Z',
-              },
-            ],
-          }),
-        )
+              citations: [
+                {
+                  materialId: 'material-1',
+                  title: 'Lecture 1',
+                  sectionHint: 'Chapter 1 — Consensus',
+                  pageNumber: 1,
+                  excerpt: 'Consensus algorithms keep replicas consistent.',
+                },
+              ],
+              createdAt: '2026-11-16T00:00:02Z',
+            },
+          ],
+        })
+        return sse([
+          { event: 'token', data: { delta: '## Direct answer\n' } },
+          { event: 'token', data: { delta: 'Consensus algorithms keep replicas consistent. [1]\n\n' } },
+          {
+            event: 'token',
+            data: {
+              delta: '## Explanation\nFrom your course materials, consensus keeps replicas consistent.\n\n## Key terms\n- **Consensus** — keeps replicas consistent [1]\n',
+            },
+          },
+          { event: 'done', data: session },
+        ])
       }
       if (String(url).endsWith('/materials')) {
         return json([material])
@@ -168,23 +177,22 @@ From your course materials, consensus keeps replicas consistent.
         expect(body.language).toBe('DE')
         return json(emptySession({ id: 'session-de', language: 'DE' }))
       }
-      if (String(url).includes('/messages') && init?.method === 'POST') {
-        return json(
-          emptySession({
-            id: 'session-de',
-            language: 'DE',
-            messages: [
-              {
-                id: 'm1',
-                role: 'USER',
-                content: 'What is consensus?',
-                citations: [],
-                createdAt: '2026-11-16T00:00:01Z',
-              },
-              {
-                id: 'm2',
-                role: 'ASSISTANT',
-                content: `## Direkte Antwort
+      if (String(url).includes('/messages/stream') && init?.method === 'POST') {
+        const session = emptySession({
+          id: 'session-de',
+          language: 'DE',
+          messages: [
+            {
+              id: 'm1',
+              role: 'USER',
+              content: 'What is consensus?',
+              citations: [],
+              createdAt: '2026-11-16T00:00:01Z',
+            },
+            {
+              id: 'm2',
+              role: 'ASSISTANT',
+              content: `## Direkte Antwort
 Consensus algorithms keep replicas consistent. [1]
 
 ## Erklärung
@@ -193,19 +201,19 @@ Aus den veröffentlichten Materialien.
 ## Schlüsselbegriffe
 - **Consensus** — keeps replicas consistent [1]
 `,
-                citations: [
-                  {
-                    materialId: 'material-1',
-                    title: 'Lecture 1',
-                    pageNumber: 1,
-                    excerpt: 'Consensus algorithms keep replicas consistent.',
-                  },
-                ],
-                createdAt: '2026-11-16T00:00:02Z',
-              },
-            ],
-          }),
-        )
+              citations: [
+                {
+                  materialId: 'material-1',
+                  title: 'Lecture 1',
+                  pageNumber: 1,
+                  excerpt: 'Consensus algorithms keep replicas consistent.',
+                },
+              ],
+              createdAt: '2026-11-16T00:00:02Z',
+            },
+          ],
+        })
+        return sse([{ event: 'done', data: session }])
       }
       if (String(url).endsWith('/materials')) {
         return json([material])
@@ -304,27 +312,26 @@ Aus den veröffentlichten Materialien.
       if (String(url).endsWith('/rag/chat/sessions') && init?.method === 'POST') {
         return json(emptySession())
       }
-      if (String(url).includes('/messages') && init?.method === 'POST') {
-        return json(
-          emptySession({
-            messages: [
-              {
-                id: 'm1',
-                role: 'USER',
-                content: 'What is the dining philosophers problem?',
-                citations: [],
-                createdAt: '2026-11-16T00:00:01Z',
-              },
-              {
-                id: 'm2',
-                role: 'ASSISTANT',
-                content: 'The published pages do not cover that question.',
-                citations: [],
-                createdAt: '2026-11-16T00:00:02Z',
-              },
-            ],
-          }),
-        )
+      if (String(url).includes('/messages/stream') && init?.method === 'POST') {
+        const session = emptySession({
+          messages: [
+            {
+              id: 'm1',
+              role: 'USER',
+              content: 'What is the dining philosophers problem?',
+              citations: [],
+              createdAt: '2026-11-16T00:00:01Z',
+            },
+            {
+              id: 'm2',
+              role: 'ASSISTANT',
+              content: 'The published pages do not cover that question.',
+              citations: [],
+              createdAt: '2026-11-16T00:00:02Z',
+            },
+          ],
+        })
+        return sse([{ event: 'done', data: session }])
       }
       if (String(url).endsWith('/materials')) {
         return json([material])
@@ -377,48 +384,49 @@ Aus den veröffentlichten Materialien.
   it('retries a failed message from Try again', async () => {
     setAccessToken('student-token')
     let messageCalls = 0
+    const successSession = emptySession({
+      messages: [
+        {
+          id: 'm1',
+          role: 'USER',
+          content: 'What is consensus?',
+          citations: [],
+          createdAt: '2026-11-16T00:00:01Z',
+        },
+        {
+          id: 'm2',
+          role: 'ASSISTANT',
+          content: '## Direct answer\nConsensus keeps replicas consistent. [1]',
+          citations: [
+            {
+              materialId: 'material-1',
+              title: 'Lecture 1',
+              pageNumber: 1,
+              excerpt: 'Consensus algorithms keep replicas consistent.',
+            },
+          ],
+          createdAt: '2026-11-16T00:00:02Z',
+        },
+      ],
+    })
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (String(url).endsWith('/rag/chat/sessions') && init?.method === 'POST') {
         return json(emptySession())
       }
-      if (String(url).includes('/messages') && init?.method === 'POST') {
+      if (String(url).includes('/messages/stream') && init?.method === 'POST') {
         messageCalls += 1
         if (messageCalls === 1) {
-          return json(
+          return sse([
             {
-              code: 'BAD_GATEWAY',
-              message: 'Could not draft an answer from the published materials. Try again shortly.',
+              event: 'error',
+              data: {
+                message: 'Could not draft an answer from the published materials. Try again shortly.',
+                status: 502,
+              },
             },
-            502,
-          )
+          ])
         }
-        return json(
-          emptySession({
-            messages: [
-              {
-                id: 'm1',
-                role: 'USER',
-                content: 'What is consensus?',
-                citations: [],
-                createdAt: '2026-11-16T00:00:01Z',
-              },
-              {
-                id: 'm2',
-                role: 'ASSISTANT',
-                content: '## Direct answer\nConsensus keeps replicas consistent. [1]',
-                citations: [
-                  {
-                    materialId: 'material-1',
-                    title: 'Lecture 1',
-                    pageNumber: 1,
-                    excerpt: 'Consensus algorithms keep replicas consistent.',
-                  },
-                ],
-                createdAt: '2026-11-16T00:00:02Z',
-              },
-            ],
-          }),
-        )
+        return sse([{ event: 'done', data: successSession }])
       }
       if (String(url).endsWith('/materials')) {
         return json([material])
@@ -434,6 +442,8 @@ Aus den veröffentlichten Materialien.
     })
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
+    expect(await screen.findByText(/Could not draft an answer/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { name: 'Direct answer' })).toBeInTheDocument()
     expect(messageCalls).toBe(2)
   })
@@ -443,5 +453,13 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function sse(events: Array<{ event: string; data: unknown }>) {
+  const body = events.map((item) => `event: ${item.event}\ndata: ${JSON.stringify(item.data)}\n\n`).join('')
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream' },
   })
 }
