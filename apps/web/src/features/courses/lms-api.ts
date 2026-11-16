@@ -1,6 +1,6 @@
 import { learningFetch } from '../../shared/api/learning-client.ts'
 
-export type LmsProvider = 'FAKE'
+export type LmsProvider = 'FAKE' | 'MOODLE'
 
 export type LmsLink = {
   courseId: string

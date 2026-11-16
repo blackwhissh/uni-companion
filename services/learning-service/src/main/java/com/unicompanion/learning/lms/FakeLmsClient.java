@@ -5,7 +5,6 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
@@ -23,7 +22,6 @@ import java.util.Map;
  * Use external course id {@code demo-moodle-course} to pull two sample PDFs.
  */
 @Component
-@ConditionalOnProperty(prefix = "unicompanion.lms", name = "provider", havingValue = "fake", matchIfMissing = true)
 public class FakeLmsClient implements LmsClient {
 
     public static final String DEMO_COURSE_ID = "demo-moodle-course";

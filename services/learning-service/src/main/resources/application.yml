@@ -38,8 +38,11 @@ unicompanion:
     embedding-model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
     chat-model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}
   lms:
-    # fake = in-memory demo catalog (demo-moodle-course). Real Moodle/ILIAS adapters come later.
-    provider: ${LMS_PROVIDER:fake}
+    # Fake client is always on (demo-moodle-course). Moodle is optional and selected per course link.
+    moodle:
+      enabled: ${LMS_MOODLE_ENABLED:false}
+      base-url: ${LMS_MOODLE_BASE_URL:}
+      token: ${LMS_MOODLE_TOKEN:}
 
 springdoc:
   api-docs:
