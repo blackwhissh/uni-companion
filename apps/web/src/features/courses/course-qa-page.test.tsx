@@ -451,6 +451,56 @@ Aus den veröffentlichten Materialien.
     expect(await screen.findByRole('heading', { name: 'The result' })).toBeInTheDocument()
     expect(messageCalls).toBe(2)
   })
+
+  it('reopens the last chat and saves the result as a private note', async () => {
+    setAccessToken('student-token')
+    const saved = emptySession({
+      id: 'session-9',
+      messages: [
+        {
+          id: 'm1',
+          role: 'USER',
+          content: 'What is consensus?',
+          citations: [],
+          createdAt: '2026-11-16T00:00:01Z',
+        },
+        {
+          id: 'm2',
+          role: 'ASSISTANT',
+          content: '## Direct answer\nConsensus keeps replicas consistent.',
+          citations: [],
+          createdAt: '2026-11-16T00:00:02Z',
+        },
+      ],
+    })
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith('/rag/chat/sessions/session-9')) {
+        return json(saved)
+      }
+      if (String(url).endsWith('/notes/courses/course-1') && init?.method === 'POST') {
+        return json({ id: 'note-1', title: 'What is consensus?', body: 'Consensus keeps replicas consistent.' }, 201)
+      }
+      if (String(url).endsWith('/materials')) {
+        return json([material])
+      }
+      return json(course)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAt('/courses/course-1/qa?session=session-9', <CourseQaPage />)
+
+    expect(await screen.findByRole('heading', { name: 'The result' })).toBeInTheDocument()
+    expect(screen.getByText('Consensus keeps replicas consistent.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save result as note' }))
+    expect(await screen.findByRole('button', { name: 'Saved to your notes' })).toBeInTheDocument()
+    const noteCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).includes('/notes/courses/course-1') && init?.method === 'POST',
+    )
+    expect(JSON.parse(String(noteCall?.[1]?.body))).toEqual({
+      title: 'What is consensus?',
+      body: 'Consensus keeps replicas consistent.',
+    })
+  })
 })
 
 function json(body: unknown, status = 200) {

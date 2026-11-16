@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import {
   Alert,
@@ -18,6 +18,10 @@ import { CourseNotesPanel } from './CourseNotesPanel.tsx'
 import { enrollInCourse, getCourse, unenrollFromCourse } from './course-api.ts'
 import { downloadMaterial, listMaterials, openMaterialPreview } from './material-api.ts'
 import type { Material } from './material-api.ts'
+import { latestStudyChat } from './rag-api.ts'
+import { lectureMarks, localIsoDate, todayStep } from './study-continue.ts'
+import { getStudyPlan, lectureActivity, practiceMissedQuiz } from './study-api.ts'
+import { studyActionError } from './study-ui.ts'
 
 export function CourseHomePage() {
   const { courseId = '' } = useParams()
@@ -39,6 +43,7 @@ export function CourseHomePage() {
     await queryClient.invalidateQueries({ queryKey: ['materials', courseId] })
   }
   const [fileError, setFileError] = useState<string | null>(null)
+  const [practiceError, setPracticeError] = useState<string | null>(null)
   const [actionNotice, setActionNotice] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ material: Material; url: string } | null>(null)
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null)
@@ -76,6 +81,45 @@ export function CourseHomePage() {
   const visibleMaterials = enrolled || ownerPreview ? studentMaterials : []
   const readyCount = visibleMaterials.length
   const canOpenStudy = enrolled && readyCount > 0
+  const latestChat = useQuery({
+    queryKey: ['study-chat-latest', courseId],
+    queryFn: () => latestStudyChat(courseId),
+    enabled: enrolled,
+    retry: false,
+  })
+  const plan = useQuery({
+    queryKey: ['plan', courseId],
+    queryFn: async () => {
+      try {
+        const next = await getStudyPlan(courseId)
+        return next && Array.isArray(next.steps) ? next : null
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 404 || err.status === 400)) {
+          return null
+        }
+        throw err
+      }
+    },
+    enabled: enrolled,
+    retry: false,
+  })
+  const activity = useQuery({
+    queryKey: ['lecture-activity', courseId],
+    queryFn: () => lectureActivity(courseId),
+    enabled: enrolled,
+    retry: false,
+  })
+  const marksByMaterial = new Map((activity.data ?? []).map((item) => [item.materialId, item.kinds]))
+  const nextStep = todayStep(plan.data?.steps, localIsoDate())
+  const navigate = useNavigate()
+  const practice = useMutation({
+    mutationFn: () => practiceMissedQuiz(courseId),
+    onSuccess: (quiz) => {
+      setPracticeError(null)
+      navigate(`/courses/${courseId}/quiz?quiz=${quiz.id}`)
+    },
+    onError: (err) => setPracticeError(studyActionError(err, 'Could not build that practice quiz.')),
+  })
 
   async function onDownload(material: Material) {
     try {
@@ -181,6 +225,59 @@ export function CourseHomePage() {
             </p>
           )}
 
+          {enrolled && (latestChat.data || nextStep) ? (
+            <section className="mt-8 rounded-2xl border border-accent/25 bg-accent/5 px-5 py-4">
+              <SectionLabel>Pick up here</SectionLabel>
+              {latestChat.data ? (
+                <div className="mt-3">
+                  <p className="text-sm leading-relaxed text-ink">{latestChat.data.preview}</p>
+                  <Link
+                    to={`/courses/${courseId}/qa?session=${latestChat.data.id}`}
+                    className="mt-2 inline-block text-sm font-medium text-accent-deep hover:underline"
+                  >
+                    Continue chat
+                  </Link>
+                </div>
+              ) : null}
+              {nextStep ? (
+                <div className={latestChat.data ? 'mt-4 border-t border-accent/15 pt-4' : 'mt-3'}>
+                  <p className="text-sm leading-relaxed text-ink">
+                    {nextStep.kind === 'QUIZ'
+                      ? `${nextStep.date === localIsoDate() ? 'Today' : 'Next'}: take a quiz so the plan knows what you still miss.`
+                      : `${nextStep.date === localIsoDate() ? 'Today' : 'Next'}: ${nextStep.prompt}`}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    <Link
+                      to={
+                        nextStep.kind === 'GAP' && nextStep.prompt
+                          ? `/courses/${courseId}/qa?question=${encodeURIComponent(nextStep.prompt)}`
+                          : `/courses/${courseId}/quiz`
+                      }
+                      className="text-sm font-medium text-accent-deep hover:underline"
+                    >
+                      {nextStep.kind === 'GAP' ? 'Ask about this' : 'Open quiz'}
+                    </Link>
+                    {nextStep.kind === 'GAP' ? (
+                      <button
+                        type="button"
+                        className="text-sm font-medium text-accent-deep hover:underline disabled:opacity-60"
+                        disabled={practice.isPending}
+                        onClick={() => practice.mutate()}
+                      >
+                        {practice.isPending ? 'Building…' : 'Practice these questions'}
+                      </button>
+                    ) : null}
+                  </div>
+                  {practiceError ? (
+                    <div className="mt-3">
+                      <Alert>{practiceError}</Alert>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           <section className="mt-10 animate-rise-delay">
             <SectionLabel>From the lectures</SectionLabel>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -273,6 +370,11 @@ export function CourseHomePage() {
                       <p className="mt-1 text-sm text-muted">
                         {previewLoadingId === material.id ? 'Opening preview…' : material.fileName}
                       </p>
+                      {enrolled ? (
+                        <p className="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-muted">
+                          {lectureMarks(marksByMaterial.get(material.id)).join(' · ')}
+                        </p>
+                      ) : null}
                     </button>
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <StatusPill tone="accent">Published</StatusPill>

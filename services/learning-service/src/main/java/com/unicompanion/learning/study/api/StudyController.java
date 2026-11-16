@@ -1,7 +1,9 @@
 package com.unicompanion.learning.study.api;
 
 import com.unicompanion.learning.config.IdempotencyService;
+import com.unicompanion.learning.study.application.FlashcardReviewService;
 import com.unicompanion.learning.study.application.ProgressService;
+import com.unicompanion.learning.study.application.StudyActivityService;
 import com.unicompanion.learning.study.application.ProgressSummary;
 import com.unicompanion.learning.study.application.StudyPlan;
 import com.unicompanion.learning.study.application.StudyPlanService;
@@ -38,6 +40,8 @@ public class StudyController {
     private final StudyService study;
     private final ProgressService progress;
     private final StudyPlanService plans;
+    private final FlashcardReviewService cardReviews;
+    private final StudyActivityService activity;
     private final IdempotencyService idempotency;
     private final JsonMapper json;
 
@@ -45,14 +49,45 @@ public class StudyController {
             StudyService study,
             ProgressService progress,
             StudyPlanService plans,
+            FlashcardReviewService cardReviews,
+            StudyActivityService activity,
             IdempotencyService idempotency,
             JsonMapper json
     ) {
         this.study = study;
         this.progress = progress;
         this.plans = plans;
+        this.cardReviews = cardReviews;
+        this.activity = activity;
         this.idempotency = idempotency;
         this.json = json;
+    }
+
+    @GetMapping("/courses/{courseId}/activity")
+    public List<StudyActivityService.MaterialActivity> activity(
+            @PathVariable UUID courseId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return activity.forCourse(courseId, userId(jwt));
+    }
+
+    @PostMapping("/courses/{courseId}/flashcards/{cardId}/review")
+    public CardReviewResponse reviewCard(
+            @PathVariable UUID courseId,
+            @PathVariable UUID cardId,
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody CardReviewRequest request
+    ) {
+        cardReviews.mark(courseId, userId(jwt), cardId, request.front(), request.status());
+        return new CardReviewResponse(request.status());
+    }
+
+    @PostMapping("/courses/{courseId}/quizzes/practice")
+    public StudyService.QuizView practiceMissed(
+            @PathVariable UUID courseId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return study.practiceMissed(courseId, userId(jwt));
     }
 
     @GetMapping("/courses/{courseId}/progress")
@@ -103,6 +138,7 @@ public class StudyController {
         }
         try {
             StudyService.GenerateDeckResult result = study.generateFlashcards(courseId, uid, force, materials);
+            activity.record(uid, courseId, materials, StudyActivityService.CARDS);
             int status = result.created() ? HttpStatus.CREATED.value() : HttpStatus.OK.value();
             idempotency.complete(uid, idempotencyKey, status, writeJson(result.view()));
             return ResponseEntity.status(status).body(result.view());
@@ -212,13 +248,16 @@ public class StudyController {
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody SubmitRequest request
     ) {
-        return study.submitQuiz(
+        UUID uid = userId(jwt);
+        StudyService.AttemptView attempt = study.submitQuiz(
                 quizId,
-                userId(jwt),
+                uid,
                 request.answers().stream()
                         .map(answer -> new StudyService.AnswerInput(answer.questionId(), answer.selectedIndex()))
                         .toList()
         );
+        activity.recordQuiz(uid, quizId);
+        return attempt;
     }
 
     private static List<UUID> materialIds(GenerateRequest request) {
@@ -245,6 +284,12 @@ public class StudyController {
     }
 
     public record PlanRequest(@NotNull LocalDate examDate) {
+    }
+
+    public record CardReviewRequest(@NotNull String front, @NotNull String status) {
+    }
+
+    public record CardReviewResponse(String status) {
     }
 
     public record GenerateRequest(List<UUID> materialIds) {

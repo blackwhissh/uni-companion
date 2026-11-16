@@ -172,6 +172,50 @@ describe('course flashcards page', () => {
     expect(await screen.findByText('What is consensus?')).toBeInTheDocument()
     expect(generateCalls).toBe(2)
   })
+
+  it('marks a revealed card Again so it can join the gap list', async () => {
+    setAccessToken('student-token')
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const path = String(url)
+      if (path.includes('/flashcards/generate') && init?.method === 'POST') {
+        return json(
+          {
+            id: 'deck-1',
+            courseId: 'course-1',
+            version: 1,
+            availableVersions: 1,
+            maxVersions: 3,
+            delivery: 'CREATED',
+            versions: [{ id: 'deck-1', version: 1, createdAt: '2026-09-28T20:00:00Z', current: true }],
+            cards: [{ id: 'card-1', front: 'What is consensus?', back: 'Keeping replicas consistent.' }],
+          },
+          201,
+        )
+      }
+      if (path.includes('/flashcards/card-1/review') && init?.method === 'POST') {
+        return json({ status: 'AGAIN' })
+      }
+      if (path.endsWith('/materials')) {
+        return json([material])
+      }
+      return json(course)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAt('/courses/course-1/flashcards', <CourseFlashcardsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Start flashcards' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Show answer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Again' }))
+
+    expect(await screen.findByRole('button', { name: 'Marked to practice' })).toBeInTheDocument()
+    const reviewCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).includes('/flashcards/card-1/review') && init?.method === 'POST',
+    )
+    expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({
+      front: 'What is consensus?',
+      status: 'AGAIN',
+    })
+  })
 })
 
 function json(body: unknown, status = 200) {

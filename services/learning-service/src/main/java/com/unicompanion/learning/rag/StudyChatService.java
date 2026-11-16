@@ -7,6 +7,7 @@ import com.unicompanion.learning.course.infrastructure.EnrollmentRepository;
 import com.unicompanion.learning.config.ObservabilitySupport;
 import com.unicompanion.learning.ingestion.EmbeddingException;
 import com.unicompanion.learning.ingestion.EmbeddingModel;
+import com.unicompanion.learning.study.application.StudyActivityService;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
@@ -40,6 +41,7 @@ public class StudyChatService {
     private final EmbeddingModel embeddings;
     private final ChunkRetrievalRepository chunks;
     private final ChatModel chat;
+    private final StudyActivityService activity;
     private final ObservationRegistry observations;
     private final TransactionTemplate transactions;
 
@@ -51,6 +53,7 @@ public class StudyChatService {
             EmbeddingModel embeddings,
             ChunkRetrievalRepository chunks,
             ChatModel chat,
+            StudyActivityService activity,
             ObservationRegistry observations,
             PlatformTransactionManager transactionManager
     ) {
@@ -61,6 +64,7 @@ public class StudyChatService {
         this.embeddings = embeddings;
         this.chunks = chunks;
         this.chat = chat;
+        this.activity = activity;
         this.observations = observations;
         this.transactions = new TransactionTemplate(transactionManager);
     }
@@ -80,8 +84,39 @@ public class StudyChatService {
                 now
         );
         sessions.save(session);
+        activity.record(userId, courseId, selected, StudyActivityService.CHAT);
         log.info("Study chat started session={} course={} user={} materials={}", session.getId(), courseId, userId, selected.size());
         return toView(session, List.of());
+    }
+
+    @Transactional(readOnly = true)
+    public LatestChat latest(UUID courseId, UUID userId) {
+        requireEnrolled(courseId, userId);
+        StudyChatSessionEntity session = sessions.findFirstByCourseIdAndUserIdOrderByUpdatedAtDesc(courseId, userId)
+                .orElse(null);
+        if (session == null) {
+            return null;
+        }
+        String preview = messages.findBySessionIdOrderByCreatedAtAsc(session.getId()).stream()
+                .filter(message -> StudyChatMessageEntity.ROLE_USER.equals(message.getRole()))
+                .map(StudyChatMessageEntity::getContent)
+                .filter(content -> content != null && !content.isBlank())
+                .findFirst()
+                .orElse("");
+        if (preview.isBlank()) {
+            return null;
+        }
+        String trimmed = preview.trim();
+        if (trimmed.length() > 140) {
+            trimmed = trimmed.substring(0, 137) + "…";
+        }
+        return new LatestChat(
+                session.getId(),
+                session.getCourseId(),
+                session.getMaterialIds(),
+                session.getUpdatedAt(),
+                trimmed
+        );
     }
 
     @Transactional(readOnly = true)
@@ -402,6 +437,15 @@ public class StudyChatService {
             ExplanationLanguage language,
             List<ChatModel.Turn> history,
             UUID userMessageId
+    ) {
+    }
+
+    public record LatestChat(
+            UUID id,
+            UUID courseId,
+            List<UUID> materialIds,
+            Instant updatedAt,
+            String preview
     ) {
     }
 

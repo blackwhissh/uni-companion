@@ -84,3 +84,16 @@ function isGermanHeading(heading: string | null): boolean {
 function normalize(heading: string | null): string {
   return (heading ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
 }
+
+/** Turns the result section of a tutor reply into a private note. */
+export function noteFromAnswer(question: string, markdown: string): { title: string; body: string } | null {
+  const sections = splitStudyAnswer(markdown)
+  const result = sections.find((section) => section.kind === 'result' && section.body.trim().length > 0)
+  const body = (result?.body ?? '').trim()
+  if (!body) {
+    return null
+  }
+  const titleSource = question.trim() || 'Study result'
+  const title = titleSource.length > 160 ? `${titleSource.slice(0, 157)}…` : titleSource
+  return { title, body: body.length > 8000 ? body.slice(0, 8000) : body }
+}

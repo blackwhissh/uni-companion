@@ -1,9 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import {
   Alert,
   BackLink,
+  Button,
   ButtonLink,
   EmptyState,
   Page,
@@ -11,7 +13,8 @@ import {
   SectionLabel,
 } from '../../shared/ui/ui.tsx'
 import { getCourse } from './course-api.ts'
-import { getCourseProgress } from './study-api.ts'
+import { getCourseProgress, practiceMissedQuiz } from './study-api.ts'
+import { studyActionError } from './study-ui.ts'
 import type { WeakTopic } from './study-api.ts'
 
 export function CourseProgressPage() {
@@ -32,6 +35,16 @@ export function CourseProgressPage() {
   const unavailable = course.error instanceof ApiError && course.error.status === 404
   const courseLoading = course.isLoading && course.data == null
   const hasAttempts = (progress.data?.attemptCount ?? 0) > 0
+  const navigate = useNavigate()
+  const [practiceError, setPracticeError] = useState<string | null>(null)
+  const practice = useMutation({
+    mutationFn: () => practiceMissedQuiz(courseId),
+    onSuccess: (quiz) => {
+      setPracticeError(null)
+      navigate(`/courses/${courseId}/quiz?quiz=${quiz.id}`)
+    },
+    onError: (err) => setPracticeError(studyActionError(err, 'Could not build that practice quiz.')),
+  })
 
   return (
     <Page>
@@ -103,7 +116,19 @@ export function CourseProgressPage() {
           </section>
 
           <section className="mt-10">
-            <SectionLabel>Questions to revisit</SectionLabel>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <SectionLabel>Questions to revisit</SectionLabel>
+              {progress.data.weakTopics.length > 0 ? (
+                <Button type="button" disabled={practice.isPending} onClick={() => practice.mutate()}>
+                  {practice.isPending ? 'Building…' : 'Practice these questions'}
+                </Button>
+              ) : null}
+            </div>
+            {practiceError ? (
+              <div className="mt-3">
+                <Alert>{practiceError}</Alert>
+              </div>
+            ) : null}
             {progress.data.weakTopics.length === 0 ? (
               <p className="mt-3 text-sm leading-relaxed text-muted">
                 Nice — your latest answer was right for every question you’ve seen.

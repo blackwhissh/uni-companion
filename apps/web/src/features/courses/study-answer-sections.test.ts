@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sectionLabel, splitStudyAnswer } from './study-answer-sections.ts'
+import { noteFromAnswer, sectionLabel, splitStudyAnswer } from './study-answer-sections.ts'
 
 describe('splitStudyAnswer', () => {
   it('separates the result from the walkthrough and the terms', () => {
@@ -44,5 +44,15 @@ Konsens hält Replikate konsistent. [1]
       },
     ])
     expect(sectionLabel(sections[0])).toBeNull()
+  })
+
+  it('saves only the result, titled with the question', () => {
+    expect(
+      noteFromAnswer('What is consensus?', `## Direct answer\nReplicas stay consistent. [1]\n\n## Explanation\nLonger walkthrough.`),
+    ).toEqual({
+      title: 'What is consensus?',
+      body: 'Replicas stay consistent. [1]',
+    })
+    expect(noteFromAnswer('Hi', 'No heading here.')).toBeNull()
   })
 })

@@ -20,11 +20,13 @@ import { getCourse } from './course-api.ts'
 import { listMaterials } from './material-api.ts'
 import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
 import { QaSources } from './QaSources.tsx'
+import { createCourseNote } from './notes-api.ts'
 import { QA_FOLLOW_UP_PROMPTS, QA_SUGGESTED_PROMPTS } from './qa-prompts.ts'
-import { sectionLabel, splitStudyAnswer } from './study-answer-sections.ts'
+import { noteFromAnswer, sectionLabel, splitStudyAnswer } from './study-answer-sections.ts'
 import { ExplainLanguageField } from './ExplainLanguageField.tsx'
 import type { ExplainLanguage } from './ExplainLanguageField.tsx'
 import {
+  getStudyChat,
   streamStudyChatMessage,
   startStudyChat,
 } from './rag-api.ts'
@@ -39,7 +41,7 @@ const MATERIALS_GONE =
 
 export function CourseQaPage() {
   const { courseId = '' } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { ready: authReady } = useAuth()
   const course = useQuery({
     queryKey: ['courses', courseId],
@@ -66,10 +68,40 @@ export function CourseQaPage() {
   const [pickingMaterials, setPickingMaterials] = useState(true)
   const [streamingDraft, setStreamingDraft] = useState<string | null>(null)
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null)
+  const [savedNotes, setSavedNotes] = useState<Record<string, 'saving' | 'saved' | 'error'>>({})
+  const resumeId = searchParams.get('session')
   const selectedRef = useRef(selectedMaterialIds)
   selectedRef.current = selectedMaterialIds
   const threadEndRef = useRef<HTMLDivElement | null>(null)
   const pendingStarter = useRef<string | null>(searchParams.get('question'))
+
+  useEffect(() => {
+    if (!resumeId || !courseId) {
+      return
+    }
+    let cancelled = false
+    getStudyChat(resumeId)
+      .then((next) => {
+        if (cancelled) {
+          return
+        }
+        setSession(next)
+        setSelectedMaterialIds(next.materialIds)
+        saveMaterialSelection('qa', courseId, next.materialIds)
+        setPickingMaterials(false)
+        setError(null)
+      })
+      .catch((err) => {
+        if (cancelled) {
+          return
+        }
+        setError(err instanceof ApiError ? err.message : 'Could not open that chat.')
+        setPickingMaterials(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [resumeId, courseId])
 
   useEffect(() => {
     if (!courseId) {
@@ -213,6 +245,11 @@ export function CourseQaPage() {
   }, [readyIdsKey, materials.data])
 
   function beginChat(materialIds: string[]) {
+    if (searchParams.has('session') || searchParams.has('question')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('session')
+      setSearchParams(next, { replace: true })
+    }
     setSelectedMaterialIds(materialIds)
     saveMaterialSelection('qa', courseId, materialIds)
     setPickingMaterials(false)
@@ -252,6 +289,17 @@ export function CourseQaPage() {
       return
     }
     setDraft(prompt.slice(0, QUESTION_MAX))
+  }
+
+  function saveResult(messageId: string, question: string, markdown: string) {
+    const draft = noteFromAnswer(question, markdown)
+    if (!draft) {
+      return
+    }
+    setSavedNotes((current) => ({ ...current, [messageId]: 'saving' }))
+    createCourseNote(courseId, draft)
+      .then(() => setSavedNotes((current) => ({ ...current, [messageId]: 'saved' })))
+      .catch(() => setSavedNotes((current) => ({ ...current, [messageId]: 'error' })))
   }
 
   function startFreshChat() {
@@ -381,9 +429,29 @@ export function CourseQaPage() {
                     </div>
                   ) : null}
 
-                  {(session?.messages ?? []).map((message) => (
-                    <ChatBubble key={message.id} courseId={courseId} message={message} />
-                  ))}
+                  {(session?.messages ?? []).map((message, index, all) => {
+                    const previousQuestion = [...all.slice(0, index)].reverse().find((item) => item.role === 'USER')
+                    const canSave = message.role === 'ASSISTANT' && noteFromAnswer(previousQuestion?.content ?? '', message.content)
+                    return (
+                      <ChatBubble
+                        key={message.id}
+                        courseId={courseId}
+                        message={message}
+                        saveLabel={
+                          !canSave
+                            ? null
+                            : savedNotes[message.id] === 'saved'
+                              ? 'Saved to your notes'
+                              : savedNotes[message.id] === 'saving'
+                                ? 'Saving…'
+                                : savedNotes[message.id] === 'error'
+                                  ? 'Could not save. Try again'
+                                  : 'Save result as note'
+                        }
+                        onSave={canSave ? () => saveResult(message.id, previousQuestion?.content ?? '', message.content) : undefined}
+                      />
+                    )
+                  })}
 
                   {pendingUserMessage && !(session?.messages ?? []).some((m) => m.role === 'USER' && m.content === pendingUserMessage) ? (
                     <ChatBubble
@@ -578,10 +646,14 @@ function ChatBubble({
   courseId,
   message,
   streaming = false,
+  saveLabel = null,
+  onSave,
 }: {
   courseId: string
   message: StudyChatMessage
   streaming?: boolean
+  saveLabel?: string | null
+  onSave?: () => void
 }) {
   const isUser = message.role === 'USER'
   if (isUser) {
@@ -616,6 +688,16 @@ function ChatBubble({
             No supporting passage was found in the selected lectures for this answer. Treat it as unverified until you
             open the PDF yourself.
           </p>
+        ) : null}
+        {saveLabel && onSave ? (
+          <button
+            type="button"
+            className="mt-3 text-sm font-medium text-accent-deep hover:underline disabled:opacity-60"
+            disabled={saveLabel === 'Saving…' || saveLabel === 'Saved to your notes'}
+            onClick={onSave}
+          >
+            {saveLabel}
+          </button>
         ) : null}
       </div>
       {!streaming ? <QaSources courseId={courseId} citations={message.citations} answer={message.content} /> : null}
