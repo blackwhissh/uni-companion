@@ -1,5 +1,6 @@
 package com.unicompanion.learning.ingestion;
 
+import com.unicompanion.learning.config.IngestProperties;
 import com.unicompanion.learning.material.infrastructure.LocalPdfStorage;
 import com.unicompanion.learning.material.infrastructure.MaterialChunkEntity;
 import com.unicompanion.learning.material.infrastructure.MaterialChunkRepository;
@@ -7,6 +8,7 @@ import com.unicompanion.learning.material.infrastructure.MaterialEntity;
 import com.unicompanion.learning.material.infrastructure.MaterialRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,19 +27,47 @@ public class PdfTextExtraction {
     private final LocalPdfStorage storage;
     private final PdfTextReader reader;
     private final EmbeddingModel embeddings;
+    private final IngestProperties ingest;
+    private final PdfTextExtraction self;
 
     public PdfTextExtraction(
             MaterialRepository materials,
             MaterialChunkRepository chunks,
             LocalPdfStorage storage,
             PdfTextReader reader,
-            EmbeddingModel embeddings
+            EmbeddingModel embeddings,
+            IngestProperties ingest,
+            @org.springframework.context.annotation.Lazy PdfTextExtraction self
     ) {
         this.materials = materials;
         this.chunks = chunks;
         this.storage = storage;
         this.reader = reader;
         this.embeddings = embeddings;
+        this.ingest = ingest;
+        this.self = self;
+    }
+
+    /**
+     * Kick off indexing. Production runs on {@code ingestExecutor}; tests can set
+     * {@code unicompanion.ingest.async=false} to finish before the HTTP response returns.
+     */
+    public void schedule(UUID materialId) {
+        if (ingest.async()) {
+            MaterialEntity material = materials.findById(materialId).orElseThrow();
+            material.markProcessing(Instant.now());
+            materials.save(material);
+            log.info("Scheduling async PDF ingest material={}", materialId);
+            self.extractAsync(materialId);
+            return;
+        }
+        // Must go through the Spring proxy so @Transactional on extract() applies.
+        self.extract(materialId);
+    }
+
+    @Async("ingestExecutor")
+    public void extractAsync(UUID materialId) {
+        extract(materialId);
     }
 
     @Transactional

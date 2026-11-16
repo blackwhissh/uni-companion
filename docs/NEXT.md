@@ -3,41 +3,45 @@
 | Field | Value |
 |---|---|
 | Document ID | DOC-NEXT |
-| Version | 1.1.0 |
+| Version | 1.2.0 |
 | Status | Draft |
 | Last updated | 2026-11-16 |
 | Owner | Project owner |
-| Based on | Multi-turn study chat over published lectures (ChatGPT-like topic tutoring) |
+| Based on | Mid-senior hardening: async ingest, safer tokens, denylist, rate limits, springdoc |
 
 ## 1. Where the product is
 
-Students can enroll in published courses, ask grounded questions in English or German, search across published lecture pages, generate lecture summaries, drill flashcards, take practice quizzes, track weak topics, build an exam-date study plan, opt into intent-based study-partner matching with consent-gated email exchange and one-click disconnect, keep private notes, and export or delete their personal data (`NFR-004`). Platform admins have an `/admin` panel. Course admins can retry failed PDF indexing.
+Full grounded study platform on `main`: multi-turn study chat, search/summaries, flashcards/quizzes/plans, matching with consent-gated email, private notes, GDPR export/delete, platform admin, and OpenAPI via springdoc.
 
-## 2. This increment (build now)
+Recent hardening:
+- PDF ingest runs asynchronously in production (`unicompanion.ingest.async=true`)
+- Access tokens are memory-only (refresh cookie restores session)
+- Refresh revocation is persisted in Postgres
+- AI endpoints are rate-limited
+- `/v3/api-docs` + Swagger UI come from springdoc (generated from controllers)
 
-| Step | Outcome | Use cases / NFRs |
-|---|---|---|
-| 1 | An enrolled student can start a multi-turn study chat scoped to selected published lectures (`POST /api/rag/chat/sessions`). | UC-020 |
-| 2 | Follow-up messages reuse prior turns for clarification while every factual claim is re-grounded in fresh retrieval (`POST /api/rag/chat/sessions/{id}/messages`). | UC-020 |
-| 3 | The course Q&A page becomes a ChatGPT-style study thread with starters, follow-ups, and “New chat”. | UC-020 |
-| 4 | Study chats are included in personal-data export/purge and cleared on unenroll. | NFR-004 |
+## 2. This increment (done)
 
-## 3. Rules for this increment
+| Step | Outcome |
+|---|---|
+| 1 | Async PDF indexing after upload/replace/retry |
+| 2 | Memory-only access tokens |
+| 3 | DB-backed refresh-token denylist |
+| 4 | Rate limits on `/api/rag/**` and study generate |
+| 5 | springdoc OpenAPI 3 + Swagger UI |
 
-- Chat is never open-world: only selected published+ready materials are retrieved each turn.
-- History is capped; factual claims must cite this turn’s excerpts.
-- University-email verification is not part of this increment.
-
-## 4. After this increment
+## 3. After this increment
 
 | Order | Capability | Why it waits |
 |---|---|---|
-| 1 | University-email verification (`@uni-siegen.de`) (UC-004, FR-004) | Owner-owned later change |
-| 2 | LMS material sync (`UC-060` / `FR-019`) | Needs institutional credentials |
-| 3 | Streaming chat tokens | Nice-to-have after multi-turn lands |
+| 1 | University-email verification | Owner-owned later change |
+| 2 | OpenTelemetry traces/metrics | Ops depth after hardening |
+| 3 | Streaming study chat | Product polish |
+| 4 | LMS sync | Needs institutional credentials |
 
-## 5. Done when
+## 4. Done when
 
-- A student can chat about a topic, ask “explain simpler”, and get a grounded follow-up with citations.
-- Changing lectures starts a fresh chat session.
-- Chat sessions appear in `GET /api/me/data` and are purged on delete/unenroll.
+- Upload returns while indexing continues in the background (prod)
+- Logout invalidates refresh tokens across restarts
+- Burst AI calls return 429
+- `/v3/api-docs` and `/swagger-ui.html` stay in sync with controllers

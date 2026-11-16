@@ -61,8 +61,8 @@ public class MaterialController {
                 bytes(file),
                 isPlatformAdmin(jwt)
         );
-        extraction.extract(accepted.getId());
-        return MaterialResponse.from(accepted);
+        extraction.schedule(accepted.getId());
+        return MaterialResponse.from(materials.get(accepted.getId()));
     }
 
     @PostMapping(path = "/api/materials/{id}/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -81,7 +81,7 @@ public class MaterialController {
                 bytes(file),
                 isPlatformAdmin(jwt)
         );
-        extraction.extract(id);
+        extraction.schedule(id);
         return MaterialResponse.from(materials.get(id));
     }
 
@@ -91,7 +91,7 @@ public class MaterialController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         materials.prepareRetry(id, userId(jwt), isPlatformAdmin(jwt));
-        extraction.extract(id);
+        extraction.schedule(id);
         return MaterialResponse.from(materials.get(id));
     }
 

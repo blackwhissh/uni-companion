@@ -13,5 +13,11 @@ unicompanion:
     secret: test-secret-test-secret-test-secret
   storage:
     path: target/test-materials
+  ingest:
+    async: false
+  rate-limit:
+    enabled: false
+    requests-per-minute: 1000
+    burst: 1000
   gemini:
     enabled: false

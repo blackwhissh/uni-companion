@@ -35,7 +35,15 @@ public class SecurityConfig {
                                 "/api/auth/refresh",
                                 "/api/auth/logout")
                         .permitAll()
-                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**", "/v3/api-docs").permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/actuator/health",
+                                "/actuator/health/**",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));

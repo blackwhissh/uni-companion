@@ -8,7 +8,13 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 @SpringBootApplication
-@EnableConfigurationProperties({JwtProperties.class, StorageProperties.class, GeminiProperties.class})
+@EnableConfigurationProperties({
+        JwtProperties.class,
+        StorageProperties.class,
+        GeminiProperties.class,
+        com.unicompanion.learning.config.IngestProperties.class,
+        com.unicompanion.learning.config.AiRateLimitProperties.class
+})
 public class LearningServiceApplication {
 
     public static void main(String[] args) {
