@@ -11,6 +11,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -30,6 +31,19 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
+                .headers(headers -> {
+                    headers.contentTypeOptions(Customizer.withDefaults());
+                    headers.frameOptions(frame -> frame.deny());
+                    headers.referrerPolicy(referrer -> referrer.policy(
+                            ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN
+                    ));
+                    headers.permissionsPolicy(permissions -> permissions.policy(
+                            "camera=(), microphone=(), geolocation=()"
+                    ));
+                    headers.contentSecurityPolicy(csp -> csp.policyDirectives(
+                            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+                    ));
+                })
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
@@ -44,6 +58,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/courses").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/courses/*/materials").hasAnyRole("COURSE_ADMIN", "ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/courses/*/lms").hasAnyRole("COURSE_ADMIN", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/courses/*/lms/sync").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/courses/*/visibility").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/courses/*/owner").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/materials/*/visibility").hasAnyRole("COURSE_ADMIN", "ADMIN")
@@ -61,7 +77,7 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(properties.corsAllowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id", "Idempotency-Key"));
         config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);

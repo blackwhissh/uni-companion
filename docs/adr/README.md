@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document ID | DOC-ADR |
-| Version | 0.1.0 |
+| Version | 0.2.0 |
 | Status | Draft |
-| Last updated | 2026-09-27 |
+| Last updated | 2026-11-16 |
 
 ## Process
 
@@ -23,3 +23,4 @@
 | [0004](0004-progressive-decomposition.md) | Progressive service decomposition | Accepted |
 | [0005](0005-gemini-llm-provider.md) | Google Gemini as Phase A LLM | Accepted |
 | [0006](0006-tdd-approach.md) | Test-Driven Development approach | Accepted |
+| [0007](0007-lms-sync-fake-then-moodle.md) | LMS sync via port + Fake, then Moodle | Accepted |

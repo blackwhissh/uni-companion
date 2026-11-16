@@ -1,5 +1,6 @@
 import { getAccessToken } from '../../shared/api/access-token.ts'
 import { learningApiUrl } from '../../shared/api/config.ts'
+import { newIdempotencyKey } from '../../shared/api/error-catalog.ts'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import { learningFetch, learningUpload } from '../../shared/api/learning-client.ts'
 
@@ -11,6 +12,8 @@ export type Material = {
   visibility: 'UNPUBLISHED' | 'PUBLISHED'
   processingStatus: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED'
   failureReason?: string
+  sourceProvider?: string | null
+  sourceExternalId?: string | null
 }
 
 export function listMaterials(courseId: string) {
@@ -23,13 +26,17 @@ export function uploadMaterial(courseId: string, file: File, title: string) {
   if (title.trim()) {
     body.append('title', title.trim())
   }
-  return learningUpload<Material>(`/api/courses/${courseId}/materials`, body)
+  return learningUpload<Material>(`/api/courses/${courseId}/materials`, body, {
+    idempotencyKey: newIdempotencyKey(),
+  })
 }
 
 export function replaceMaterial(id: string, file: File) {
   const body = new FormData()
   body.append('file', file)
-  return learningUpload<Material>(`/api/materials/${id}/file`, body)
+  return learningUpload<Material>(`/api/materials/${id}/file`, body, {
+    idempotencyKey: newIdempotencyKey(),
+  })
 }
 
 export function retryMaterial(id: string) {

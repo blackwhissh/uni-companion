@@ -9,6 +9,16 @@
 		max_size 25MB
 	}
 
+	# Browser security headers for the SPA (APIs also set their own via Spring).
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		X-Frame-Options DENY
+		# script/style from self; Google Fonts CSS+fonts; blob: for PDF preview iframes and downloads.
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self' blob:; worker-src 'self' blob:; media-src 'self' blob:"
+	}
+
 	handle_path /identity/* {
 		reverse_proxy identity:8081 {
 			header_up X-Forwarded-Proto {scheme}

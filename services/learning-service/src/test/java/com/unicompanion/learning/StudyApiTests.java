@@ -30,6 +30,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
@@ -88,6 +89,32 @@ class StudyApiTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"materialIds\":[]}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void generateFlashcardsReplaysWhenIdempotencyKeyRepeats() throws Exception {
+        ReadyCourse ready = readyCourse("STDY-IDEM");
+        enroll(ready.courseId(), STUDENT);
+        String key = "flashcards-" + UUID.randomUUID();
+
+        MvcResult first = mockMvc.perform(post("/api/study/courses/" + ready.courseId() + "/flashcards/generate")
+                        .header("Authorization", STUDENT)
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(generateBody(ready.materialId())))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String firstId = JsonPath.read(first.getResponse().getContentAsString(), "$.id");
+
+        MvcResult second = mockMvc.perform(post("/api/study/courses/" + ready.courseId() + "/flashcards/generate")
+                        .header("Authorization", STUDENT)
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(generateBody(ready.materialId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(firstId))
+                .andReturn();
+        assertThat(second.getResponse().getContentAsString()).isEqualTo(first.getResponse().getContentAsString());
     }
 
     @Test

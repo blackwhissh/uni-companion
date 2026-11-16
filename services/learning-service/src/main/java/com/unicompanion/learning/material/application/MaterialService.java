@@ -97,6 +97,94 @@ public class MaterialService {
         return saved;
     }
 
+    /**
+     * Import or refresh a material keyed by LMS file id. Same checksum → skip; changed → replace + re-ingest.
+     */
+    @Transactional
+    public LmsUpsertOutcome upsertFromLms(
+            UUID userId,
+            UUID courseId,
+            String sourceProvider,
+            String sourceExternalId,
+            String sourceChecksum,
+            String title,
+            String fileName,
+            String contentType,
+            byte[] bytes,
+            boolean platformAdmin
+    ) {
+        CourseEntity course = courses.findById(courseId).orElseThrow(MaterialService::notFound);
+        boolean owner = course.getOwnerId().equals(userId);
+        if (!owner && !platformAdmin) {
+            throw forbidden();
+        }
+        String safeName = fileName(fileName);
+        if (bytes.length == 0 || !safeName.toLowerCase(Locale.ROOT).endsWith(".pdf") || !isPdf(contentType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "LMS file must be a PDF.");
+        }
+        String materialTitle = materialTitle(title, safeName);
+        Instant now = Instant.now();
+        var existing = materials.findByCourseIdAndSourceProviderAndSourceExternalId(
+                courseId,
+                sourceProvider,
+                sourceExternalId
+        );
+        if (existing.isPresent()) {
+            MaterialEntity material = existing.get();
+            if (sourceChecksum != null && sourceChecksum.equals(material.getSourceChecksum())) {
+                return new LmsUpsertOutcome(LmsUpsertAction.SKIPPED, material);
+            }
+            String previousPath = material.getStoragePath();
+            String storagePath = storage.store(material.getId(), safeName, bytes);
+            material.replaceFromLms(materialTitle, safeName, storagePath, sourceChecksum, now);
+            materials.saveAndFlush(material);
+            chunks.deleteByMaterialId(material.getId());
+            decks.retireForMaterial(material.getId(), now, "The LMS file was updated.");
+            quizzes.retireForMaterial(material.getId(), now, "The LMS file was updated.");
+            if (!previousPath.equals(storagePath)) {
+                storage.deleteFile(previousPath);
+            }
+            log.info(
+                    "LMS updated material id={} course={} externalId={} by={}",
+                    material.getId(),
+                    courseId,
+                    sourceExternalId,
+                    userId
+            );
+            return new LmsUpsertOutcome(LmsUpsertAction.UPDATED, material);
+        }
+        UUID id = UUID.randomUUID();
+        String storagePath = storage.store(id, safeName, bytes);
+        MaterialEntity saved = materials.save(MaterialEntity.createFromLms(
+                id,
+                courseId,
+                materialTitle,
+                safeName,
+                storagePath,
+                sourceProvider,
+                sourceExternalId,
+                sourceChecksum,
+                now
+        ));
+        log.info(
+                "LMS imported material id={} course={} externalId={} by={}",
+                saved.getId(),
+                courseId,
+                sourceExternalId,
+                userId
+        );
+        return new LmsUpsertOutcome(LmsUpsertAction.IMPORTED, saved);
+    }
+
+    public enum LmsUpsertAction {
+        IMPORTED,
+        UPDATED,
+        SKIPPED
+    }
+
+    public record LmsUpsertOutcome(LmsUpsertAction action, MaterialEntity material) {
+    }
+
     @Transactional
     public MaterialEntity replace(
             UUID materialId,

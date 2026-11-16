@@ -64,6 +64,12 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       GEMINI_CHAT_MODEL: ${GEMINI_CHAT_MODEL:-gemini-2.5-flash}
+      # Optional Moodle LMS sync (webservice token). Leave disabled until campus IT provides a token.
+      LMS_MOODLE_ENABLED: ${LMS_MOODLE_ENABLED:-false}
+      LMS_MOODLE_BASE_URL: ${LMS_MOODLE_BASE_URL:-}
+      LMS_MOODLE_TOKEN: ${LMS_MOODLE_TOKEN:-}
+      LMS_SYNC_SCHEDULED_ENABLED: ${LMS_SYNC_SCHEDULED_ENABLED:-false}
+      LMS_SYNC_CRON: ${LMS_SYNC_CRON:-0 0 */6 * * *}
     volumes:
       - materials:/data/materials
       - ./secrets:/secrets:ro

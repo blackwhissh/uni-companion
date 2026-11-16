@@ -65,11 +65,18 @@ export async function learningFetchStream(
   return response
 }
 
-export async function learningUpload<T>(path: string, body: FormData): Promise<T> {
+export async function learningUpload<T>(
+  path: string,
+  body: FormData,
+  init: { idempotencyKey?: string } = {},
+): Promise<T> {
   const headers = new Headers()
   const token = getAccessToken()
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
+  }
+  if (init.idempotencyKey) {
+    headers.set('Idempotency-Key', init.idempotencyKey)
   }
   const response = await fetch(`${learningApiUrl}${path}`, {
     method: 'POST',

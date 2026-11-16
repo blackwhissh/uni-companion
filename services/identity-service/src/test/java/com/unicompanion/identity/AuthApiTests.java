@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
@@ -24,6 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -45,6 +47,9 @@ class AuthApiTests {
 
     @Autowired
     private JwtDecoder jwtDecoder;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void registerCreatesStudentAndJwtIncludesThatRole() throws Exception {
@@ -331,6 +336,13 @@ class AuthApiTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles").value(org.hamcrest.Matchers.containsInAnyOrder("COURSE_ADMIN", "STUDENT")));
 
+        Integer granted = jdbc.queryForObject(
+                "select count(*) from audit_events where action = 'COURSE_ADMIN_GRANTED' and resource_id = ?",
+                Integer.class,
+                studentId.toString()
+        );
+        assertThat(granted).isEqualTo(1);
+
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -349,6 +361,13 @@ class AuthApiTests {
                 .andExpect(jsonPath("$.roles").value(org.hamcrest.Matchers.contains("STUDENT")))
                 .andExpect(jsonPath("$.roles").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("COURSE_ADMIN"))));
 
+        Integer revoked = jdbc.queryForObject(
+                "select count(*) from audit_events where action = 'COURSE_ADMIN_REVOKED' and resource_id = ?",
+                Integer.class,
+                studentId.toString()
+        );
+        assertThat(revoked).isEqualTo(1);
+
         mockMvc.perform(put("/api/admin/accounts/" + UUID.randomUUID() + "/course-admin")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -357,6 +376,16 @@ class AuthApiTests {
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    void healthProbesExposeLivenessAndReadiness() throws Exception {
+        mockMvc.perform(get("/actuator/health/liveness"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"));
+        mockMvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
     }
 
     @Test

@@ -73,6 +73,9 @@ describe('material pages', () => {
     let activeCount = 0
     let intents: string[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/lms')) {
+        return json({ code: 'NOT_FOUND', message: 'Nothing is available at this address.' }, 404)
+      }
       if (String(url).includes('/contacts')) {
         return json({
           discoverable: true,
@@ -239,10 +242,86 @@ describe('material pages', () => {
     expect(accepted).toBe(true)
   })
 
+  it('lets an admin link the fake LMS and sync PDFs', async () => {
+    setAccessToken('admin-token')
+    let materials: Material[] = []
+    let linked = false
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const path = String(url)
+      const method = init?.method ?? 'GET'
+      if (path.includes('/lms/sync') && method === 'POST') {
+        materials = [
+          {
+            ...ready,
+            id: 'm-lms-1',
+            title: 'Consensus',
+            fileName: '01-consensus.pdf',
+            sourceProvider: 'FAKE',
+            sourceExternalId: 'file-consensus',
+          },
+          {
+            ...ready,
+            id: 'm-lms-2',
+            title: 'Replication',
+            fileName: '02-replication.pdf',
+            sourceProvider: 'FAKE',
+            sourceExternalId: 'file-replication',
+          },
+        ]
+        return json({
+          courseId: 'course-1',
+          provider: 'FAKE',
+          externalCourseId: 'demo-moodle-course',
+          status: 'OK',
+          imported: 2,
+          updated: 0,
+          skipped: 0,
+          syncedAt: '2026-11-16T06:00:00Z',
+          materialIds: ['m-lms-1', 'm-lms-2'],
+          message: 'Imported 2, updated 0, skipped 0.',
+        })
+      }
+      if (path.includes('/lms') && method === 'PUT') {
+        linked = true
+        return json({
+          courseId: 'course-1',
+          provider: 'FAKE',
+          externalCourseId: 'demo-moodle-course',
+          enabled: true,
+        })
+      }
+      if (path.includes('/lms')) {
+        return linked
+          ? json({
+              courseId: 'course-1',
+              provider: 'FAKE',
+              externalCourseId: 'demo-moodle-course',
+              enabled: true,
+            })
+          : json({ code: 'NOT_FOUND', message: 'Nothing is available at this address.' }, 404)
+      }
+      if (path.endsWith('/materials')) {
+        return json(materials)
+      }
+      return json(course)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAt('/admin/courses/course-1/materials', <AdminMaterialsPage />)
+
+    expect(await screen.findByText('LMS sync')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Sync now' }))
+    expect(await screen.findByText('Imported 2, updated 0, skipped 0.')).toBeInTheDocument()
+    expect(await screen.findByText(/01-consensus\.pdf · Indexed · Unpublished · LMS \(FAKE\)/)).toBeInTheDocument()
+  })
+
   it('lets an admin upload a PDF and publish it', async () => {
     setAccessToken('admin-token')
     let materials: Material[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/lms')) {
+        return json({ code: 'NOT_FOUND', message: 'Nothing is available at this address.' }, 404)
+      }
       const method = init?.method ?? 'GET'
       if (method === 'POST') {
         const body = init?.body as FormData
@@ -291,6 +370,9 @@ describe('material pages', () => {
     setAccessToken('admin-token')
     let materials: Material[] = [{ ...ready, visibility: 'PUBLISHED', fileName: 'lecture.pdf' }]
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/lms')) {
+        return json({ code: 'NOT_FOUND', message: 'Nothing is available at this address.' }, 404)
+      }
       if (String(url).includes('/file') && (init?.method ?? 'GET') === 'POST') {
         const body = init?.body as FormData
         expect(body.get('file')).toBeInstanceOf(File)
@@ -326,6 +408,9 @@ describe('material pages', () => {
       },
     ]
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/lms')) {
+        return json({ code: 'NOT_FOUND', message: 'Nothing is available at this address.' }, 404)
+      }
       if (String(url).endsWith('/retry') && init?.method === 'POST') {
         materials = [{ ...ready, processingStatus: 'READY' }]
         return json(materials[0])

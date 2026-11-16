@@ -1,5 +1,6 @@
 package com.unicompanion.learning.study.api;
 
+import com.unicompanion.learning.config.IdempotencyService;
 import com.unicompanion.learning.study.application.ProgressService;
 import com.unicompanion.learning.study.application.ProgressSummary;
 import com.unicompanion.learning.study.application.StudyPlan;
@@ -17,13 +18,18 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/study")
@@ -32,11 +38,21 @@ public class StudyController {
     private final StudyService study;
     private final ProgressService progress;
     private final StudyPlanService plans;
+    private final IdempotencyService idempotency;
+    private final JsonMapper json;
 
-    public StudyController(StudyService study, ProgressService progress, StudyPlanService plans) {
+    public StudyController(
+            StudyService study,
+            ProgressService progress,
+            StudyPlanService plans,
+            IdempotencyService idempotency,
+            JsonMapper json
+    ) {
         this.study = study;
         this.progress = progress;
         this.plans = plans;
+        this.idempotency = idempotency;
+        this.json = json;
     }
 
     @GetMapping("/courses/{courseId}/progress")
@@ -69,15 +85,31 @@ public class StudyController {
             @PathVariable UUID courseId,
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(defaultValue = "false") boolean force,
-            @RequestBody(required = false) GenerateRequest request
+            @RequestBody(required = false) GenerateRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
-        StudyService.GenerateDeckResult result = study.generateFlashcards(
-                courseId,
-                userId(jwt),
-                force,
-                materialIds(request)
+        UUID uid = userId(jwt);
+        List<UUID> materials = materialIds(request);
+        String route = "POST /api/study/courses/" + courseId + "/flashcards/generate";
+        String fingerprint = IdempotencyService.fingerprint(
+                route,
+                String.valueOf(force),
+                materials.stream().map(UUID::toString).sorted().collect(Collectors.joining(","))
         );
-        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result.view());
+        Optional<IdempotencyService.CachedResponse> cached = idempotency.begin(uid, idempotencyKey, route, fingerprint);
+        if (cached.isPresent()) {
+            return ResponseEntity.status(cached.get().httpStatus())
+                    .body(readJson(cached.get().body(), StudyService.DeckView.class));
+        }
+        try {
+            StudyService.GenerateDeckResult result = study.generateFlashcards(courseId, uid, force, materials);
+            int status = result.created() ? HttpStatus.CREATED.value() : HttpStatus.OK.value();
+            idempotency.complete(uid, idempotencyKey, status, writeJson(result.view()));
+            return ResponseEntity.status(status).body(result.view());
+        } catch (RuntimeException ex) {
+            idempotency.fail(uid, idempotencyKey);
+            throw ex;
+        }
     }
 
     @GetMapping("/courses/{courseId}/flashcards")
@@ -112,15 +144,31 @@ public class StudyController {
             @PathVariable UUID courseId,
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(defaultValue = "false") boolean force,
-            @RequestBody(required = false) GenerateRequest request
+            @RequestBody(required = false) GenerateRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
-        StudyService.GenerateQuizResult result = study.generateQuiz(
-                courseId,
-                userId(jwt),
-                force,
-                materialIds(request)
+        UUID uid = userId(jwt);
+        List<UUID> materials = materialIds(request);
+        String route = "POST /api/study/courses/" + courseId + "/quizzes/generate";
+        String fingerprint = IdempotencyService.fingerprint(
+                route,
+                String.valueOf(force),
+                materials.stream().map(UUID::toString).sorted().collect(Collectors.joining(","))
         );
-        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result.view());
+        Optional<IdempotencyService.CachedResponse> cached = idempotency.begin(uid, idempotencyKey, route, fingerprint);
+        if (cached.isPresent()) {
+            return ResponseEntity.status(cached.get().httpStatus())
+                    .body(readJson(cached.get().body(), StudyService.QuizView.class));
+        }
+        try {
+            StudyService.GenerateQuizResult result = study.generateQuiz(courseId, uid, force, materials);
+            int status = result.created() ? HttpStatus.CREATED.value() : HttpStatus.OK.value();
+            idempotency.complete(uid, idempotencyKey, status, writeJson(result.view()));
+            return ResponseEntity.status(status).body(result.view());
+        } catch (RuntimeException ex) {
+            idempotency.fail(uid, idempotencyKey);
+            throw ex;
+        }
     }
 
     @GetMapping("/quizzes/{quizId}")
@@ -178,6 +226,18 @@ public class StudyController {
             return List.of();
         }
         return request.materialIds();
+    }
+
+    private String writeJson(Object value) {
+        return json.writeValueAsString(value);
+    }
+
+    private <T> T readJson(String body, Class<T> type) {
+        try {
+            return json.readValue(body, type);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not replay idempotent response.", ex);
+        }
     }
 
     private static UUID userId(Jwt jwt) {

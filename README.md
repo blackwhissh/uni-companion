@@ -52,7 +52,7 @@ Students **enroll → study (RAG / cards / quiz) → match**.
 |---|---|
 | **A** | You as Course Admin; one course; classmate demo |
 | **B** | Professor/Fachschaft admins; richer matching |
-| **C** | LMS sync; advanced matching / agents |
+| **C** | LMS sync (Fake/Moodle client shipped; campus token to go live); advanced matching / agents |
 
 ## Run locally
 
@@ -100,6 +100,7 @@ Copy [`.env.example`](.env.example) when you need to override defaults. Demo log
 mvn test
 cd apps/web && npm test
 bash scripts/e2e-smoke.sh   # Playwright: Postgres + services + browser smoke
+bash scripts/load-smoke.sh  # Concurrent GET /api/courses latency baseline (stack must be up)
 ```
 
 `mvn test` starts Postgres with Testcontainers, so Docker must be running. E2E smoke also needs Docker Compose v2 (`docker compose`).

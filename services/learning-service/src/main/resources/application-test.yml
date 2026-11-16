@@ -21,6 +21,9 @@ unicompanion:
     burst: 1000
   gemini:
     enabled: false
+  lms:
+    sync:
+      scheduled-enabled: false
 
 management:
   otlp:

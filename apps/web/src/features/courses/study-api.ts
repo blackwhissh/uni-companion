@@ -1,3 +1,4 @@
+import { newIdempotencyKey } from '../../shared/api/error-catalog.ts'
 import { ApiError } from '../../shared/api/identity-client.ts'
 import { learningFetch } from '../../shared/api/learning-client.ts'
 
@@ -95,6 +96,7 @@ export async function generateFlashcards(courseId: string, materialIds: string[]
   const query = force ? '?force=true' : ''
   return learningFetch<FlashcardDeck>(`/api/study/courses/${courseId}/flashcards/generate${query}`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': newIdempotencyKey() },
     body: JSON.stringify({ materialIds }),
   })
 }
@@ -130,6 +132,7 @@ export async function generateQuiz(courseId: string, materialIds: string[], forc
   const query = force ? '?force=true' : ''
   return learningFetch<Quiz>(`/api/study/courses/${courseId}/quizzes/generate${query}`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': newIdempotencyKey() },
     body: JSON.stringify({ materialIds }),
   })
 }

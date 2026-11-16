@@ -2,7 +2,9 @@ package com.unicompanion.identity.api;
 
 import com.unicompanion.identity.application.AccountService;
 import com.unicompanion.identity.application.AccountView;
+import com.unicompanion.identity.application.AuditService;
 import com.unicompanion.identity.domain.IdentityException;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -23,9 +26,11 @@ import java.util.UUID;
 public class AdminAccountController {
 
     private final AccountService accounts;
+    private final AuditService audit;
 
-    public AdminAccountController(AccountService accounts) {
+    public AdminAccountController(AccountService accounts, AuditService audit) {
         this.accounts = accounts;
+        this.audit = audit;
     }
 
     @GetMapping
@@ -38,10 +43,21 @@ public class AdminAccountController {
     public AdminAccountResponse setCourseAdmin(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt,
-            @Valid @RequestBody CourseAdminRequest request
+            @Valid @RequestBody CourseAdminRequest request,
+            HttpServletRequest httpRequest
     ) {
         requirePlatformAdmin(jwt);
-        return AdminAccountResponse.from(accounts.setCourseAdmin(id, request.courseAdmin()));
+        UUID actorId = UUID.fromString(jwt.getSubject());
+        AccountView updated = accounts.setCourseAdmin(id, request.courseAdmin());
+        audit.record(
+                actorId,
+                request.courseAdmin() ? "COURSE_ADMIN_GRANTED" : "COURSE_ADMIN_REVOKED",
+                "account",
+                id.toString(),
+                Map.of("courseAdmin", request.courseAdmin()),
+                CorrelationIdFilter.correlationId(httpRequest)
+        );
+        return AdminAccountResponse.from(updated);
     }
 
     private static void requirePlatformAdmin(Jwt jwt) {
