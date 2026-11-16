@@ -21,3 +21,18 @@ unicompanion:
     burst: 1000
   gemini:
     enabled: false
+
+management:
+  otlp:
+    metrics:
+      export:
+        enabled: false
+    tracing:
+      export:
+        enabled: false
+  tracing:
+    sampling:
+      probability: 0.0
+    export:
+      otlp:
+        enabled: false

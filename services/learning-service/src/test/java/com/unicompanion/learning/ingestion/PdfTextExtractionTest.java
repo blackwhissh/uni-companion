@@ -97,16 +97,16 @@ class PdfTextExtractionTest {
     }
 
     private PdfTextExtraction extraction() {
-        PdfTextExtraction extraction = new PdfTextExtraction(
+        return new PdfTextExtraction(
                 materials,
                 chunks,
                 storage,
                 reader,
                 embeddings,
                 new com.unicompanion.learning.config.IngestProperties(false),
+                io.micrometer.observation.ObservationRegistry.NOOP,
                 null
         );
-        return extraction;
     }
 
     private static HttpClientErrorException tooManyRequests() {

@@ -4,8 +4,11 @@ import com.unicompanion.learning.course.infrastructure.CourseEntity;
 import com.unicompanion.learning.course.infrastructure.CourseRepository;
 import com.unicompanion.learning.course.infrastructure.EnrollmentKey;
 import com.unicompanion.learning.course.infrastructure.EnrollmentRepository;
+import com.unicompanion.learning.config.ObservabilitySupport;
 import com.unicompanion.learning.ingestion.EmbeddingException;
 import com.unicompanion.learning.ingestion.EmbeddingModel;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -34,6 +37,7 @@ public class StudyChatService {
     private final EmbeddingModel embeddings;
     private final ChunkRetrievalRepository chunks;
     private final ChatModel chat;
+    private final ObservationRegistry observations;
 
     public StudyChatService(
             CourseRepository courses,
@@ -42,7 +46,8 @@ public class StudyChatService {
             StudyChatMessageRepository messages,
             EmbeddingModel embeddings,
             ChunkRetrievalRepository chunks,
-            ChatModel chat
+            ChatModel chat,
+            ObservationRegistry observations
     ) {
         this.courses = courses;
         this.enrollments = enrollments;
@@ -51,6 +56,7 @@ public class StudyChatService {
         this.embeddings = embeddings;
         this.chunks = chunks;
         this.chat = chat;
+        this.observations = observations;
     }
 
     @Transactional
@@ -82,6 +88,18 @@ public class StudyChatService {
 
     @Transactional
     public SessionView ask(UUID sessionId, UUID userId, String question) {
+        Observation observation = ObservabilitySupport.start(observations, "learning.rag.chat.message");
+        try {
+            return askObserved(sessionId, userId, question, observation);
+        } catch (RuntimeException ex) {
+            observation.error(ex);
+            throw ex;
+        } finally {
+            observation.stop();
+        }
+    }
+
+    private SessionView askObserved(UUID sessionId, UUID userId, String question, Observation observation) {
         String trimmed = question == null ? "" : question.trim();
         if (trimmed.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ask a question about the lectures.");
@@ -118,8 +136,10 @@ public class StudyChatService {
         if (history.size() > HISTORY_WINDOW) {
             history = history.subList(history.size() - HISTORY_WINDOW, history.size());
         }
+        observation.highCardinalityKeyValue("history.turns", String.valueOf(history.size()));
 
         ExplanationLanguage language = resolveLanguage(session.getLanguage(), trimmed);
+        observation.lowCardinalityKeyValue("language", language.name());
         List<ChatModel.RetrievedChunk> retrieved;
         String rawAnswer;
         try {
@@ -148,6 +168,7 @@ public class StudyChatService {
                         CitationText.excerpt(chunk.content(), trimmed, grounded.answer())
                 ))
                 .toList();
+        observation.lowCardinalityKeyValue("cited", String.valueOf(!citations.isEmpty()));
 
         StudyChatMessageEntity assistant = StudyChatMessageEntity.assistant(
                 UUID.randomUUID(),

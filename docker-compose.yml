@@ -17,5 +17,16 @@ services:
       timeout: 5s
       retries: 12
 
+  # Optional local OpenTelemetry stack: docker compose --profile otel up -d
+  # Then run services with OTEL_EXPORT_ENABLED=true
+  otel-lgtm:
+    profiles: ["otel"]
+    image: grafana/otel-lgtm:0.11.8
+    container_name: uni-companion-otel
+    ports:
+      - "3000:3000"
+      - "4317:4317"
+      - "4318:4318"
+
 volumes:
   uni_companion_pg:

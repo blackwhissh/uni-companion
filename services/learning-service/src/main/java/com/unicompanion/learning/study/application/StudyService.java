@@ -1,12 +1,14 @@
 package com.unicompanion.learning.study.application;
 
 import com.unicompanion.learning.config.GeminiProperties;
+import com.unicompanion.learning.config.ObservabilitySupport;
 import com.unicompanion.learning.course.infrastructure.CourseEntity;
 import com.unicompanion.learning.course.infrastructure.CourseRepository;
 import com.unicompanion.learning.course.infrastructure.EnrollmentKey;
 import com.unicompanion.learning.course.infrastructure.EnrollmentRepository;
 import com.unicompanion.learning.rag.ChatModel;
 import com.unicompanion.learning.rag.ChunkRetrievalRepository;
+import io.micrometer.observation.ObservationRegistry;
 import com.unicompanion.learning.study.infrastructure.FlashcardDeckEntity;
 import com.unicompanion.learning.study.infrastructure.FlashcardDeckProgressEntity;
 import com.unicompanion.learning.study.infrastructure.FlashcardDeckProgressRepository;
@@ -77,6 +79,7 @@ public class StudyService {
     private final QuizAttemptItemRepository attemptItems;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
+    private final ObservationRegistry observations;
     private final int maxSharedVersions;
     private final int reportRetirementThreshold;
     private final String generationRecipe;
@@ -97,6 +100,7 @@ public class StudyService {
             JdbcTemplate jdbc,
             org.springframework.transaction.PlatformTransactionManager transactionManager,
             GeminiProperties gemini,
+            ObservationRegistry observations,
             @Value("${unicompanion.study.max-shared-versions:3}") int maxSharedVersions,
             @Value("${unicompanion.study.report-retirement-threshold:3}") int reportRetirementThreshold,
             @Value("${unicompanion.study.generation-revision:v3}") String generationRevision
@@ -115,12 +119,21 @@ public class StudyService {
         this.attemptItems = attemptItems;
         this.jdbc = jdbc;
         this.transactions = new TransactionTemplate(transactionManager);
+        this.observations = observations;
         this.maxSharedVersions = Math.max(1, maxSharedVersions);
         this.reportRetirementThreshold = Math.max(1, reportRetirementThreshold);
         this.generationRecipe = generationRevision + ":" + gemini.chatModel() + ":" + chat.getClass().getSimpleName();
     }
 
     public GenerateDeckResult generateFlashcards(UUID courseId, UUID userId, boolean force, List<UUID> materialIds) {
+        return ObservabilitySupport.observe(
+                observations,
+                "learning.study.flashcards.generate",
+                () -> generateFlashcardsBody(courseId, userId, force, materialIds)
+        );
+    }
+
+    private GenerateDeckResult generateFlashcardsBody(UUID courseId, UUID userId, boolean force, List<UUID> materialIds) {
         requireEnrollment(courseId, userId);
         String materialsKey = materialsKey(materialIds);
         validateSelectedMaterials(courseId, materialIds);
@@ -220,6 +233,14 @@ public class StudyService {
     }
 
     public GenerateQuizResult generateQuiz(UUID courseId, UUID userId, boolean force, List<UUID> materialIds) {
+        return ObservabilitySupport.observe(
+                observations,
+                "learning.study.quiz.generate",
+                () -> generateQuizBody(courseId, userId, force, materialIds)
+        );
+    }
+
+    private GenerateQuizResult generateQuizBody(UUID courseId, UUID userId, boolean force, List<UUID> materialIds) {
         requireEnrollment(courseId, userId);
         String materialsKey = materialsKey(materialIds);
         validateSelectedMaterials(courseId, materialIds);

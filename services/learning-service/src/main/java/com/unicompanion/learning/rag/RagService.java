@@ -4,8 +4,11 @@ import com.unicompanion.learning.course.infrastructure.CourseEntity;
 import com.unicompanion.learning.course.infrastructure.CourseRepository;
 import com.unicompanion.learning.course.infrastructure.EnrollmentKey;
 import com.unicompanion.learning.course.infrastructure.EnrollmentRepository;
+import com.unicompanion.learning.config.ObservabilitySupport;
 import com.unicompanion.learning.ingestion.EmbeddingException;
 import com.unicompanion.learning.ingestion.EmbeddingModel;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -30,22 +33,46 @@ public class RagService {
     private final EmbeddingModel embeddings;
     private final ChunkRetrievalRepository chunks;
     private final ChatModel chat;
+    private final ObservationRegistry observations;
 
     public RagService(
             CourseRepository courses,
             EnrollmentRepository enrollments,
             EmbeddingModel embeddings,
             ChunkRetrievalRepository chunks,
-            ChatModel chat
+            ChatModel chat,
+            ObservationRegistry observations
     ) {
         this.courses = courses;
         this.enrollments = enrollments;
         this.embeddings = embeddings;
         this.chunks = chunks;
         this.chat = chat;
+        this.observations = observations;
     }
 
     public Answer query(UUID courseId, UUID userId, String question, List<UUID> materialIds, String language) {
+        Observation observation = ObservabilitySupport.start(observations, "learning.rag.query");
+        try {
+            Answer answer = queryObserved(courseId, userId, question, materialIds, language, observation);
+            observation.lowCardinalityKeyValue("cited", String.valueOf(!answer.citations().isEmpty()));
+            return answer;
+        } catch (RuntimeException ex) {
+            observation.error(ex);
+            throw ex;
+        } finally {
+            observation.stop();
+        }
+    }
+
+    private Answer queryObserved(
+            UUID courseId,
+            UUID userId,
+            String question,
+            List<UUID> materialIds,
+            String language,
+            Observation observation
+    ) {
         String trimmed = question == null ? "" : question.trim();
         if (trimmed.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ask a question.");
@@ -54,6 +81,7 @@ public class RagService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Question must be at most 2000 characters.");
         }
         ExplanationLanguage resolvedLanguage = resolveLanguage(language, trimmed);
+        observation.lowCardinalityKeyValue("language", resolvedLanguage.name());
         CourseEntity course = courses.findById(courseId).orElseThrow(RagService::notFound);
         boolean owner = course.getOwnerId().equals(userId);
         if (!course.isPublished() && !owner) {
@@ -92,6 +120,7 @@ public class RagService {
             );
         }
         CitedSources.Result grounded = CitedSources.select(rawAnswer, retrieved);
+        observation.highCardinalityKeyValue("retrieved", String.valueOf(retrieved.size()));
         log.info(
                 "RAG query course={} user={} materials={} language={} questionChars={} retrieved={} cited={} answerChars={}",
                 courseId,

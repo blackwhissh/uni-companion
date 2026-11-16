@@ -1,11 +1,14 @@
 package com.unicompanion.learning.ingestion;
 
 import com.unicompanion.learning.config.IngestProperties;
+import com.unicompanion.learning.config.ObservabilitySupport;
 import com.unicompanion.learning.material.infrastructure.LocalPdfStorage;
 import com.unicompanion.learning.material.infrastructure.MaterialChunkEntity;
 import com.unicompanion.learning.material.infrastructure.MaterialChunkRepository;
 import com.unicompanion.learning.material.infrastructure.MaterialEntity;
 import com.unicompanion.learning.material.infrastructure.MaterialRepository;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -28,6 +31,7 @@ public class PdfTextExtraction {
     private final PdfTextReader reader;
     private final EmbeddingModel embeddings;
     private final IngestProperties ingest;
+    private final ObservationRegistry observations;
     private final PdfTextExtraction self;
 
     public PdfTextExtraction(
@@ -37,6 +41,7 @@ public class PdfTextExtraction {
             PdfTextReader reader,
             EmbeddingModel embeddings,
             IngestProperties ingest,
+            ObservationRegistry observations,
             @org.springframework.context.annotation.Lazy PdfTextExtraction self
     ) {
         this.materials = materials;
@@ -45,6 +50,7 @@ public class PdfTextExtraction {
         this.reader = reader;
         this.embeddings = embeddings;
         this.ingest = ingest;
+        this.observations = observations;
         this.self = self;
     }
 
@@ -72,6 +78,19 @@ public class PdfTextExtraction {
 
     @Transactional
     public void extract(UUID materialId) {
+        Observation observation = ObservabilitySupport.start(observations, "learning.pdf.ingest");
+        observation.lowCardinalityKeyValue("embedding.model", embeddings.getClass().getSimpleName());
+        try {
+            extractObserved(materialId, observation);
+        } catch (RuntimeException ex) {
+            observation.error(ex);
+            throw ex;
+        } finally {
+            observation.stop();
+        }
+    }
+
+    private void extractObserved(UUID materialId, Observation observation) {
         MaterialEntity material = materials.findById(materialId).orElseThrow();
         material.markProcessing(Instant.now());
         log.info("Ingest started material={} embedding={}", materialId, embeddings.getClass().getSimpleName());
@@ -79,6 +98,7 @@ public class PdfTextExtraction {
             List<PdfTextReader.PageText> pages = reader.read(storage.read(material.getStoragePath()));
             if (pages.isEmpty()) {
                 material.markFailed("The PDF has no extractable text.", Instant.now());
+                observation.lowCardinalityKeyValue("status", "FAILED");
                 log.warn("Ingest failed material={}: no extractable text", materialId);
                 return;
             }
@@ -88,6 +108,7 @@ public class PdfTextExtraction {
             if (vectors.size() != pages.size()) {
                 chunks.deleteByMaterialId(materialId);
                 material.markFailed("The PDF text could not be embedded.", Instant.now());
+                observation.lowCardinalityKeyValue("status", "FAILED");
                 log.warn("Ingest failed material={}: embedding count {} != pages {}", materialId, vectors.size(), pages.size());
                 return;
             }
@@ -98,6 +119,7 @@ public class PdfTextExtraction {
                 if (embedding == null || embedding.length != EmbeddingModel.DIMENSIONS) {
                     chunks.deleteByMaterialId(materialId);
                     material.markFailed("The PDF text could not be embedded.", Instant.now());
+                    observation.lowCardinalityKeyValue("status", "FAILED");
                     log.warn("Ingest failed material={}: embedding size invalid on page={}", materialId, page.pageNumber());
                     return;
                 }
@@ -111,12 +133,18 @@ public class PdfTextExtraction {
                 ));
             }
             material.markReady(Instant.now());
+            observation.lowCardinalityKeyValue("status", "READY");
+            observation.highCardinalityKeyValue("pages", String.valueOf(pages.size()));
             log.info("Ingest ready material={} pages={} chunks={}", materialId, pages.size(), index);
         } catch (EmbeddingException ex) {
+            observation.error(ex);
+            observation.lowCardinalityKeyValue("status", "FAILED");
             log.warn("PDF embedding failed for material {}: {}", materialId, ex.getMessage(), ex);
             chunks.deleteByMaterialId(materialId);
             material.markFailed(ex.getMessage(), Instant.now());
         } catch (RuntimeException | IOException ex) {
+            observation.error(ex);
+            observation.lowCardinalityKeyValue("status", "FAILED");
             log.warn("PDF extraction failed for material {}", materialId, ex);
             chunks.deleteByMaterialId(materialId);
             material.markFailed(failureReason(ex), Instant.now());

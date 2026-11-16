@@ -3,45 +3,32 @@
 | Field | Value |
 |---|---|
 | Document ID | DOC-NEXT |
-| Version | 1.2.0 |
+| Version | 1.3.0 |
 | Status | Draft |
 | Last updated | 2026-11-16 |
 | Owner | Project owner |
-| Based on | Mid-senior hardening: async ingest, safer tokens, denylist, rate limits, springdoc |
+| Based on | OpenTelemetry traces/metrics for learning + identity |
 
 ## 1. Where the product is
 
-Full grounded study platform on `main`: multi-turn study chat, search/summaries, flashcards/quizzes/plans, matching with consent-gated email, private notes, GDPR export/delete, platform admin, and OpenAPI via springdoc.
+Full grounded study platform with Phase A hardening (async ingest, safer tokens, denylist, rate limits, springdoc) plus OpenTelemetry:
 
-Recent hardening:
-- PDF ingest runs asynchronously in production (`unicompanion.ingest.async=true`)
-- Access tokens are memory-only (refresh cookie restores session)
-- Refresh revocation is persisted in Postgres
-- AI endpoints are rate-limited
-- `/v3/api-docs` + Swagger UI come from springdoc (generated from controllers)
+- `spring-boot-starter-opentelemetry` on both services
+- Custom spans: `learning.pdf.ingest`, `learning.rag.query`, `learning.rag.chat.message`, `learning.study.flashcards.generate`, `learning.study.quiz.generate`
+- Export off by default; enable with `OTEL_EXPORT_ENABLED=true` and optional `docker compose --profile otel up`
 
-## 2. This increment (done)
+## 2. After this increment
 
-| Step | Outcome |
+| Order | Capability |
 |---|---|
-| 1 | Async PDF indexing after upload/replace/retry |
-| 2 | Memory-only access tokens |
-| 3 | DB-backed refresh-token denylist |
-| 4 | Rate limits on `/api/rag/**` and study generate |
-| 5 | springdoc OpenAPI 3 + Swagger UI |
+| 1 | Streaming study chat |
+| 2 | University-email verification |
+| 3 | Playwright E2E smoke |
+| 4 | LMS sync |
 
-## 3. After this increment
+## 3. Done when
 
-| Order | Capability | Why it waits |
-|---|---|---|
-| 1 | University-email verification | Owner-owned later change |
-| 2 | OpenTelemetry traces/metrics | Ops depth after hardening |
-| 3 | Streaming study chat | Product polish |
-| 4 | LMS sync | Needs institutional credentials |
-
-## 4. Done when
-
-- Upload returns while indexing continues in the background (prod)
-- Logout invalidates refresh tokens across restarts
-- Burst AI calls return 429
-- `/v3/api-docs` and `/swagger-ui.html` stay in sync with controllers
+- Services start with OTEL wired
+- AI/ingest paths emit named observations
+- Tests do not require a collector
+- Optional Grafana LGTM profile is documented
