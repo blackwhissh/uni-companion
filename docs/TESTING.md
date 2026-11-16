@@ -107,6 +107,7 @@ Gemini calls in unit/API tests use a **fake** `ChatModel` / `EmbeddingModel`. On
 |---|---|
 | Vitest | Unit / component runner (Vite-native) |
 | React Testing Library | Component behavior |
+| Playwright | Thin browser smoke (landing + login) |
 | MSW (optional) | API mocking |
 
 ### Commands (target)
@@ -117,9 +118,14 @@ mvn test
 
 # frontend
 npm test
+
+# browser smoke (Postgres + both services + Vite QA proxy)
+bash scripts/e2e-smoke.sh
+# or, with the stack already up:
+cd apps/web && npm run test:e2e
 ```
 
-CI (when added) shall run unit + API tests on every push; integration/Testcontainers as pipeline allows.
+CI runs Maven + Vitest/build + Playwright smoke on every PR; deploy waits for all three.
 
 ## 8. Definition of Ready / Done (testing)
 
