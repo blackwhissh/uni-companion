@@ -110,6 +110,19 @@ public class LmsSyncService {
         return saved;
     }
 
+    @Transactional(readOnly = true)
+    public List<CourseLmsLinkEntity> listEnabledLinks() {
+        return links.findByEnabledTrue();
+    }
+
+    /**
+     * Background sync: runs as the course owner for audit, without an interactive JWT.
+     */
+    public LmsSyncResult syncScheduled(UUID courseId) {
+        CourseEntity course = courses.findById(courseId).orElseThrow(LmsSyncService::notFound);
+        return sync(courseId, course.getOwnerId(), true, "scheduled-lms-sync");
+    }
+
     /**
      * Not {@code @Transactional}: each upsert commits on its own, then ingest runs
      * (same pattern as manual upload) so async indexing sees committed rows.

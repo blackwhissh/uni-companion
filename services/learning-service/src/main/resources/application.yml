@@ -43,6 +43,10 @@ unicompanion:
       enabled: ${LMS_MOODLE_ENABLED:false}
       base-url: ${LMS_MOODLE_BASE_URL:}
       token: ${LMS_MOODLE_TOKEN:}
+    sync:
+      # Off by default in local/test; enable in prod after linking courses.
+      scheduled-enabled: ${LMS_SYNC_SCHEDULED_ENABLED:false}
+      cron: ${LMS_SYNC_CRON:0 0 */6 * * *}
 
 springdoc:
   api-docs:
