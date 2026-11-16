@@ -3,32 +3,31 @@
 | Field | Value |
 |---|---|
 | Document ID | DOC-NEXT |
-| Version | 1.8.0 |
+| Version | 1.9.0 |
 | Status | Draft |
 | Last updated | 2026-11-16 |
 | Owner | Project owner |
-| Based on | Moodle LmsClient (token webservice) |
+| Based on | Scheduled LMS sync |
 
 ## 1. Where the product is
 
-LMS sync foundation plus optional Moodle adapter:
+LMS sync with Fake + optional Moodle, plus optional scheduled pull:
 
-- `FakeLmsClient` always available (`demo-moodle-course`)
-- `MoodleLmsClient` behind `LMS_MOODLE_ENABLED` + base URL + token
-- Admin materials page can choose Fake or Moodle provider
-- ADR-0007 records Fake-then-Moodle decision
+- Manual Sync now on admin materials
+- `unicompanion.lms.sync.scheduled-enabled` + cron (default every 6h when enabled)
+- Scheduled runs audit as course owner with correlation id `scheduled-lms-sync`
 
 ## 2. After this increment
 
 | Order | Capability |
 |---|---|
-| 1 | Wire campus Moodle secrets / scheduled sync |
+| 1 | Wire campus Moodle secrets in deploy |
 | — | ILIAS `LmsClient` if needed |
 | — | University-email verification (deferred) |
 | — | Remaining P3 polish (CSP, load test) as needed |
 
 ## 3. Done when
 
-- Moodle client lists PDF resources from `core_course_get_contents` (unit-tested)
-- Download appends webservice token without storing it on materials
-- FE can select Moodle provider and numeric course id
+- Enabled links are discoverable via `listEnabledLinks`
+- `syncScheduled` imports Fake demo PDFs and writes audit with `scheduled-lms-sync`
+- Scheduler bean only loads when `scheduled-enabled=true` (off in tests)

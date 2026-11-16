@@ -2,6 +2,8 @@ package com.unicompanion.learning;
 
 import com.jayway.jsonpath.JsonPath;
 import com.unicompanion.learning.lms.FakeLmsClient;
+import com.unicompanion.learning.lms.LmsSyncResult;
+import com.unicompanion.learning.lms.LmsSyncService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -48,6 +50,9 @@ class LmsApiTests {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private LmsSyncService lmsSync;
+
     @Test
     void courseAdminCanLinkFakeLmsAndSyncImportsPdfs() throws Exception {
         String courseId = createCourse("LMS-SYNC");
@@ -93,6 +98,32 @@ class LmsApiTests {
                 .andExpect(jsonPath("$.imported").value(0))
                 .andExpect(jsonPath("$.updated").value(0))
                 .andExpect(jsonPath("$.skipped").value(2));
+    }
+
+    @Test
+    void scheduledSyncImportsForEnabledLinks() throws Exception {
+        String courseId = createCourse("LMS-SCHED");
+
+        mockMvc.perform(put("/api/courses/" + courseId + "/lms")
+                        .header("Authorization", ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"provider":"FAKE","externalCourseId":"%s","enabled":true}
+                                """.formatted(FakeLmsClient.DEMO_COURSE_ID)))
+                .andExpect(status().isOk());
+
+        assertThat(lmsSync.listEnabledLinks()).extracting(link -> link.getCourseId().toString()).contains(courseId);
+
+        LmsSyncResult result = lmsSync.syncScheduled(UUID.fromString(courseId));
+        assertThat(result.imported()).isEqualTo(2);
+        assertThat(result.skipped()).isEqualTo(0);
+
+        Integer auditRows = jdbc.queryForObject(
+                "select count(*) from audit_events where action = 'LMS_SYNC' and resource_id = ? and correlation_id = 'scheduled-lms-sync'",
+                Integer.class,
+                courseId
+        );
+        assertThat(auditRows).isEqualTo(1);
     }
 
     @Test
