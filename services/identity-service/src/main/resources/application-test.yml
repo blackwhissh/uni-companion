@@ -9,6 +9,12 @@ logging:
     com.unicompanion.identity.api.RequestAccessLogFilter: WARN
 
 unicompanion:
+  identity:
+    verification:
+      domains:
+        - uni-siegen.de
+        - uni.test
+      log-codes: false
   jwt:
     secret: test-secret-test-secret-test-secret
     ttl: 1h

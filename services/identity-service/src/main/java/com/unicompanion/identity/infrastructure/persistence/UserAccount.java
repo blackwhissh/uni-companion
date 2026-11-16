@@ -36,6 +36,12 @@ public class UserAccount {
     @Column(length = 500)
     private String interests;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -58,9 +64,16 @@ public class UserAccount {
         account.passwordHash = passwordHash;
         account.displayName = displayName;
         account.roles = new HashSet<>(roles);
+        account.emailVerified = false;
         account.createdAt = now;
         account.updatedAt = now;
         return account;
+    }
+
+    public void markEmailVerified(Instant now) {
+        this.emailVerified = true;
+        this.emailVerifiedAt = now;
+        this.updatedAt = now;
     }
 
     public void updateProfile(String displayName, String interests, Instant now) {
@@ -107,6 +120,14 @@ public class UserAccount {
 
     public String getInterests() {
         return interests;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
+    public Instant getEmailVerifiedAt() {
+        return emailVerifiedAt;
     }
 
     public Instant getCreatedAt() {

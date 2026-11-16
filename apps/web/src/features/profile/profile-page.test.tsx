@@ -81,6 +81,36 @@ describe('profile page privacy controls', () => {
 
     expect(await screen.findByRole('heading', { name: 'Login screen' })).toBeInTheDocument()
   })
+
+  it('sends a university verification code and marks the address verified', async () => {
+    setAccessToken('student-token')
+    const verified = { ...student, emailVerified: true }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).endsWith('/api/me/verification') && init?.method === 'POST') {
+          return json({ status: 'REQUESTED' })
+        }
+        if (String(url).endsWith('/api/me/verification/confirm') && init?.method === 'POST') {
+          expect(JSON.parse(String(init.body))).toEqual({ code: '042013' })
+          return json(verified)
+        }
+        if (String(url).endsWith('/api/me')) {
+          return json(student)
+        }
+        return json({}, 500)
+      }),
+    )
+
+    renderProfile()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Send code' }))
+    expect(await screen.findByText('Code sent. It expires in 15 minutes.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: '042013' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    expect(await screen.findByText('Verified')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Send code' })).not.toBeInTheDocument()
+  })
 })
 
 function json(body: unknown, status = 200) {

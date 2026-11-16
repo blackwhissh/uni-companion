@@ -4,6 +4,7 @@ export type User = {
   displayName: string
   interests: string | null
   roles: string[]
+  emailVerified?: boolean
   createdAt: string
 }
 
