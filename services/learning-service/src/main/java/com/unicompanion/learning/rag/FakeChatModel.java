@@ -83,6 +83,17 @@ public class FakeChatModel implements ChatModel {
     }
 
     @Override
+    public void streamAnswerWithHistory(
+            String question,
+            List<RetrievedChunk> chunks,
+            ExplanationLanguage language,
+            List<Turn> history,
+            java.util.function.Consumer<String> onDelta
+    ) {
+        ChatModel.emitChunks(answerWithHistory(question, chunks, language, history), onDelta);
+    }
+
+    @Override
     public String summarize(String title, List<RetrievedChunk> chunks, ExplanationLanguage language) {
         if (chunks == null || chunks.isEmpty()) {
             return language == ExplanationLanguage.DE

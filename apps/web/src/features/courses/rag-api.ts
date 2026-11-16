@@ -1,5 +1,5 @@
 import { ApiError } from '../../shared/api/identity-client.ts'
-import { learningFetch } from '../../shared/api/learning-client.ts'
+import { learningFetch, learningFetchStream } from '../../shared/api/learning-client.ts'
 
 export type RagCitation = {
   materialId: string
@@ -86,6 +86,97 @@ export function sendStudyChatMessage(sessionId: string, question: string) {
       body: JSON.stringify({ question }),
     }),
   )
+}
+
+export type StudyChatStreamHandlers = {
+  onToken?: (delta: string) => void
+  onDone: (session: StudyChatSession) => void
+}
+
+/**
+ * Progressive study-chat reply over SSE (`token` deltas, then `done` with the saved session).
+ * Failures are not auto-retried — the user message may already be persisted server-side.
+ */
+export async function streamStudyChatMessage(
+  sessionId: string,
+  question: string,
+  handlers: StudyChatStreamHandlers,
+): Promise<StudyChatSession> {
+  const response = await learningFetchStream(`/api/rag/chat/sessions/${sessionId}/messages/stream`, {
+    method: 'POST',
+    body: JSON.stringify({ question }),
+  })
+
+  if (!response.body) {
+    throw new ApiError('REQUEST_FAILED', 'Could not open the study chat stream.', 502, null)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let completed: StudyChatSession | null = null
+  let streamError: ApiError | null = null
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      break
+    }
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() ?? ''
+    for (const part of parts) {
+      const parsed = parseSseBlock(part)
+      if (!parsed) {
+        continue
+      }
+      if (parsed.event === 'token') {
+        const delta = typeof parsed.data?.delta === 'string' ? parsed.data.delta : ''
+        if (delta) {
+          handlers.onToken?.(delta)
+        }
+      } else if (parsed.event === 'done') {
+        completed = parsed.data as StudyChatSession
+        handlers.onDone(completed)
+      } else if (parsed.event === 'error') {
+        const message =
+          typeof parsed.data?.message === 'string'
+            ? parsed.data.message
+            : 'Could not draft an answer from the published materials. Try again shortly.'
+        const status = typeof parsed.data?.status === 'number' ? parsed.data.status : 502
+        streamError = new ApiError('STREAM_FAILED', message, status, null)
+      }
+    }
+  }
+
+  if (streamError) {
+    throw streamError
+  }
+  if (!completed) {
+    throw new ApiError('REQUEST_FAILED', 'The study chat stream ended without a reply.', 502, null)
+  }
+  return completed
+}
+
+function parseSseBlock(block: string): { event: string; data: Record<string, unknown> } | null {
+  const lines = block.split('\n')
+  let event = 'message'
+  const dataLines: string[] = []
+  for (const line of lines) {
+    if (line.startsWith('event:')) {
+      event = line.slice('event:'.length).trim()
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice('data:'.length).trim())
+    }
+  }
+  if (dataLines.length === 0) {
+    return null
+  }
+  try {
+    return { event, data: JSON.parse(dataLines.join('\n')) as Record<string, unknown> }
+  } catch {
+    return null
+  }
 }
 
 export function searchLectures(courseId: string, query: string) {
