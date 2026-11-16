@@ -147,6 +147,7 @@ public class StudyChatService {
         try {
             float[] queryEmbedding = embeddings.embed(prepared.question());
             retrieved = chunks.findTopK(prepared.courseId(), prepared.materialIds(), queryEmbedding, TOP_K);
+            retrieved = sectionOrHits(prepared.courseId(), prepared.materialIds(), prepared.question(), retrieved);
             chat.streamAnswerWithHistory(
                     prepared.question(),
                     retrieved,
@@ -356,6 +357,24 @@ public class StudyChatService {
             return ExplanationLanguage.DE;
         }
         return ExplanationLanguage.EN;
+    }
+
+    private List<ChatModel.RetrievedChunk> sectionOrHits(
+            UUID courseId,
+            List<UUID> materialIds,
+            String question,
+            List<ChatModel.RetrievedChunk> hits
+    ) {
+        try {
+            List<ChatModel.RetrievedChunk> chosen = SectionAnswers.choose(chunks, courseId, materialIds, question, hits);
+            if (chosen != hits) {
+                log.info("Study chat section course={} pages={}", courseId, chosen.size());
+            }
+            return chosen;
+        } catch (RuntimeException ex) {
+            log.warn("Study chat section selection failed for course={}: {}", courseId, ex.toString());
+            return hits;
+        }
     }
 
     private static ResponseStatusException notFound() {

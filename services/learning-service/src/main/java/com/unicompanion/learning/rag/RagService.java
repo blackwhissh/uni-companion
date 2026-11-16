@@ -107,6 +107,7 @@ public class RagService {
         try {
             queryEmbedding = embeddings.embed(trimmed);
             retrieved = chunks.findTopK(courseId, materialIds, queryEmbedding, TOP_K);
+            retrieved = sectionOrHits(courseId, materialIds, trimmed, retrieved);
             rawAnswer = chat.answer(trimmed, retrieved, resolvedLanguage);
         } catch (ResponseStatusException ex) {
             throw ex;
@@ -278,6 +279,24 @@ public class RagService {
             );
         }
         return materialIds.stream().distinct().toList();
+    }
+
+    private List<ChatModel.RetrievedChunk> sectionOrHits(
+            UUID courseId,
+            List<UUID> materialIds,
+            String question,
+            List<ChatModel.RetrievedChunk> hits
+    ) {
+        try {
+            List<ChatModel.RetrievedChunk> chosen = SectionAnswers.choose(chunks, courseId, materialIds, question, hits);
+            if (chosen != hits) {
+                log.info("RAG section course={} pages={}", courseId, chosen.size());
+            }
+            return chosen;
+        } catch (RuntimeException ex) {
+            log.warn("RAG section selection failed for course={}: {}", courseId, ex.toString());
+            return hits;
+        }
     }
 
     private static ResponseStatusException notFound() {

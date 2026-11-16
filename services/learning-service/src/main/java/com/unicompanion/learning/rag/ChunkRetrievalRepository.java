@@ -57,6 +57,36 @@ public class ChunkRetrievalRepository {
         );
     }
 
+    /**
+     * Every ready published page of the selected materials, in reading order.
+     */
+    public List<ChatModel.RetrievedChunk> listReadyPages(UUID courseId, List<UUID> materialIds) {
+        if (materialIds == null || materialIds.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> distinctIds = materialIds.stream().distinct().toList();
+        String placeholders = distinctIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        List<Object> args = new ArrayList<>();
+        args.add(courseId);
+        args.addAll(distinctIds);
+        return jdbc.query(
+                """
+                        SELECT c.id, c.material_id, m.title, c.page_number, c.content
+                        FROM material_chunks c
+                        INNER JOIN materials m ON m.id = c.material_id
+                        INNER JOIN courses co ON co.id = m.course_id
+                        WHERE m.course_id = ?
+                          AND m.id IN (%s)
+                          AND m.visibility = 'PUBLISHED'
+                          AND m.processing_status = 'READY'
+                          AND co.visibility = 'PUBLISHED'
+                        ORDER BY m.title ASC, c.page_number ASC, c.chunk_index ASC
+                        """.formatted(placeholders),
+                (rs, rowNum) -> mapChunk(rs),
+                args.toArray()
+        );
+    }
+
     public List<ChatModel.RetrievedChunk> samplePublished(UUID courseId, int limit) {
         return samplePublished(courseId, null, limit);
     }
