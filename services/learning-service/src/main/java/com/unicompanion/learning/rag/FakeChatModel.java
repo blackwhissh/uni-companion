@@ -14,6 +14,16 @@ public class FakeChatModel implements ChatModel {
 
     @Override
     public String answer(String question, List<RetrievedChunk> chunks, ExplanationLanguage language) {
+        return answerWithHistory(question, chunks, language, List.of());
+    }
+
+    @Override
+    public String answerWithHistory(
+            String question,
+            List<RetrievedChunk> chunks,
+            ExplanationLanguage language,
+            List<Turn> history
+    ) {
         ExplanationLanguage resolved = language == null
                 ? (QuestionLanguage.isLikelyGerman(question) ? ExplanationLanguage.DE : ExplanationLanguage.EN)
                 : language;
@@ -23,17 +33,27 @@ public class FakeChatModel implements ChatModel {
         RetrievedChunk primary = chunks.getFirst();
         String body = truncate(primary.content(), 320);
         boolean german = resolved == ExplanationLanguage.DE;
+        boolean followUp = history != null && !history.isEmpty();
         String directHeading = german ? "## Direkte Antwort" : "## Direct answer";
         String explanationHeading = german ? "## Erklärung" : "## Explanation";
         String termsHeading = german ? "## Schlüsselbegriffe" : "## Key terms";
         String lead = german
                 ? "Aus den veröffentlichten Materialien: %s [%d]".formatted(body, 1)
                 : "From your course materials: %s [%d]".formatted(body, 1);
-        String support = german
-                ? "Die veröffentlichten Materialien stützen diese Antwort. Quelle [%d] (%s, Seite %d) passt zu deiner Frage: \"%s\".".formatted(
-                        1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim())
-                : "The published materials support this answer. Source [%d] (%s, page %d) is the closest match to your question: \"%s\".".formatted(
-                        1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim());
+        String support;
+        if (followUp) {
+            support = german
+                    ? "Folgefrage in diesem Lerngespräch. Quelle [%d] (%s, Seite %d) passt zu: \"%s\".".formatted(
+                            1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim())
+                    : "Follow-up in this study chat. Source [%d] (%s, page %d) matches: \"%s\".".formatted(
+                            1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim());
+        } else {
+            support = german
+                    ? "Die veröffentlichten Materialien stützen diese Antwort. Quelle [%d] (%s, Seite %d) passt zu deiner Frage: \"%s\".".formatted(
+                            1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim())
+                    : "The published materials support this answer. Source [%d] (%s, page %d) is the closest match to your question: \"%s\".".formatted(
+                            1, primary.title(), primary.pageNumber(), question == null ? "" : question.trim());
+        }
         StringBuilder terms = new StringBuilder();
         for (int i = 0; i < chunks.size(); i++) {
             RetrievedChunk chunk = chunks.get(i);

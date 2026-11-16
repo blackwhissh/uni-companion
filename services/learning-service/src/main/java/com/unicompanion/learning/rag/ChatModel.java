@@ -7,6 +7,19 @@ public interface ChatModel {
 
     String answer(String question, List<RetrievedChunk> chunks, ExplanationLanguage language);
 
+    /**
+     * Multi-turn study chat. History is prior user/assistant turns (oldest first), excluding the
+     * current question. Default falls back to single-turn {@link #answer}.
+     */
+    default String answerWithHistory(
+            String question,
+            List<RetrievedChunk> chunks,
+            ExplanationLanguage language,
+            List<Turn> history
+    ) {
+        return answer(question, chunks, language);
+    }
+
     String summarize(String title, List<RetrievedChunk> chunks, ExplanationLanguage language);
 
     default List<FlashcardDraft> generateFlashcards(List<RetrievedChunk> chunks, int count) {
@@ -36,6 +49,10 @@ public interface ChatModel {
             int pageNumber,
             String content
     ) {
+    }
+
+    /** One prior chat turn. Role is {@code USER} or {@code ASSISTANT}. */
+    record Turn(String role, String content) {
     }
 
     record FlashcardDraft(String front, String back) {

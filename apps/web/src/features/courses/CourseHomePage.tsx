@@ -185,8 +185,8 @@ export function CourseHomePage() {
             <SectionLabel>From the lectures</SectionLabel>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <StudyMode
-                title="Q&A"
-                body="Ask anything from the lectures — in English or German — and get an answer with page citations."
+                title="Study chat"
+                body="Chat about topics like a tutor — ask follow-ups, get analogies, or quiz yourself from the lectures."
                 state={canOpenStudy ? 'Open' : ownerPreview ? 'Join to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/qa` : undefined}
               />

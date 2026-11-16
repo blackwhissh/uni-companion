@@ -18,7 +18,7 @@ public class OpenApiController {
         doc.put("info", Map.of(
                 "title", "Uni Companion Learning Service API",
                 "version", "1.0.0",
-                "description", "Courses, canonical PDF materials, grounded RAG Q&A/search/summaries, flashcards, quizzes, study plans, matching, private student notes, and GDPR personal data export."
+                "description", "Courses, canonical PDF materials, grounded RAG Q&A/search/summaries, multi-turn study chat, flashcards, quizzes, study plans, matching, private student notes, and GDPR personal data export."
         ));
         doc.put("components", Map.of(
                 "securitySchemes", Map.of(
@@ -53,6 +53,9 @@ public class OpenApiController {
         paths.put("/api/rag/query", Map.of("post", operation("Grounded Q&A over published course materials (EN/DE)")));
         paths.put("/api/rag/search", Map.of("post", operation("Semantic search across published course materials")));
         paths.put("/api/rag/summary", Map.of("post", operation("Summarize a published lecture (EN/DE)")));
+        paths.put("/api/rag/chat/sessions", Map.of("post", operation("Start a multi-turn study chat over selected lectures")));
+        paths.put("/api/rag/chat/sessions/{sessionId}", Map.of("get", operation("Load a study chat session and message history")));
+        paths.put("/api/rag/chat/sessions/{sessionId}/messages", Map.of("post", operation("Send a follow-up in a study chat (grounded RAG)")));
         paths.put("/api/study/courses/{courseId}/flashcards", Map.of("get", operation("Get active flashcard deck")));
         paths.put("/api/study/courses/{courseId}/flashcards/generate", Map.of("post", operation("Generate or reuse flashcard deck")));
         paths.put("/api/study/courses/{courseId}/quizzes", Map.of("get", operation("Get active practice quiz")));

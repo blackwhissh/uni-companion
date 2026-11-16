@@ -307,6 +307,51 @@ class RagApiTests {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void enrolledStudentCanContinueAStudyChatWithFollowUps() throws Exception {
+        String courseId = createCourse("RAG-CHAT");
+        publishCourse(courseId);
+        String materialId = upload(courseId, "Lecture 1", "lecture.pdf", pdfBytes("Consensus algorithms keep replicas consistent."));
+        publishMaterial(materialId);
+        enroll(courseId);
+
+        MvcResult started = mockMvc.perform(post("/api/rag/chat/sessions")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","materialIds":["%s"],"language":"EN"}
+                                """.formatted(courseId, materialId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", hasSize(0)))
+                .andExpect(jsonPath("$.materialIds[0]").value(materialId))
+                .andReturn();
+        String sessionId = JsonPath.read(started.getResponse().getContentAsString(), "$.id");
+
+        mockMvc.perform(post("/api/rag/chat/sessions/" + sessionId + "/messages")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"What do consensus algorithms do?\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", hasSize(2)))
+                .andExpect(jsonPath("$.messages[0].role").value("USER"))
+                .andExpect(jsonPath("$.messages[1].role").value("ASSISTANT"))
+                .andExpect(jsonPath("$.messages[1].content", containsString("Consensus")))
+                .andExpect(jsonPath("$.messages[1].citations", hasSize(1)));
+
+        mockMvc.perform(post("/api/rag/chat/sessions/" + sessionId + "/messages")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"Explain that simpler.\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", hasSize(4)))
+                .andExpect(jsonPath("$.messages[3].content", containsString("Follow-up")));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/rag/chat/sessions/" + sessionId)
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", hasSize(4)));
+    }
+
     private String createCourse(String code) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/courses")
                         .header("Authorization", ADMIN)

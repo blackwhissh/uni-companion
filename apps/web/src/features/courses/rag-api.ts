@@ -44,6 +44,50 @@ export function askCourseQuestion(
   )
 }
 
+export type StudyChatMessage = {
+  id: string
+  role: 'USER' | 'ASSISTANT' | string
+  content: string
+  citations: RagCitation[]
+  createdAt: string
+}
+
+export type StudyChatSession = {
+  id: string
+  courseId: string
+  materialIds: string[]
+  language: string | null
+  messages: StudyChatMessage[]
+  createdAt: string
+  updatedAt: string
+}
+
+export function startStudyChat(courseId: string, materialIds: string[], language?: 'EN' | 'DE') {
+  return withRetry(() =>
+    learningFetch<StudyChatSession>('/api/rag/chat/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        courseId,
+        materialIds,
+        ...(language ? { language } : {}),
+      }),
+    }),
+  )
+}
+
+export function getStudyChat(sessionId: string) {
+  return withRetry(() => learningFetch<StudyChatSession>(`/api/rag/chat/sessions/${sessionId}`))
+}
+
+export function sendStudyChatMessage(sessionId: string, question: string) {
+  return withRetry(() =>
+    learningFetch<StudyChatSession>(`/api/rag/chat/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    }),
+  )
+}
+
 export function searchLectures(courseId: string, query: string) {
   return withRetry(() =>
     learningFetch<SearchResult>('/api/rag/search', {

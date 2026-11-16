@@ -19,14 +19,17 @@ import { getCourse } from './course-api.ts'
 import { listMaterials } from './material-api.ts'
 import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
 import { QaSources } from './QaSources.tsx'
-import { QA_SUGGESTED_PROMPTS } from './qa-prompts.ts'
+import { QA_FOLLOW_UP_PROMPTS, QA_SUGGESTED_PROMPTS } from './qa-prompts.ts'
 import { ExplainLanguageField } from './ExplainLanguageField.tsx'
 import type { ExplainLanguage } from './ExplainLanguageField.tsx'
-import { askCourseQuestion } from './rag-api.ts'
+import {
+  sendStudyChatMessage,
+  startStudyChat,
+} from './rag-api.ts'
+import type { StudyChatMessage, StudyChatSession } from './rag-api.ts'
 import { useAuth } from '../auth/use-auth.ts'
 import { studyActionError } from './study-ui.ts'
 import { StudyMaterialPicker } from './StudyMaterialPicker.tsx'
-import type { RagAnswer } from './rag-api.ts'
 
 const QUESTION_MAX = 2000
 const MATERIALS_GONE =
@@ -49,10 +52,9 @@ export function CourseQaPage() {
     enabled: course.data?.enrolled === true,
     retry: false,
   })
-  const [question, setQuestion] = useState(() => (searchParams.get('question') ?? '').slice(0, QUESTION_MAX))
+  const [draft, setDraft] = useState(() => (searchParams.get('question') ?? '').slice(0, QUESTION_MAX))
   const [language, setLanguage] = useState<ExplainLanguage>('')
-  const [askedQuestion, setAskedQuestion] = useState<string | null>(null)
-  const [result, setResult] = useState<RagAnswer | null>(null)
+  const [session, setSession] = useState<StudyChatSession | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pasteWarning, setPasteWarning] = useState<string | null>(null)
   const [materialNotice, setMaterialNotice] = useState<string | null>(null)
@@ -62,6 +64,8 @@ export function CourseQaPage() {
   const [pickingMaterials, setPickingMaterials] = useState(true)
   const selectedRef = useRef(selectedMaterialIds)
   selectedRef.current = selectedMaterialIds
+  const threadEndRef = useRef<HTMLDivElement | null>(null)
+  const pendingStarter = useRef<string | null>(searchParams.get('question'))
 
   useEffect(() => {
     if (!courseId) {
@@ -73,18 +77,25 @@ export function CourseQaPage() {
     }
   }, [courseId])
 
+  useEffect(() => {
+    const node = threadEndRef.current
+    if (node && typeof node.scrollIntoView === 'function') {
+      node.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [session?.messages.length, session?.id])
+
   const ask = useMutation({
-    mutationFn: ({ q, materialIds, language: explainIn }: { q: string; materialIds: string[]; language: ExplainLanguage }) =>
-      askCourseQuestion(courseId, q, materialIds, explainIn === '' ? undefined : explainIn),
-    onSuccess: (answer, variables) => {
+    mutationFn: ({ sessionId, question }: { sessionId: string; question: string }) =>
+      sendStudyChatMessage(sessionId, question),
+    onSuccess: (next) => {
       setError(null)
       setMaterialNotice(null)
-      setAskedQuestion(variables.q)
-      setResult(answer)
+      setSession(next)
+      setDraft('')
+      setPasteWarning(null)
     },
     onError: async (err) => {
-      // Keep the previous answer visible; only update the error banner.
-      const message = studyActionError(err, 'Could not answer that question.')
+      const message = studyActionError(err, 'Could not answer that.')
       if (message.includes(MATERIALS_GONE) || (err instanceof ApiError && err.message.includes(MATERIALS_GONE))) {
         const refreshed = await materials.refetch()
         const readyIds = new Set(
@@ -95,20 +106,37 @@ export function CourseQaPage() {
         const dropped = selectedRef.current.filter((id) => !readyIds.has(id))
         const kept = selectedRef.current.filter((id) => readyIds.has(id))
         setSelectedMaterialIds(kept)
-        if (dropped.length > 0) {
-          setMaterialNotice(
-            dropped.length === 1
-              ? 'One selected material is no longer available (unpublished or not ready). Choose materials again.'
-              : `${dropped.length} selected materials are no longer available (unpublished or not ready). Choose materials again.`,
-          )
-        } else {
-          setMaterialNotice('Selected materials are no longer available. Choose materials again.')
-        }
+        setSession(null)
+        setMaterialNotice(
+          dropped.length === 1
+            ? 'One selected lecture is no longer available. Pick lectures again to keep chatting.'
+            : 'Some selected lectures are no longer available. Pick lectures again to keep chatting.',
+        )
         setPickingMaterials(true)
         setError(null)
         return
       }
       setError(readableAskError(err, message))
+    },
+  })
+
+  const start = useMutation({
+    mutationFn: (materialIds: string[]) =>
+      startStudyChat(courseId, materialIds, language === '' ? undefined : language),
+    onSuccess: (next) => {
+      setError(null)
+      setMaterialNotice(null)
+      setSession(next)
+      const starter = pendingStarter.current?.trim()
+      if (starter) {
+        pendingStarter.current = null
+        setDraft('')
+        ask.mutate({ sessionId: next.id, question: starter })
+      }
+    },
+    onError: (err) => {
+      setError(studyActionError(err, 'Could not start a study chat.'))
+      setPickingMaterials(true)
     },
   })
 
@@ -152,59 +180,83 @@ export function CourseQaPage() {
       }
       setMaterialNotice(
         dropped === 1
-          ? 'One selected material was unpublished or is no longer ready. It was removed from your selection.'
-          : `${dropped} selected materials were unpublished or are no longer ready. They were removed from your selection.`,
+          ? 'One selected lecture was unpublished or is no longer ready. It was removed from your selection.'
+          : `${dropped} selected lectures were unpublished or are no longer ready. They were removed from your selection.`,
       )
       if (kept.length === 0) {
         setPickingMaterials(true)
+        setSession(null)
       }
       return kept
     })
-    // readyMaterials identity changes every render; key on ids.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readyIdsKey, materials.data])
+
+  function beginChat(materialIds: string[]) {
+    setSelectedMaterialIds(materialIds)
+    saveMaterialSelection('qa', courseId, materialIds)
+    setPickingMaterials(false)
+    setSession(null)
+    setError(null)
+    setMaterialNotice(null)
+    start.mutate(materialIds)
+  }
 
   function submitQuestion(raw: string) {
     const trimmed = raw.trim()
     if (!trimmed) {
-      setError('Ask a question about this course.')
+      setError('Ask something about these lectures.')
       return
     }
     if (trimmed.length > QUESTION_MAX) {
-      setError(`Keep your question to ${QUESTION_MAX.toLocaleString()} characters or fewer.`)
+      setError(`Keep your message to ${QUESTION_MAX.toLocaleString()} characters or fewer.`)
       return
     }
-    setQuestion(trimmed)
-    if (selectedMaterialIds.length === 0) {
-      setError('Select at least one material first.')
+    if (!session) {
+      setError('Pick lectures first so we know what to study from.')
       return
     }
-    ask.mutate({ q: trimmed, materialIds: selectedMaterialIds, language })
+    ask.mutate({ sessionId: session.id, question: trimmed })
   }
 
   function onSubmit(event: FormEvent) {
     event.preventDefault()
-    submitQuestion(question)
+    submitQuestion(draft)
   }
 
-  function useSuggestedPrompt(prompt: string) {
+  function usePrompt(prompt: string, sendImmediately: boolean) {
     setError(null)
     setPasteWarning(null)
-    setQuestion(prompt.slice(0, QUESTION_MAX))
+    if (sendImmediately && session) {
+      submitQuestion(prompt)
+      return
+    }
+    setDraft(prompt.slice(0, QUESTION_MAX))
+  }
+
+  function startFreshChat() {
+    if (selectedMaterialIds.length === 0) {
+      setPickingMaterials(true)
+      return
+    }
+    setDraft('')
+    setError(null)
+    beginChat(selectedMaterialIds)
   }
 
   const unavailable = course.error instanceof ApiError && course.error.status === 404
   const readyCount = readyMaterials.length
   const enrolled = course.data?.enrolled === true
-  const insufficient = result != null && result.citations.length === 0
-  const overLimit = question.length > QUESTION_MAX
-  const canAsk =
+  const overLimit = draft.length > QUESTION_MAX
+  const busy = start.isPending || ask.isPending
+  const canSend =
     authReady &&
-    !ask.isPending &&
-    question.trim().length > 0 &&
+    !busy &&
+    !!session &&
+    draft.trim().length > 0 &&
     !overLimit &&
-    question.length <= QUESTION_MAX &&
     !pasteWarning
+  const hasMessages = (session?.messages.length ?? 0) > 0
 
   return (
     <Page>
@@ -218,14 +270,21 @@ export function CourseQaPage() {
       ) : null}
       <div className="mt-4">
         <PageHeader
-          eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Q&A'}
-          title="Course Q&A"
-          description="Ask in your own words, or start from a ready prompt. Answers come from the published lectures — English or German — with page citations you can open."
+          eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Study chat'}
+          title="Study chat"
+          description="Talk through topics the way you would with a tutor — ask follow-ups, request analogies, or get quizzed. Answers stay grounded in the lectures you pick."
           actions={
             enrolled && readyCount > 0 && !pickingMaterials ? (
-              <Button type="button" variant="secondary" disabled={ask.isPending} onClick={() => setPickingMaterials(true)}>
-                Change materials
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {session ? (
+                  <Button type="button" variant="ghost" disabled={busy} onClick={startFreshChat}>
+                    New chat
+                  </Button>
+                ) : null}
+                <Button type="button" variant="secondary" disabled={busy} onClick={() => setPickingMaterials(true)}>
+                  Change lectures
+                </Button>
+              </div>
             ) : null
           }
         />
@@ -235,15 +294,15 @@ export function CourseQaPage() {
 
       {course.data && !enrolled && !unavailable ? (
         <EmptyState
-          title="Join to ask questions"
-          description="Join the course first, then you can ask anything from the lectures."
+          title="Join to study in chat"
+          description="Join the course first, then you can chat about the lectures like a tutor session."
         />
       ) : null}
 
       {enrolled && readyCount === 0 ? (
         <EmptyState
-          title="No lectures to ask about yet"
-          description="Once your professor publishes the PDFs, come back and ask anything from them."
+          title="No lectures to study yet"
+          description="Once your professor publishes the PDFs, come back and chat about the topics."
         />
       ) : null}
 
@@ -258,161 +317,197 @@ export function CourseQaPage() {
           {pickingMaterials ? (
             <StudyMaterialPicker
               materials={readyMaterials}
-              description="Choose which lectures to ask about. We’ll keep this set until you change it."
-              confirmLabel="Use selected materials"
+              description="Choose which lectures this chat can use. You can change them anytime — that starts a fresh chat."
+              confirmLabel="Start studying"
+              pending={start.isPending}
               initialSelectedIds={selectedMaterialIds}
-              onCancel={selectedMaterialIds.length > 0 ? () => setPickingMaterials(false) : undefined}
-              onConfirm={(materialIds) => {
-                const recovering = materialNotice != null
-                setSelectedMaterialIds(materialIds)
-                saveMaterialSelection('qa', courseId, materialIds)
-                setPickingMaterials(false)
-                if (!recovering) {
-                  setResult(null)
-                  setAskedQuestion(null)
-                }
-                setError(null)
-                setMaterialNotice(null)
-              }}
+              onCancel={session || selectedMaterialIds.length > 0 ? () => setPickingMaterials(false) : undefined}
+              onConfirm={beginChat}
             />
           ) : (
-          <Panel className="mt-8">
-            <SectionLabel>Your question</SectionLabel>
-            <p className="mt-2 text-sm text-muted">
-              Searching {selectedMaterialIds.length} selected {selectedMaterialIds.length === 1 ? 'material' : 'materials'}.
-            </p>
-            {selectedMaterialIds.length === 0 ? (
-              <p className="mt-2 text-sm text-muted" role="status">
-                Pick at least one lecture to ask about.
+            <div className="mt-8 flex flex-col gap-4">
+              <p className="text-sm text-muted">
+                Studying from {selectedMaterialIds.length}{' '}
+                {selectedMaterialIds.length === 1 ? 'lecture' : 'lectures'}. Ask anything — then keep going with
+                follow-ups.
               </p>
-            ) : null}
-            <form className="mt-4 flex flex-col gap-4" onSubmit={onSubmit}>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="qa-question" className="text-sm font-medium text-ink-soft">
-                  Question
-                </label>
-                <textarea
-                  id="qa-question"
-                  value={question}
-                  onChange={(event) => {
-                    setPasteWarning(null)
-                    setQuestion(event.target.value.slice(0, QUESTION_MAX))
-                  }}
-                  onPaste={(event) => {
-                    const pasted = event.clipboardData.getData('text')
-                    if (!pasted) {
-                      return
-                    }
-                    const start = event.currentTarget.selectionStart ?? question.length
-                    const end = event.currentTarget.selectionEnd ?? start
-                    const merged = question.slice(0, start) + pasted + question.slice(end)
-                    if (merged.length > QUESTION_MAX) {
-                      event.preventDefault()
-                      setQuestion(merged.slice(0, QUESTION_MAX))
-                      setPasteWarning(
-                        `Paste was trimmed to ${QUESTION_MAX.toLocaleString()} characters. Shorten your question before asking.`,
-                      )
-                    } else {
-                      setPasteWarning(null)
-                    }
-                  }}
-                  rows={4}
-                  className="rounded-lg border border-line bg-white/80 px-3 py-2.5 text-base font-normal text-ink shadow-[inset_0_1px_0_rgb(7_52_60_/_0.03)] outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
-                  placeholder="What are the main ideas covered in these materials?"
-                />
-                <span className={`text-xs font-normal ${overLimit || pasteWarning ? 'text-danger' : 'text-muted'}`}>
-                  {question.length.toLocaleString()} / {QUESTION_MAX.toLocaleString()} characters
-                  {pasteWarning
-                    ? ` — ${pasteWarning}`
-                    : overLimit
-                      ? ' — shorten your question to ask'
-                      : ''}
-                </span>
-              </div>
 
-              <ExplainLanguageField name="qa-language" value={language} onChange={setLanguage} matchQuestion />
+              <Panel className="flex min-h-[28rem] flex-col overflow-hidden !p-0">
+                <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5" aria-live="polite">
+                  {!hasMessages && !busy ? (
+                    <div className="flex h-full flex-col justify-center gap-4">
+                      <div>
+                        <SectionLabel>Start anywhere</SectionLabel>
+                        <p className="mt-2 text-sm leading-relaxed text-muted">
+                          Pick a starter, or type your own question about a topic, definition, or process.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="Suggested starters">
+                        {QA_SUGGESTED_PROMPTS.map((prompt) => (
+                          <button
+                            key={prompt.id}
+                            type="button"
+                            disabled={busy || !session}
+                            onClick={() => usePrompt(prompt.question, true)}
+                            className="rounded-lg border border-line bg-mist/70 px-3 py-1.5 text-left text-sm text-ink-soft transition hover:border-accent/40 hover:bg-white hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {prompt.label}
+                          </button>
+                        ))}
+                      </div>
+                      <GroundedNote />
+                    </div>
+                  ) : null}
 
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Try a prompt</p>
-                <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Suggested prompts">
-                  {QA_SUGGESTED_PROMPTS.map((prompt) => (
-                    <button
-                      key={prompt.id}
-                      type="button"
-                      disabled={ask.isPending}
-                      onClick={() => useSuggestedPrompt(prompt.question)}
-                      className="rounded-lg border border-line bg-mist/70 px-3 py-1.5 text-left text-sm text-ink-soft transition hover:border-accent/40 hover:bg-white hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {prompt.label}
-                    </button>
+                  {(session?.messages ?? []).map((message) => (
+                    <ChatBubble key={message.id} courseId={courseId} message={message} />
                   ))}
-                </div>
-              </div>
 
-              {error ? <Alert>{error}</Alert> : null}
-              <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={!canAsk}>
-                  {ask.isPending ? 'Thinking…' : 'Ask'}
-                </Button>
-                {error && question.trim() && !overLimit ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={ask.isPending}
-                    onClick={() => submitQuestion(question)}
-                  >
-                    Try again
-                  </Button>
+                  {busy ? (
+                    <div className="animate-pulse-soft rounded-2xl border border-line/70 bg-mist/50 px-4 py-3 text-sm text-muted">
+                      Looking through the lectures…
+                    </div>
+                  ) : null}
+                  <div ref={threadEndRef} />
+                </div>
+
+                {hasMessages && !busy ? (
+                  <div className="border-t border-line/70 px-5 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Keep going</p>
+                    <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Follow-up prompts">
+                      {QA_FOLLOW_UP_PROMPTS.map((prompt) => (
+                        <button
+                          key={prompt.id}
+                          type="button"
+                          disabled={!session}
+                          onClick={() => usePrompt(prompt.question, true)}
+                          className="rounded-lg border border-line bg-white px-3 py-1.5 text-left text-sm text-ink-soft transition hover:border-accent/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {prompt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ) : null}
-              </div>
-            </form>
-          </Panel>
+
+                <form className="border-t border-line/70 px-5 py-4" onSubmit={onSubmit}>
+                  <ExplainLanguageField name="qa-language" value={language} onChange={setLanguage} matchQuestion />
+                  <label htmlFor="qa-draft" className="mt-3 block text-sm font-medium text-ink-soft">
+                    Your message
+                  </label>
+                  <textarea
+                    id="qa-draft"
+                    value={draft}
+                    rows={3}
+                    onChange={(event) => {
+                      setPasteWarning(null)
+                      setDraft(event.target.value.slice(0, QUESTION_MAX))
+                    }}
+                    onPaste={(event) => {
+                      const pasted = event.clipboardData.getData('text')
+                      if (!pasted) {
+                        return
+                      }
+                      const startPos = event.currentTarget.selectionStart ?? draft.length
+                      const end = event.currentTarget.selectionEnd ?? startPos
+                      const merged = draft.slice(0, startPos) + pasted + draft.slice(end)
+                      if (merged.length > QUESTION_MAX) {
+                        event.preventDefault()
+                        setDraft(merged.slice(0, QUESTION_MAX))
+                        setPasteWarning(
+                          `Paste was trimmed to ${QUESTION_MAX.toLocaleString()} characters. Shorten your message before sending.`,
+                        )
+                      } else {
+                        setPasteWarning(null)
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault()
+                        if (canSend) {
+                          submitQuestion(draft)
+                        }
+                      }
+                    }}
+                    className="mt-1.5 w-full rounded-lg border border-line bg-white/80 px-3 py-2.5 text-base font-normal text-ink shadow-[inset_0_1px_0_rgb(7_52_60_/_0.03)] outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                    placeholder="Ask about a topic, or say “explain that simpler”…"
+                  />
+                  <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                    <span className={`text-xs font-normal ${overLimit || pasteWarning ? 'text-danger' : 'text-muted'}`}>
+                      {draft.length.toLocaleString()} / {QUESTION_MAX.toLocaleString()} characters
+                      {pasteWarning
+                        ? ` — ${pasteWarning}`
+                        : overLimit
+                          ? ' — shorten your message to send'
+                          : ' · Enter to send · Shift+Enter for a new line'}
+                    </span>
+                  </div>
+                  {error ? (
+                    <div className="mt-3">
+                      <Alert>{error}</Alert>
+                    </div>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button type="submit" disabled={!canSend}>
+                      {ask.isPending ? 'Thinking…' : hasMessages ? 'Send' : 'Ask'}
+                    </Button>
+                    {error && draft.trim() && !overLimit && session ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={busy}
+                        onClick={() => submitQuestion(draft)}
+                      >
+                        Try again
+                      </Button>
+                    ) : null}
+                  </div>
+                </form>
+              </Panel>
+            </div>
           )}
-
-          {!pickingMaterials && ask.isPending ? (
-            <section className="mt-10 animate-pulse-soft" aria-live="polite">
-              <SectionLabel>Working</SectionLabel>
-              <Panel className="mt-4">
-                <p className="text-muted">Looking through the lectures and drafting an answer…</p>
-              </Panel>
-            </section>
-          ) : null}
-
-          {result ? (
-            <section className={`mt-10 ${ask.isPending ? 'opacity-60' : 'animate-rise-delay'}`}>
-              {askedQuestion ? (
-                <div className="mb-6 rounded-2xl border border-line/80 bg-mist/60 px-5 py-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">You asked</p>
-                  <p className="mt-2 font-display text-lg leading-snug text-ink">{askedQuestion}</p>
-                </div>
-              ) : null}
-
-              <SectionLabel>{insufficient ? 'No supporting passage found' : 'Answer'}</SectionLabel>
-              <GroundedNote className="mt-2" />
-              <Panel className={`mt-4 ${insufficient ? 'border-warn/30 bg-amber-50/50' : ''}`}>
-                <StudyMarkdown
-                  markdown={result.answer}
-                  citations={result.citations.map((citation, index) => ({
-                    index: index + 1,
-                    title: citation.title,
-                    pageNumber: citation.pageNumber,
-                    sectionHint: citation.sectionHint,
-                  }))}
-                />
-                {insufficient ? (
-                  <p className="mt-4 border-t border-warn/20 pt-3 text-sm leading-relaxed text-ink-soft" role="status">
-                    No supporting passage was found in the selected materials for this answer. Treat it as
-                    unverified until you open the lecture PDF yourself.
-                  </p>
-                ) : null}
-              </Panel>
-
-              <QaSources courseId={courseId} citations={result.citations} answer={result.answer} />
-            </section>
-          ) : null}
         </>
       ) : null}
     </Page>
+  )
+}
+
+function ChatBubble({ courseId, message }: { courseId: string; message: StudyChatMessage }) {
+  const isUser = message.role === 'USER'
+  if (isUser) {
+    return (
+      <div className="ml-auto max-w-[85%] rounded-2xl bg-ink px-4 py-3 text-white shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">You</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+      </div>
+    )
+  }
+
+  const insufficient = message.citations.length === 0
+  return (
+    <div className="max-w-[95%] space-y-3">
+      <div className={`rounded-2xl border px-4 py-3 ${insufficient ? 'border-warn/30 bg-amber-50/50' : 'border-line/80 bg-white'}`}>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Tutor</p>
+        <div className="mt-2">
+          <StudyMarkdown
+            markdown={message.content}
+            citations={message.citations.map((citation, index) => ({
+              index: index + 1,
+              title: citation.title,
+              pageNumber: citation.pageNumber,
+              sectionHint: citation.sectionHint,
+            }))}
+          />
+        </div>
+        {insufficient ? (
+          <p className="mt-3 border-t border-warn/20 pt-3 text-sm leading-relaxed text-ink-soft" role="status">
+            No supporting passage was found in the selected lectures for this answer. Treat it as unverified until you
+            open the PDF yourself.
+          </p>
+        ) : null}
+      </div>
+      <QaSources courseId={courseId} citations={message.citations} answer={message.content} />
+    </div>
   )
 }
 
@@ -423,12 +518,12 @@ function readableAskError(err: unknown, fallback: string): string {
   const questionDetail = err.details?.question
   if (questionDetail) {
     if (/size|2000|characters/i.test(questionDetail)) {
-      return `Keep your question to ${QUESTION_MAX.toLocaleString()} characters or fewer.`
+      return `Keep your message to ${QUESTION_MAX.toLocaleString()} characters or fewer.`
     }
     return questionDetail
   }
   if (/validation failed/i.test(err.message)) {
-    return `Keep your question to ${QUESTION_MAX.toLocaleString()} characters or fewer.`
+    return `Keep your message to ${QUESTION_MAX.toLocaleString()} characters or fewer.`
   }
   return fallback
 }

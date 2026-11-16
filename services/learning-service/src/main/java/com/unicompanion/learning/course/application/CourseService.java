@@ -12,6 +12,7 @@ import com.unicompanion.learning.material.infrastructure.MaterialChunkRepository
 import com.unicompanion.learning.material.infrastructure.MaterialEntity;
 import com.unicompanion.learning.material.infrastructure.MaterialRepository;
 import com.unicompanion.learning.notes.StudentNoteService;
+import com.unicompanion.learning.rag.StudyChatService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -36,6 +37,7 @@ public class CourseService {
     private final LocalPdfStorage storage;
     private final MatchingService matching;
     private final StudentNoteService notes;
+    private final StudyChatService studyChats;
 
     public CourseService(
             CourseRepository courses,
@@ -44,7 +46,8 @@ public class CourseService {
             MaterialChunkRepository chunks,
             LocalPdfStorage storage,
             MatchingService matching,
-            StudentNoteService notes
+            StudentNoteService notes,
+            StudyChatService studyChats
     ) {
         this.courses = courses;
         this.enrollments = enrollments;
@@ -53,6 +56,7 @@ public class CourseService {
         this.storage = storage;
         this.matching = matching;
         this.notes = notes;
+        this.studyChats = studyChats;
     }
 
     @Transactional
@@ -179,6 +183,7 @@ public class CourseService {
         enrollments.deleteById(new EnrollmentKey(courseId, userId));
         matching.clearOptIn(courseId, userId);
         notes.clearCourseNotes(courseId, userId);
+        studyChats.clearCourseChats(courseId, userId);
         log.info("Unenrolled user={} from course={}", userId, courseId);
     }
 

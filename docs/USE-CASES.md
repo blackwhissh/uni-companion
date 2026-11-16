@@ -300,17 +300,17 @@ Study features run only against **canonical published materials** the student is
 
 ### F3.1 Grounded Q&A (RAG)
 
-#### UC-020 — Ask a question about the course
+#### UC-020 — Study a topic in chat (grounded tutor)
 
 | Field | Content |
 |---|---|
 | **Actors** | A-STU, A-SYS |
 | **Priority / Phase** | Must · MVP |
-| **Goal** | Understand a topic using official lecture material |
+| **Goal** | Understand a topic using official lecture material in a ChatGPT-like multi-turn study chat |
 | **Preconditions** | Enrolled; ≥1 material `READY` and `PUBLISHED` |
-| **Main flow** | 1. Open Q&A.<br>2. Ask question.<br>3. System retrieves course chunks.<br>4. Returns grounded answer + citations when possible.<br>5. Optional follow-ups. |
-| **Exceptions** | E1: Not enrolled → deny.<br>E2: No relevant chunks → say material may not cover it.<br>E3: Provider error → retry. |
-| **Postconditions** | Answer delivered from canonical KB. |
+| **Main flow** | 1. Open Study chat and pick lectures.<br>2. Ask a question or use a starter prompt.<br>3. System retrieves course chunks for this turn and answers with citations.<br>4. Student asks follow-ups (“explain simpler”, “quiz me”, etc.); prior turns clarify intent, but each answer is re-grounded in fresh excerpts.<br>5. Student can start a new chat or change lectures. |
+| **Exceptions** | E1: Not enrolled → deny.<br>E2: No relevant chunks → say material may not cover it.<br>E3: Provider error → retry.<br>E4: Chat full → start a new chat. |
+| **Postconditions** | Grounded study conversation over the canonical KB; chat history is private to the student. |
 
 ### F3.2 Flashcards
 

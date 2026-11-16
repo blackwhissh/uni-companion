@@ -146,6 +146,25 @@ public class PersonalDataService {
                 userId
         );
 
+        List<StudyChatRecord> studyChats = jdbc.query(
+                """
+                select s.id, s.course_id, c.code, s.updated_at,
+                       (select count(*) from study_chat_messages m where m.session_id = s.id) as message_count
+                from study_chat_sessions s
+                join courses c on c.id = s.course_id
+                where s.user_id = ?
+                order by s.updated_at desc
+                """,
+                (rs, rowNum) -> new StudyChatRecord(
+                        UUID.fromString(rs.getString("id")),
+                        UUID.fromString(rs.getString("course_id")),
+                        rs.getString("code"),
+                        rs.getInt("message_count"),
+                        rs.getTimestamp("updated_at").toInstant()
+                ),
+                userId
+        );
+
         return new PersonalDataExport(
                 userId,
                 Instant.now(),
@@ -154,7 +173,8 @@ public class PersonalDataService {
                 quizAttempts,
                 matchProfiles,
                 contacts,
-                privateNotes
+                privateNotes,
+                studyChats
         );
     }
 
@@ -162,6 +182,7 @@ public class PersonalDataService {
     public void purgeFor(UUID userId) {
         jdbc.update("delete from contact_requests where requester_id = ? or recipient_id = ?", userId, userId);
         jdbc.update("delete from match_opt_ins where user_id = ?", userId);
+        jdbc.update("delete from study_chat_sessions where user_id = ?", userId);
         jdbc.update("delete from student_notes where user_id = ?", userId);
         jdbc.update("delete from study_plans where user_id = ?", userId);
         jdbc.update("delete from quiz_attempts where user_id = ?", userId);
@@ -181,7 +202,17 @@ public class PersonalDataService {
             List<QuizAttemptRecord> quizAttempts,
             List<MatchProfileRecord> matchProfiles,
             List<ContactRecord> contacts,
-            List<PrivateNoteRecord> privateNotes
+            List<PrivateNoteRecord> privateNotes,
+            List<StudyChatRecord> studyChats
+    ) {
+    }
+
+    public record StudyChatRecord(
+            UUID sessionId,
+            UUID courseId,
+            String courseCode,
+            int messageCount,
+            Instant updatedAt
     ) {
     }
 

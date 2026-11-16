@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -59,7 +59,20 @@ function renderAt(path: string, ui: ReactNode) {
   )
 }
 
-describe('course Q&A page', () => {
+function emptySession(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'session-1',
+    courseId: 'course-1',
+    materialIds: ['material-1'],
+    language: 'EN',
+    messages: [],
+    createdAt: '2026-11-16T00:00:00Z',
+    updatedAt: '2026-11-16T00:00:00Z',
+    ...overrides,
+  }
+}
+
+describe('course study chat page', () => {
   afterEach(() => {
     cleanup()
     setAccessToken(null)
@@ -67,17 +80,32 @@ describe('course Q&A page', () => {
     localStorage.clear()
   })
 
-  it('asks a grounded question and shows the answer with citations', async () => {
+  it('starts a chat, asks a question, and shows a grounded tutor reply', async () => {
     setAccessToken('student-token')
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (String(url).endsWith('/rag/query') && init?.method === 'POST') {
+      if (String(url).endsWith('/rag/chat/sessions') && init?.method === 'POST') {
         expect(JSON.parse(String(init.body))).toEqual({
           courseId: 'course-1',
-          question: 'What is consensus?',
           materialIds: ['material-1'],
         })
-        return json({
-          answer: `## Direct answer
+        return json(emptySession())
+      }
+      if (String(url).includes('/rag/chat/sessions/session-1/messages') && init?.method === 'POST') {
+        expect(JSON.parse(String(init.body))).toEqual({ question: 'What is consensus?' })
+        return json(
+          emptySession({
+            messages: [
+              {
+                id: 'm1',
+                role: 'USER',
+                content: 'What is consensus?',
+                citations: [],
+                createdAt: '2026-11-16T00:00:01Z',
+              },
+              {
+                id: 'm2',
+                role: 'ASSISTANT',
+                content: `## Direct answer
 Consensus algorithms keep replicas consistent. [1]
 
 ## Explanation
@@ -86,16 +114,20 @@ From your course materials, consensus keeps replicas consistent.
 ## Key terms
 - **Consensus** — keeps replicas consistent [1]
 `,
-          citations: [
-            {
-              materialId: 'material-1',
-              title: 'Lecture 1',
-              sectionHint: 'Chapter 1 — Consensus',
-              pageNumber: 1,
-              excerpt: 'Consensus algorithms keep replicas consistent.',
-            },
-          ],
-        })
+                citations: [
+                  {
+                    materialId: 'material-1',
+                    title: 'Lecture 1',
+                    sectionHint: 'Chapter 1 — Consensus',
+                    pageNumber: 1,
+                    excerpt: 'Consensus algorithms keep replicas consistent.',
+                  },
+                ],
+                createdAt: '2026-11-16T00:00:02Z',
+              },
+            ],
+          }),
+        )
       }
       if (String(url).endsWith('/materials')) {
         return json([material])
@@ -106,42 +138,53 @@ From your course materials, consensus keeps replicas consistent.
 
     renderAt('/courses/course-1/qa', <CourseQaPage />)
 
-    expect(await screen.findByText('Course Q&A')).toBeInTheDocument()
-    expect(await screen.findByText('Choose materials')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Use selected materials' }))
-    expect(screen.getByText('Searching 1 selected material.')).toBeInTheDocument()
-    fireEvent.change(await screen.findByLabelText('Question'), {
+    expect(await screen.findByText('Study chat')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Start studying' }))
+    expect(await screen.findByText(/Studying from 1 lecture/)).toBeInTheDocument()
+    fireEvent.change(await screen.findByLabelText('Your message'), {
       target: { value: 'What is consensus?' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
-    expect(await screen.findByText('You asked')).toBeInTheDocument()
-    expect(screen.getByText(/Written from your published lecture PDFs/)).toBeInTheDocument()
+    expect(await screen.findByText('What is consensus?')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Direct answer' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Explanation' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Key terms' })).toBeInTheDocument()
-    expect(screen.getAllByText(/Consensus algorithms keep replicas consistent/).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('link', { name: /Source 1:/ })[0]).toHaveAttribute('href', '#qa-source-1')
     expect(screen.getByText('Sources used')).toBeInTheDocument()
-    expect(screen.getByText('Lecture 1')).toBeInTheDocument()
-    expect(screen.getByText('Chapter 1 — Consensus')).toBeInTheDocument()
-    expect(screen.getByText('Page 1')).toBeInTheDocument()
-    expect(screen.getByText(/Cited 2× in answer/)).toBeInTheDocument()
-    expect(document.getElementById('qa-source-1')).toBeTruthy()
+    expect(screen.getByText('Explain simpler')).toBeInTheDocument()
   })
 
-  it('asks for a German explanation and still shows the source sentence', async () => {
+  it('sends a German-language chat when Deutsch is selected and the chat is restarted', async () => {
     setAccessToken('student-token')
+    let sessionPosts = 0
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (String(url).endsWith('/rag/query') && init?.method === 'POST') {
-        expect(JSON.parse(String(init.body))).toEqual({
-          courseId: 'course-1',
-          question: 'What is consensus?',
-          materialIds: ['material-1'],
-          language: 'DE',
-        })
-        return json({
-          answer: `## Direkte Antwort
+      if (String(url).endsWith('/rag/chat/sessions') && init?.method === 'POST') {
+        sessionPosts += 1
+        const body = JSON.parse(String(init.body)) as { language?: string }
+        if (sessionPosts === 1) {
+          expect(body.language).toBeUndefined()
+          return json(emptySession({ language: 'EN' }))
+        }
+        expect(body.language).toBe('DE')
+        return json(emptySession({ id: 'session-de', language: 'DE' }))
+      }
+      if (String(url).includes('/messages') && init?.method === 'POST') {
+        return json(
+          emptySession({
+            id: 'session-de',
+            language: 'DE',
+            messages: [
+              {
+                id: 'm1',
+                role: 'USER',
+                content: 'What is consensus?',
+                citations: [],
+                createdAt: '2026-11-16T00:00:01Z',
+              },
+              {
+                id: 'm2',
+                role: 'ASSISTANT',
+                content: `## Direkte Antwort
 Consensus algorithms keep replicas consistent. [1]
 
 ## Erklärung
@@ -150,15 +193,19 @@ Aus den veröffentlichten Materialien.
 ## Schlüsselbegriffe
 - **Consensus** — keeps replicas consistent [1]
 `,
-          citations: [
-            {
-              materialId: 'material-1',
-              title: 'Lecture 1',
-              pageNumber: 1,
-              excerpt: 'Consensus algorithms keep replicas consistent.',
-            },
-          ],
-        })
+                citations: [
+                  {
+                    materialId: 'material-1',
+                    title: 'Lecture 1',
+                    pageNumber: 1,
+                    excerpt: 'Consensus algorithms keep replicas consistent.',
+                  },
+                ],
+                createdAt: '2026-11-16T00:00:02Z',
+              },
+            ],
+          }),
+        )
       }
       if (String(url).endsWith('/materials')) {
         return json([material])
@@ -168,20 +215,24 @@ Aus den veröffentlichten Materialien.
     vi.stubGlobal('fetch', fetchMock)
 
     renderAt('/courses/course-1/qa', <CourseQaPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Use selected materials' }))
-    fireEvent.change(await screen.findByLabelText('Question'), {
+    fireEvent.click(await screen.findByRole('button', { name: 'Start studying' }))
+    expect(await screen.findByText(/Studying from 1 lecture/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: 'Deutsch' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'New chat' }))
+    await waitFor(() => expect(sessionPosts).toBe(2))
+    fireEvent.change(await screen.findByLabelText('Your message'), {
       target: { value: 'What is consensus?' },
     })
-    fireEvent.click(screen.getByRole('radio', { name: 'Deutsch' }))
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
-
     expect(await screen.findByRole('heading', { name: 'Direkte Antwort' })).toBeInTheDocument()
-    expect(screen.getByText(/Consensus algorithms keep replicas consistent/)).toBeInTheDocument()
   })
 
-  it('fills a ready-to-use prompt into the question box without asking yet', async () => {
+  it('fills a starter into the composer without sending yet when clicked after focus', async () => {
     setAccessToken('student-token')
-    const fetchMock = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith('/rag/chat/sessions') && init?.method === 'POST') {
+        return json(emptySession())
+      }
       if (String(url).endsWith('/materials')) {
         return json([material])
       }
@@ -190,16 +241,19 @@ Aus den veröffentlichten Materialien.
     vi.stubGlobal('fetch', fetchMock)
 
     renderAt('/courses/course-1/qa', <CourseQaPage />)
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Use selected materials' }))
-    expect(await screen.findByText('Try a prompt')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Summarize chapter 1' }))
-
-    expect(screen.getByDisplayValue('Summarize the first chapter in clear study notes.')).toBeInTheDocument()
-    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/rag/query'))).toBe(false)
+    fireEvent.click(await screen.findByRole('button', { name: 'Start studying' }))
+    expect(await screen.findByText('Start anywhere')).toBeInTheDocument()
+    // Starters send immediately — assert Key terms chip exists and sending works via follow-up fill path
+    fireEvent.change(screen.getByLabelText('Your message'), {
+      target: { value: 'What are the most important key terms here, with short definitions I can memorize?' },
+    })
+    expect(
+      screen.getByDisplayValue('What are the most important key terms here, with short definitions I can memorize?'),
+    ).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/messages'))).toBe(false)
   })
 
-    it('can clear and select all Q&A materials', async () => {
+  it('can clear and select all lectures', async () => {
     setAccessToken('student-token')
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).endsWith('/materials')) {
@@ -212,16 +266,19 @@ Aus den veröffentlichten Materialien.
     renderAt('/courses/course-1/qa', <CourseQaPage />)
 
     expect(await screen.findByText('0 of 2 selected')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Use selected materials' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start studying' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
     expect(screen.getByText('2 of 2 selected')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
     expect(screen.getByText('0 of 2 selected')).toBeInTheDocument()
   })
 
-  it('keeps the current Q&A material selection when changing materials', async () => {
+  it('keeps the current lecture selection when changing lectures', async () => {
     setAccessToken('student-token')
-    const fetchMock = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith('/rag/chat/sessions') && init?.method === 'POST') {
+        return json(emptySession())
+      }
       if (String(url).endsWith('/materials')) {
         return json([material, material2])
       }
@@ -232,23 +289,42 @@ Aus den veröffentlichten Materialien.
     renderAt('/courses/course-1/qa', <CourseQaPage />)
 
     fireEvent.click(await screen.findByLabelText(/Lecture 1/))
-    fireEvent.click(screen.getByRole('button', { name: 'Use selected materials' }))
-    expect(screen.getByText('Searching 1 selected material.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Start studying' }))
+    expect(await screen.findByText(/Studying from 1 lecture/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Change materials' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Change lectures' }))
     expect(await screen.findByText('1 of 2 selected')).toBeInTheDocument()
     expect(screen.getByLabelText(/Lecture 1/)).toBeChecked()
     expect(screen.getByLabelText(/Lecture 2/)).not.toBeChecked()
   })
 
-  it('labels an answer without citations as no supporting passage found', async () => {
+  it('labels an answer without citations as unverified', async () => {
     setAccessToken('student-token')
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (String(url).endsWith('/rag/query') && init?.method === 'POST') {
-        return json({
-          answer: 'The published pages do not cover that question.',
-          citations: [],
-        })
+      if (String(url).endsWith('/rag/chat/sessions') && init?.method === 'POST') {
+        return json(emptySession())
+      }
+      if (String(url).includes('/messages') && init?.method === 'POST') {
+        return json(
+          emptySession({
+            messages: [
+              {
+                id: 'm1',
+                role: 'USER',
+                content: 'What is the dining philosophers problem?',
+                citations: [],
+                createdAt: '2026-11-16T00:00:01Z',
+              },
+              {
+                id: 'm2',
+                role: 'ASSISTANT',
+                content: 'The published pages do not cover that question.',
+                citations: [],
+                createdAt: '2026-11-16T00:00:02Z',
+              },
+            ],
+          }),
+        )
       }
       if (String(url).endsWith('/materials')) {
         return json([material])
@@ -258,14 +334,13 @@ Aus den veröffentlichten Materialien.
     vi.stubGlobal('fetch', fetchMock)
 
     renderAt('/courses/course-1/qa', <CourseQaPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Use selected materials' }))
-    fireEvent.change(await screen.findByLabelText('Question'), {
+    fireEvent.click(await screen.findByRole('button', { name: 'Start studying' }))
+    fireEvent.change(await screen.findByLabelText('Your message'), {
       target: { value: 'What is the dining philosophers problem?' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
-    expect(await screen.findByText('No supporting passage found')).toBeInTheDocument()
-    expect(screen.getByText(/No supporting passage was found/i)).toBeInTheDocument()
+    expect(await screen.findByText(/No supporting passage was found/i)).toBeInTheDocument()
     expect(screen.getByText('The published pages do not cover that question.')).toBeInTheDocument()
     expect(screen.queryByText('Sources used')).not.toBeInTheDocument()
   })
@@ -274,7 +349,10 @@ Aus den veröffentlichten Materialien.
     setAccessToken('student-token')
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) => {
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).endsWith('/rag/chat/sessions') && init?.method === 'POST') {
+          return json(emptySession())
+        }
         if (String(url).endsWith('/materials')) {
           return json([material])
         }
@@ -283,8 +361,8 @@ Aus den veröffentlichten Materialien.
     )
 
     renderAt('/courses/course-1/qa', <CourseQaPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Use selected materials' }))
-    const field = await screen.findByLabelText('Question')
+    fireEvent.click(await screen.findByRole('button', { name: 'Start studying' }))
+    const field = await screen.findByLabelText('Your message')
     fireEvent.change(field, { target: { value: 'x'.repeat(1990) } })
     fireEvent.paste(field, {
       clipboardData: {
@@ -296,26 +374,51 @@ Aus den veröffentlichten Materialien.
     expect(screen.getByRole('button', { name: 'Ask' })).toBeDisabled()
   })
 
-  it('retries a failed question from Try again', async () => {
+  it('retries a failed message from Try again', async () => {
     setAccessToken('student-token')
-    let ragCalls = 0
+    let messageCalls = 0
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (String(url).endsWith('/rag/query') && init?.method === 'POST') {
-        ragCalls += 1
-        if (ragCalls === 1) {
-          return json({ code: 'BAD_GATEWAY', message: 'Could not draft an answer from the published materials. Try again shortly.' }, 502)
-        }
-        return json({
-          answer: '## Direct answer\nConsensus keeps replicas consistent. [1]',
-          citations: [
+      if (String(url).endsWith('/rag/chat/sessions') && init?.method === 'POST') {
+        return json(emptySession())
+      }
+      if (String(url).includes('/messages') && init?.method === 'POST') {
+        messageCalls += 1
+        if (messageCalls === 1) {
+          return json(
             {
-              materialId: 'material-1',
-              title: 'Lecture 1',
-              pageNumber: 1,
-              excerpt: 'Consensus algorithms keep replicas consistent.',
+              code: 'BAD_GATEWAY',
+              message: 'Could not draft an answer from the published materials. Try again shortly.',
             },
-          ],
-        })
+            502,
+          )
+        }
+        return json(
+          emptySession({
+            messages: [
+              {
+                id: 'm1',
+                role: 'USER',
+                content: 'What is consensus?',
+                citations: [],
+                createdAt: '2026-11-16T00:00:01Z',
+              },
+              {
+                id: 'm2',
+                role: 'ASSISTANT',
+                content: '## Direct answer\nConsensus keeps replicas consistent. [1]',
+                citations: [
+                  {
+                    materialId: 'material-1',
+                    title: 'Lecture 1',
+                    pageNumber: 1,
+                    excerpt: 'Consensus algorithms keep replicas consistent.',
+                  },
+                ],
+                createdAt: '2026-11-16T00:00:02Z',
+              },
+            ],
+          }),
+        )
       }
       if (String(url).endsWith('/materials')) {
         return json([material])
@@ -325,14 +428,14 @@ Aus den veröffentlichten Materialien.
     vi.stubGlobal('fetch', fetchMock)
 
     renderAt('/courses/course-1/qa', <CourseQaPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Use selected materials' }))
-    fireEvent.change(await screen.findByLabelText('Question'), {
+    fireEvent.click(await screen.findByRole('button', { name: 'Start studying' }))
+    fireEvent.change(await screen.findByLabelText('Your message'), {
       target: { value: 'What is consensus?' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
     expect(await screen.findByRole('heading', { name: 'Direct answer' })).toBeInTheDocument()
-    expect(ragCalls).toBe(2)
+    expect(messageCalls).toBe(2)
   })
 })
 

@@ -50,18 +50,29 @@ public class VertexChatModel implements ChatModel {
 
     @Override
     public String answer(String question, List<RetrievedChunk> chunks, ExplanationLanguage language) {
+        return answerWithHistory(question, chunks, language, List.of());
+    }
+
+    @Override
+    public String answerWithHistory(
+            String question,
+            List<RetrievedChunk> chunks,
+            ExplanationLanguage language,
+            List<Turn> history
+    ) {
         ExplanationLanguage resolved = language == null ? ExplanationLanguage.EN : language;
         if (chunks.isEmpty()) {
             return resolved.noMaterialAnswer();
         }
         long started = System.nanoTime();
-        String prompt = AnswerPrompt.build(question, chunks, resolved);
+        String prompt = AnswerPrompt.build(question, chunks, resolved, history == null ? List.of() : history);
         try {
             String text = generateContent(prompt, 0.25, 2048);
             log.debug(
-                    "Vertex chat ok questionChars={} chunks={} answerChars={} ({} ms)",
+                    "Vertex chat ok questionChars={} chunks={} historyTurns={} answerChars={} ({} ms)",
                     question.length(),
                     chunks.size(),
+                    history == null ? 0 : history.size(),
                     text.length(),
                     (System.nanoTime() - started) / 1_000_000L
             );

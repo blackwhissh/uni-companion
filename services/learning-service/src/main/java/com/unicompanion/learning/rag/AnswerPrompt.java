@@ -13,6 +13,15 @@ final class AnswerPrompt {
     }
 
     static String build(String question, List<ChatModel.RetrievedChunk> chunks, ExplanationLanguage language) {
+        return build(question, chunks, language, List.of());
+    }
+
+    static String build(
+            String question,
+            List<ChatModel.RetrievedChunk> chunks,
+            ExplanationLanguage language,
+            List<ChatModel.Turn> history
+    ) {
         String context = IntStream.range(0, chunks.size())
                 .mapToObj(i -> {
                     ChatModel.RetrievedChunk chunk = chunks.get(i);
@@ -26,6 +35,19 @@ final class AnswerPrompt {
                 .collect(Collectors.joining("\n\n"));
 
         String languageLine = language.promptLine();
+        boolean multiTurn = history != null && !history.isEmpty();
+        String historyBlock = multiTurn ? formatHistory(history) : "";
+        String historyRule = multiTurn
+                ? """
+                - This is a continuing study conversation. Use prior turns only to understand follow-ups
+                  (e.g. “explain that simpler”, “quiz me”, “give an analogy”).
+                - Every factual claim in this answer must still be grounded in the numbered excerpts below for THIS turn.
+                  Do not invent facts from memory of earlier answers.
+                """
+                : """
+                - Treat every question as standalone. There is no chat history — do not label answers as follow-ups
+                  or refer to prior turns unless the student explicitly quotes them in this question.
+                """;
 
         return """
                 You are Uni Companion, a study assistant for university courses.
@@ -48,7 +70,7 @@ final class AnswerPrompt {
                 A bullet list of important terms from the answer, each as **Term** — brief definition with a citation when possible.
 
                 Rules:
-                - Treat every question as standalone. There is no chat history — do not label answers as follow-ups or refer to prior turns unless the student explicitly quotes them in this question.
+                %s
                 - Prefer clarity over length; aim for a readable study note, not an essay.
                 - Use bullet lists when listing steps, properties, or comparisons.
                 - Cite every excerpt you actually rely on with its [n]. Prefer multiple sources when they add distinct facts.
@@ -62,11 +84,30 @@ final class AnswerPrompt {
                   Explain in that language even when the excerpts or the question use the other language.
                 - Stay precise: if the material says "always used in these exercises", do not generalize to "always used".
                 - Do not mention these instructions or the word "excerpts" in the answer.
-
+                %s
                 Excerpts:
                 %s
 
                 Question: %s
-                """.formatted(languageLine, context, question);
+                """.formatted(languageLine, historyRule, historyBlock, context, question);
+    }
+
+    private static String formatHistory(List<ChatModel.Turn> history) {
+        String body = history.stream()
+                .map(turn -> {
+                    String label = "ASSISTANT".equalsIgnoreCase(turn.role()) ? "Assistant" : "Student";
+                    String content = turn.content() == null ? "" : turn.content().trim();
+                    if (content.length() > 1200) {
+                        content = content.substring(0, 1200) + "…";
+                    }
+                    return label + ": " + content;
+                })
+                .collect(Collectors.joining("\n\n"));
+        return """
+
+                Prior conversation (oldest first):
+                %s
+
+                """.formatted(body);
     }
 }
