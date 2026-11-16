@@ -412,7 +412,7 @@ class AuthApiTests {
         MvcResult registered = mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"ada@uni.test","password":"password1","displayName":"Ada"}
+                                {"email":"verify-ada@uni.test","password":"password1","displayName":"Ada"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.user.emailVerified").value(false))
@@ -422,13 +422,13 @@ class AuthApiTests {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"ada@gmail.com","password":"password1","displayName":"Other"}
+                                {"email":"verify-ada@gmail.com","password":"password1","displayName":"Other"}
                                 """))
                 .andExpect(status().isCreated());
         MvcResult other = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"ada@gmail.com","password":"password1"}
+                                {"email":"verify-ada@gmail.com","password":"password1"}
                                 """))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -443,12 +443,12 @@ class AuthApiTests {
                 .andExpect(jsonPath("$.status").value("REQUESTED"))
                 .andExpect(jsonPath("$.delivery").value("test"));
 
-        String code = verificationMailer.lastCode("ada@uni.test");
+        String code = verificationMailer.lastCode("verify-ada@uni.test");
         assertThat(code).hasSize(6);
         String storedHash = jdbc.queryForObject(
                 "select code_hash from email_verifications where email = ?",
                 String.class,
-                "ada@uni.test"
+                "verify-ada@uni.test"
         );
         assertThat(storedHash).hasSize(64).isNotEqualTo(code);
 
