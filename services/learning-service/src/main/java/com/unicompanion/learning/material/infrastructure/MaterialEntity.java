@@ -42,6 +42,15 @@ public class MaterialEntity {
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
 
+    @Column(name = "source_provider", length = 32)
+    private String sourceProvider;
+
+    @Column(name = "source_external_id", length = 128)
+    private String sourceExternalId;
+
+    @Column(name = "source_checksum", length = 128)
+    private String sourceChecksum;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -62,6 +71,24 @@ public class MaterialEntity {
         material.processingStatus = ProcessingStatus.UPLOADED;
         material.createdAt = now;
         material.updatedAt = now;
+        return material;
+    }
+
+    public static MaterialEntity createFromLms(
+            UUID id,
+            UUID courseId,
+            String title,
+            String fileName,
+            String storagePath,
+            String sourceProvider,
+            String sourceExternalId,
+            String sourceChecksum,
+            Instant now
+    ) {
+        MaterialEntity material = create(id, courseId, title, fileName, storagePath, now);
+        material.sourceProvider = sourceProvider;
+        material.sourceExternalId = sourceExternalId;
+        material.sourceChecksum = sourceChecksum;
         return material;
     }
 
@@ -103,6 +130,17 @@ public class MaterialEntity {
         this.updatedAt = now;
     }
 
+    public void replaceFromLms(
+            String title,
+            String fileName,
+            String storagePath,
+            String sourceChecksum,
+            Instant now
+    ) {
+        replaceFile(title, fileName, storagePath, now);
+        this.sourceChecksum = sourceChecksum;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -133,5 +171,17 @@ public class MaterialEntity {
 
     public String getFailureReason() {
         return failureReason;
+    }
+
+    public String getSourceProvider() {
+        return sourceProvider;
+    }
+
+    public String getSourceExternalId() {
+        return sourceExternalId;
+    }
+
+    public String getSourceChecksum() {
+        return sourceChecksum;
     }
 }

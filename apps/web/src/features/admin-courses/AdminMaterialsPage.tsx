@@ -28,6 +28,8 @@ import {
   uploadMaterial,
 } from '../courses/material-api.ts'
 import type { Material } from '../courses/material-api.ts'
+import { getLmsLink, syncLms, upsertLmsLink } from '../courses/lms-api.ts'
+import type { LmsLink } from '../courses/lms-api.ts'
 
 export function AdminMaterialsPage() {
   const { courseId = '' } = useParams()
@@ -51,6 +53,7 @@ export function AdminMaterialsPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [lmsCourseId, setLmsCourseId] = useState('demo-moodle-course')
   const [replacing, setReplacing] = useState<Material | null>(null)
   const [replacement, setReplacement] = useState<File | null>(null)
   const [replaceKey, setReplaceKey] = useState(0)
@@ -64,6 +67,20 @@ export function AdminMaterialsPage() {
   } | null>(null)
   const canManage = course.data?.owned === true || platformAdmin
   const courseUnpublished = course.data?.visibility === 'UNPUBLISHED'
+  const lms = useQuery({
+    queryKey: ['lms', courseId],
+    queryFn: async (): Promise<LmsLink | null> => {
+      try {
+        return await getLmsLink(courseId)
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          return null
+        }
+        throw err
+      }
+    },
+    enabled: Boolean(courseId) && canManage,
+  })
 
   function resetForm() {
     setTitle('')
@@ -154,6 +171,38 @@ export function AdminMaterialsPage() {
     onError: (err) => {
       setBusyId(null)
       setError(err instanceof ApiError ? err.message : 'Could not delete the material.')
+    },
+  })
+
+  const saveLmsLink = useMutation({
+    mutationFn: () =>
+      upsertLmsLink(courseId, {
+        provider: 'FAKE',
+        externalCourseId: lmsCourseId.trim(),
+        enabled: true,
+      }),
+    onSuccess: async () => {
+      setError(null)
+      setNotice('LMS course linked. Sync to import PDFs.')
+      await queryClient.invalidateQueries({ queryKey: ['lms', courseId] })
+    },
+    onError: (err) => {
+      setError(err instanceof ApiError ? err.message : 'Could not link the LMS course.')
+    },
+  })
+
+  const runLmsSync = useMutation({
+    mutationFn: () => syncLms(courseId),
+    onSuccess: async (result) => {
+      setError(null)
+      setNotice(result.message)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['materials', courseId] }),
+        queryClient.invalidateQueries({ queryKey: ['lms', courseId] }),
+      ])
+    },
+    onError: (err) => {
+      setError(err instanceof ApiError ? err.message : 'Could not sync from the LMS.')
     },
   })
 
@@ -282,6 +331,61 @@ export function AdminMaterialsPage() {
         </div>
       ) : null}
 
+      {canManage ? (
+        <Panel className="mt-8 animate-rise">
+          <SectionLabel>LMS sync</SectionLabel>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
+            Link an external LMS course and pull PDFs into Uni Companion. The default Fake provider uses{' '}
+            <code className="text-ink">demo-moodle-course</code> so you can try sync without Moodle credentials.
+            Synced lectures stay unpublished until you publish them.
+          </p>
+          <div className="mt-4 flex max-w-xl flex-col gap-3">
+            <Field
+              label="External course id"
+              type="text"
+              value={lmsCourseId}
+              onChange={setLmsCourseId}
+              autoComplete="off"
+            />
+            {lms.data ? (
+              <p className="text-sm text-ink-soft">
+                Linked to {lms.data.provider} · {lms.data.externalCourseId}
+                {lms.data.lastMessage ? ` — last sync: ${lms.data.lastMessage}` : ''}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={saveLmsLink.isPending || !lmsCourseId.trim()}
+                onClick={() => {
+                  setNotice(null)
+                  saveLmsLink.mutate()
+                }}
+              >
+                {lms.data ? 'Update LMS link' : 'Link LMS course'}
+              </Button>
+              <Button
+                type="button"
+                disabled={runLmsSync.isPending || (!lms.data && !lmsCourseId.trim())}
+                onClick={() => {
+                  setNotice(null)
+                  const run = async () => {
+                    if (!lms.data) {
+                      await saveLmsLink.mutateAsync()
+                    }
+                    await runLmsSync.mutateAsync()
+                  }
+                  void run().catch(() => undefined)
+                }}
+              >
+                Sync now
+              </Button>
+            </div>
+          </div>
+        </Panel>
+      ) : null}
+
       {canManage && formOpen ? (
         <Panel className="mt-8 animate-rise">
           <div className="flex items-center justify-between gap-3">
@@ -397,6 +501,7 @@ export function AdminMaterialsPage() {
                       <p className="mt-1 text-sm text-muted">
                         {material.fileName} · {labelFor(material.processingStatus)} ·{' '}
                         {material.visibility === 'PUBLISHED' ? 'Published' : 'Unpublished'}
+                        {material.sourceProvider ? ` · LMS (${material.sourceProvider})` : ''}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <StatusPill

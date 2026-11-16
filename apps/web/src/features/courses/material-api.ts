@@ -12,6 +12,8 @@ export type Material = {
   visibility: 'UNPUBLISHED' | 'PUBLISHED'
   processingStatus: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED'
   failureReason?: string
+  sourceProvider?: string | null
+  sourceExternalId?: string | null
 }
 
 export function listMaterials(courseId: string) {
