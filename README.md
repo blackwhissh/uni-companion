@@ -52,7 +52,7 @@ Students **enroll → study (RAG / cards / quiz) → match**.
 |---|---|
 | **A** | You as Course Admin; one course; classmate demo |
 | **B** | Professor/Fachschaft admins; richer matching |
-| **C** | LMS sync; advanced matching / agents |
+| **C** | LMS sync (Fake/Moodle client shipped; campus token to go live); advanced matching / agents |
 
 ## Run locally
 
