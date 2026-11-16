@@ -179,7 +179,8 @@ describe('course quiz page', () => {
     renderAt('/courses/course-1/quiz', <CourseQuizPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Start quiz' }))
 
-    expect(await screen.findByText('Still working on that. Give it a moment, then try again.')).toBeInTheDocument()
+    // Domain 503 copy wins over the generic SERVICE_UNAVAILABLE catalog string.
+    expect(await screen.findByText('Generation is taking longer than expected.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('Which statement is supported?')).toBeInTheDocument()
     expect(generateCalls).toBe(2)
