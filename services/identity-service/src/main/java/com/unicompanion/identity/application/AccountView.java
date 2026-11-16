@@ -13,6 +13,7 @@ public record AccountView(
         String displayName,
         String interests,
         List<String> roles,
+        boolean emailVerified,
         Instant createdAt
 ) {
 
@@ -24,6 +25,7 @@ public record AccountView(
                 account.getDisplayName(),
                 account.getInterests(),
                 roles,
+                account.isEmailVerified(),
                 account.getCreatedAt());
     }
 }

@@ -21,6 +21,13 @@ unicompanion:
     admin-display-name: Course Admin
   cors-allowed-origins:
     - http://localhost:5173
+  identity:
+    verification:
+      domains:
+        - uni-siegen.de
+      code-ttl: 15m
+      max-attempts: 5
+      log-codes: false
 
 springdoc:
   api-docs:

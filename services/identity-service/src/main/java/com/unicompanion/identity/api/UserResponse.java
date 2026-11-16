@@ -12,6 +12,7 @@ public record UserResponse(
         String displayName,
         String interests,
         List<String> roles,
+        boolean emailVerified,
         Instant createdAt
 ) {
 
@@ -22,6 +23,7 @@ public record UserResponse(
                 account.displayName(),
                 account.interests(),
                 account.roles(),
+                account.emailVerified(),
                 account.createdAt());
     }
 }

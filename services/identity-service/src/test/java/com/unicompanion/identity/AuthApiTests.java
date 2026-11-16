@@ -1,6 +1,7 @@
 package com.unicompanion.identity;
 
 import com.jayway.jsonpath.JsonPath;
+import com.unicompanion.identity.application.CapturingVerificationMailer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -50,6 +51,9 @@ class AuthApiTests {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private CapturingVerificationMailer verificationMailer;
 
     @Test
     void registerCreatesStudentAndJwtIncludesThatRole() throws Exception {
@@ -401,6 +405,81 @@ class AuthApiTests {
 
         assertThat(jwtDecoder.decode(token(result.getResponse().getContentAsString())).getClaimAsStringList("roles"))
                 .contains("COURSE_ADMIN");
+    }
+
+    @Test
+    void universityEmailVerificationStoresOnlyAHashAndSetsTheFlag() throws Exception {
+        MvcResult registered = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"ada@uni.test","password":"password1","displayName":"Ada"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.user.emailVerified").value(false))
+                .andReturn();
+        String access = token(registered.getResponse().getContentAsString());
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"ada@gmail.com","password":"password1","displayName":"Other"}
+                                """))
+                .andExpect(status().isCreated());
+        MvcResult other = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"ada@gmail.com","password":"password1"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+        mockMvc.perform(post("/api/me/verification")
+                        .header("Authorization", "Bearer " + token(other.getResponse().getContentAsString())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("NOT_UNIVERSITY_EMAIL"));
+
+        mockMvc.perform(post("/api/me/verification")
+                        .header("Authorization", "Bearer " + access))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REQUESTED"))
+                .andExpect(jsonPath("$.delivery").value("test"));
+
+        String code = verificationMailer.lastCode("ada@uni.test");
+        assertThat(code).hasSize(6);
+        String storedHash = jdbc.queryForObject(
+                "select code_hash from email_verifications where email = ?",
+                String.class,
+                "ada@uni.test"
+        );
+        assertThat(storedHash).hasSize(64).isNotEqualTo(code);
+
+        String wrong = "000000".equals(code) ? "000001" : "000000";
+        mockMvc.perform(post("/api/me/verification/confirm")
+                        .header("Authorization", "Bearer " + access)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"%s"}
+                                """.formatted(wrong)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
+
+        mockMvc.perform(post("/api/me/verification/confirm")
+                        .header("Authorization", "Bearer " + access)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"%s"}
+                                """.formatted(code)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailVerified").value(true));
+
+        Integer verified = jdbc.queryForObject(
+                "select count(*) from audit_events where action = 'EMAIL_VERIFIED' and resource_id = ?",
+                Integer.class,
+                JsonPath.read(registered.getResponse().getContentAsString(), "$.user.id")
+        );
+        assertThat(verified).isEqualTo(1);
+        mockMvc.perform(get("/api/me").header("Authorization", "Bearer " + access))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailVerified").value(true));
     }
 
     private static String token(String body) {

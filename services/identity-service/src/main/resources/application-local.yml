@@ -1,3 +1,8 @@
+unicompanion:
+  identity:
+    verification:
+      log-codes: true
+
 spring:
   datasource:
     url: ${IDENTITY_DATABASE_URL:jdbc:postgresql://localhost:5433/identity}

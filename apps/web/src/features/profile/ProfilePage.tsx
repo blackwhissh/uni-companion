@@ -1,11 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { deleteOwnAccount, exportPersonalData, fetchMe, updateProfile } from '../auth/auth-api.ts'
+import {
+  confirmEmailVerification,
+  deleteOwnAccount,
+  exportPersonalData,
+  fetchMe,
+  requestEmailVerification,
+  updateProfile,
+} from '../auth/auth-api.ts'
 import { useAuth } from '../auth/use-auth.ts'
 import { Field } from '../auth/AuthForm.tsx'
 import { ApiError } from '../../shared/api/identity-client.ts'
-import { Alert, Button, ConfirmDialog, Page, PageHeader, Panel, SectionLabel } from '../../shared/ui/ui.tsx'
+import { Alert, Button, ConfirmDialog, Page, PageHeader, Panel, SectionLabel, StatusPill } from '../../shared/ui/ui.tsx'
 
 export function ProfilePage() {
   const { setUser } = useAuth()
@@ -18,6 +25,10 @@ export function ProfilePage() {
   const [saved, setSaved] = useState(false)
   const [exported, setExported] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [code, setCode] = useState('')
+  const [codeSent, setCodeSent] = useState(false)
+  const [verifyError, setVerifyError] = useState<string | null>(null)
+  const [verifyNote, setVerifyNote] = useState<string | null>(null)
   const nameValue = displayName ?? profile.data?.displayName ?? ''
   const interestsValue = interests ?? profile.data?.interests ?? ''
   const platformAdmin = profile.data?.roles.includes('ADMIN') === true
@@ -56,6 +67,44 @@ export function ProfilePage() {
     onError: (err) => {
       setExported(false)
       setError(err instanceof ApiError ? err.message : 'Could not export your data.')
+    },
+  })
+
+  const sendCode = useMutation({
+    mutationFn: requestEmailVerification,
+    onSuccess: (result) => {
+      setVerifyError(null)
+      if (result.status === 'ALREADY_VERIFIED' && profile.data) {
+        const verified = { ...profile.data, emailVerified: true }
+        setUser(verified)
+        queryClient.setQueryData(['me'], verified)
+        setVerifyNote('This university address is already verified.')
+        return
+      }
+      setCodeSent(true)
+      setVerifyNote(
+        result.delivery === 'log'
+          ? 'Mail is not configured on this server. The code is in the identity-service log and expires in 15 minutes.'
+          : 'Code sent. It expires in 15 minutes.',
+      )
+    },
+    onError: (err) => {
+      setVerifyNote(null)
+      setVerifyError(err instanceof ApiError ? err.message : 'Could not send a code.')
+    },
+  })
+
+  const confirmCode = useMutation({
+    mutationFn: () => confirmEmailVerification(code),
+    onSuccess: (updated) => {
+      setUser(updated)
+      queryClient.setQueryData(['me'], updated)
+      setVerifyError(null)
+      setVerifyNote(null)
+      setCode('')
+    },
+    onError: (err) => {
+      setVerifyError(err instanceof ApiError ? err.message : 'Could not confirm that code.')
     },
   })
 
@@ -108,6 +157,54 @@ export function ProfilePage() {
                 Save changes
               </Button>
             </form>
+          </Panel>
+
+          <Panel className="mt-6">
+            <SectionLabel>University email</SectionLabel>
+            {profile.data.emailVerified ? (
+              <div className="mt-3">
+                <StatusPill tone="ok">Verified</StatusPill>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  {profile.data.email} is confirmed. Matching still asks before anyone can see it.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-3">
+                <p className="text-sm leading-relaxed text-muted">
+                  {profile.data.email} is on the account, which is not the same as proving you can read it. A code goes
+                  only to that address.
+                </p>
+                {verifyError ? (
+                  <div className="mt-3">
+                    <Alert>{verifyError}</Alert>
+                  </div>
+                ) : null}
+                {verifyNote ? (
+                  <p className="mt-3 text-sm font-medium text-ok" role="status">
+                    {verifyNote}
+                  </p>
+                ) : null}
+                <div className="mt-4 flex flex-wrap items-end gap-3">
+                  <Button type="button" variant="secondary" disabled={sendCode.isPending} onClick={() => sendCode.mutate()}>
+                    {sendCode.isPending ? 'Sending…' : 'Send code'}
+                  </Button>
+                  {codeSent ? (
+                    <form
+                      className="flex flex-wrap items-end gap-3"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        confirmCode.mutate()
+                      }}
+                    >
+                      <Field label="Code" type="text" value={code} onChange={setCode} autoComplete="one-time-code" />
+                      <Button type="submit" disabled={confirmCode.isPending || code.trim().length === 0}>
+                        {confirmCode.isPending ? 'Checking…' : 'Confirm'}
+                      </Button>
+                    </form>
+                  ) : null}
+                </div>
+              </div>
+            )}
           </Panel>
 
           <Panel className="mt-6">

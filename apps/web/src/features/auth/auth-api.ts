@@ -53,6 +53,19 @@ export function fetchMe() {
   return identityFetch<User>('/api/me')
 }
 
+export function requestEmailVerification() {
+  return identityFetch<{ status: 'REQUESTED' | 'ALREADY_VERIFIED'; delivery?: string | null }>('/api/me/verification', {
+    method: 'POST',
+  })
+}
+
+export function confirmEmailVerification(code: string) {
+  return identityFetch<User>('/api/me/verification/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
+}
+
 export type LearningPersonalData = {
   userId: string
   exportedAt: string

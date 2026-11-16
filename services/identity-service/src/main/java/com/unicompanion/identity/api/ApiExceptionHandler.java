@@ -94,6 +94,10 @@ public class ApiExceptionHandler {
             case INVALID_CREDENTIALS, UNAUTHENTICATED -> HttpStatus.UNAUTHORIZED;
             case FORBIDDEN -> HttpStatus.FORBIDDEN;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case NOT_UNIVERSITY_EMAIL, VERIFICATION_CODE_INVALID, VERIFICATION_EXHAUSTED, VERIFICATION_EXPIRED ->
+                    HttpStatus.BAD_REQUEST;
+            case VERIFICATION_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            case VERIFICATION_TOO_SOON -> HttpStatus.TOO_MANY_REQUESTS;
         };
     }
 
