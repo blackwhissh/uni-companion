@@ -3,31 +3,32 @@
 | Field | Value |
 |---|---|
 | Document ID | DOC-NEXT |
-| Version | 1.7.0 |
+| Version | 1.8.0 |
 | Status | Draft |
 | Last updated | 2026-11-16 |
 | Owner | Project owner |
-| Based on | LMS sync foundation (UC-060 first slice) |
+| Based on | Moodle LmsClient (token webservice) |
 
 ## 1. Where the product is
 
-Full grounded study platform through P1 operability, plus a first LMS sync slice:
+LMS sync foundation plus optional Moodle adapter:
 
-- Course LMS link (`PUT/GET /api/courses/{id}/lms`)
-- Sync (`POST .../lms/sync`) imports PDFs via `LmsClient` (Fake provider today)
-- Materials keyed by `(course, provider, external file id)` with checksum skip/update
-- Admin materials page: link + Sync now
+- `FakeLmsClient` always available (`demo-moodle-course`)
+- `MoodleLmsClient` behind `LMS_MOODLE_ENABLED` + base URL + token
+- Admin materials page can choose Fake or Moodle provider
+- ADR-0007 records Fake-then-Moodle decision
 
 ## 2. After this increment
 
 | Order | Capability |
 |---|---|
-| 1 | Real Moodle (or ILIAS) `LmsClient` + secrets |
-| — | University-email verification (deferred; revisit for campus rollout) |
-| — | Remaining P3 polish (CSP, load test, ADR hygiene) as needed |
+| 1 | Wire campus Moodle secrets / scheduled sync |
+| — | ILIAS `LmsClient` if needed |
+| — | University-email verification (deferred) |
+| — | Remaining P3 polish (CSP, load test) as needed |
 
 ## 3. Done when
 
-- Linking `demo-moodle-course` and syncing imports two unpublished PDFs
-- Re-sync with unchanged checksums skips both files
-- Students cannot link/sync; audit records `LMS_SYNC`
+- Moodle client lists PDF resources from `core_course_get_contents` (unit-tested)
+- Download appends webservice token without storing it on materials
+- FE can select Moodle provider and numeric course id

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 import { Field } from '../auth/AuthForm.tsx'
@@ -53,6 +53,7 @@ export function AdminMaterialsPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [lmsProvider, setLmsProvider] = useState<'FAKE' | 'MOODLE'>('FAKE')
   const [lmsCourseId, setLmsCourseId] = useState('demo-moodle-course')
   const [replacing, setReplacing] = useState<Material | null>(null)
   const [replacement, setReplacement] = useState<File | null>(null)
@@ -81,6 +82,14 @@ export function AdminMaterialsPage() {
     },
     enabled: Boolean(courseId) && canManage,
   })
+
+  useEffect(() => {
+    if (!lms.data) {
+      return
+    }
+    setLmsProvider(lms.data.provider === 'MOODLE' ? 'MOODLE' : 'FAKE')
+    setLmsCourseId(lms.data.externalCourseId)
+  }, [lms.data])
 
   function resetForm() {
     setTitle('')
@@ -177,7 +186,7 @@ export function AdminMaterialsPage() {
   const saveLmsLink = useMutation({
     mutationFn: () =>
       upsertLmsLink(courseId, {
-        provider: 'FAKE',
+        provider: lmsProvider,
         externalCourseId: lmsCourseId.trim(),
         enabled: true,
       }),
@@ -335,13 +344,29 @@ export function AdminMaterialsPage() {
         <Panel className="mt-8 animate-rise">
           <SectionLabel>LMS sync</SectionLabel>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-            Link an external LMS course and pull PDFs into Uni Companion. The default Fake provider uses{' '}
-            <code className="text-ink">demo-moodle-course</code> so you can try sync without Moodle credentials.
-            Synced lectures stay unpublished until you publish them.
+            Link an external LMS course and pull PDFs into Uni Companion. Fake uses{' '}
+            <code className="text-ink">demo-moodle-course</code> without credentials. Moodle needs a numeric course
+            id and server config (<code className="text-ink">LMS_MOODLE_*</code>). Synced lectures stay unpublished
+            until you publish them.
           </p>
           <div className="mt-4 flex max-w-xl flex-col gap-3">
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink-soft">
+              Provider
+              <select
+                className="rounded-lg border border-line bg-white/70 px-3 py-2 text-base font-normal text-ink"
+                value={lmsProvider}
+                onChange={(event) => {
+                  const next = event.target.value === 'MOODLE' ? 'MOODLE' : 'FAKE'
+                  setLmsProvider(next)
+                  setLmsCourseId(next === 'FAKE' ? 'demo-moodle-course' : '')
+                }}
+              >
+                <option value="FAKE">Fake (local demo)</option>
+                <option value="MOODLE">Moodle</option>
+              </select>
+            </label>
             <Field
-              label="External course id"
+              label={lmsProvider === 'MOODLE' ? 'Moodle course id' : 'External course id'}
               type="text"
               value={lmsCourseId}
               onChange={setLmsCourseId}
