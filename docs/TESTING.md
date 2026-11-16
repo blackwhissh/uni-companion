@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document ID | DOC-TEST |
-| Version | 0.1.0 |
+| Version | 0.2.0 |
 | Status | Draft |
-| Last updated | 2026-09-27 |
+| Last updated | 2026-11-16 |
 | Owner | Tech lead |
 
 ## 1. Purpose
@@ -165,6 +165,17 @@ Implement these as automated tests **before** wiring the happy-path UI.
 |---|---|
 | NFR-060 | Phase A features shall be developed using TDD for domain and API acceptance rules as defined in this document. |
 | NFR-061 | Security-sensitive paths (upload, publish, RAG, enroll) shall have automated negative tests. |
+
+## 10a. Load smoke (NFR-021 baseline)
+
+After the stack is running (`.\dev.ps1` or prod compose), measure authenticated list latency:
+
+```bash
+./scripts/load-smoke.sh
+CONCURRENCY=20 REQUESTS=100 ./scripts/load-smoke.sh
+```
+
+This is a **baseline helper**, not a full capacity test: concurrent `GET /api/courses` with a seeded admin token, reporting ok-rate and p50/p95/p99. Use k6/Gatling later if you need scenario modeling or CI gates.
 
 ## 11. References
 

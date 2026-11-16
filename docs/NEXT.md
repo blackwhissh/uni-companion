@@ -3,29 +3,29 @@
 | Field | Value |
 |---|---|
 | Document ID | DOC-NEXT |
-| Version | 1.11.0 |
+| Version | 1.12.0 |
 | Status | Draft |
 | Last updated | 2026-11-16 |
 | Owner | Project owner |
-| Based on | Moodle deploy env wiring |
+| Based on | Load smoke script (NFR-021 baseline) |
 
 ## 1. Where the product is
 
-Mid-senior path through LMS + CSP, with prod compose ready for campus Moodle secrets:
+Mid-senior path through LMS, CSP, Moodle deploy wiring, plus a load-smoke helper:
 
-- `docker-compose.prod.yml` + `.env.prod.example` expose `LMS_MOODLE_*` and `LMS_SYNC_*`
-- Defaults keep Moodle and scheduled sync **off** until a token is supplied
+- `scripts/load-smoke.sh` — concurrent authenticated `GET /api/courses` with p50/p95 reporting
+- Documented in TESTING.md for NFR-021 baselines
 
 ## 2. After this increment
 
 | Order | Capability |
 |---|---|
-| 1 | Load test / remaining ADR hygiene |
-| — | University-email verification (deferred) |
+| 1 | University-email verification (deferred — revisit for campus rollout) |
 | — | ILIAS `LmsClient` if needed |
+| — | Heavier load/CI gates (k6) if capacity targets are set |
 | — | Turn on Moodle in prod once campus token exists |
 
 ## 3. Done when
 
-- Prod learning service receives `LMS_MOODLE_*` / `LMS_SYNC_*` from compose
-- Example env documents how to enable without committing secrets
+- `scripts/load-smoke.sh` is executable and documents CONCURRENCY/REQUESTS
+- TESTING.md points at it for NFR-021
