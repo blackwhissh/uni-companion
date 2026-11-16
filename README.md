@@ -60,10 +60,13 @@ Java 21, Maven, Node.js, and Docker Desktop.
 **One command** (Postgres + identity + learning + Vite), each in its own window:
 
 ```powershell
-.\dev.ps1              # AI = fake (default)
-.\dev.ps1 -Ai vertex   # AI = real Vertex Gemini
-.\dev-stop.ps1         # stop ports 8081/8082/5173 + Postgres
+.\dev.ps1                         # AI = fake
+.\dev.ps1 -Ai vertex              # real Vertex Gemini
+.\dev.ps1 -Ai vertex -TunnelCors  # also Spring/Vite "qa" profile for public tunnels
+.\dev-stop.ps1                    # stop app ports + Postgres
 ```
+
+Grok Bot / MCP QA orchestration is **not** part of this product repo. It lives in the sibling checkout `../uni-companion-qa` (`start-qa.ps1` / review UI). Use `-TunnelCors` when that tooling exposes the app through Cloudflare.
 
 | Process | URL |
 |---|---|
@@ -83,15 +86,14 @@ Learning-service Spring profiles (always with `local`):
 
 For Vertex: run `gcloud auth application-default login --project=uniconai`, and do **not** point `GOOGLE_APPLICATION_CREDENTIALS` at another project's key (`dev.ps1 -Ai vertex` clears it for that window). Re-upload materials after switching so embeddings match the active model.
 
-Manual start (same as before):
+Manual start. `docker compose up -d --build` starts Postgres, identity-service, and learning-service (fake AI, no API key). The web app stays on Vite:
 
 ```text
-docker compose up -d
-mvn spring-boot:run -pl services/identity-service
-# PowerShell: $env:SPRING_PROFILES_ACTIVE='local,fake'   # or local,vertex
-mvn spring-boot:run -pl services/learning-service
+docker compose up -d --build
 cd apps/web && npm install && npm run dev
 ```
+
+`.\dev.ps1` still starts only Postgres in Docker and runs the two Spring apps with Maven, so a code change does not need an image rebuild. Do not run both at once: they share ports 8081 and 8082.
 
 Copy [`.env.example`](.env.example) when you need to override defaults. Demo logins: `admin` / `admin` (platform admin + course admin), `professor` / `professor` (course admin), `student` / `student`, and `student1`–`student4` / same password (students). The longer seed professor remains `admin@uni-companion.local` / `admin-pass-1` (course admin for courses they create).
 
@@ -147,3 +149,7 @@ To use real Gemini later: put a Vertex service-account JSON at `/opt/uni-compani
 ## Current status
 
 Admins upload and publish PDFs from the course console. Enrolled students see only materials that are READY and PUBLISHED. Upload stores page text and 768-d embeddings (Vertex `gemini-embedding-001` when configured). Grounded Q&A uses those vectors. Flashcards and quizzes use bounded shared version pools keyed by the exact material set and generation recipe: existing versions are reused before one batched Vertex call creates a new version.
+
+### What a stranger can do now
+
+**Phase 1.** With Docker and Node installed: `docker compose up -d --build`, then `npm run dev` in `apps/web`, then open http://localhost:5173. Register an account or log in as `professor` / `professor`, create a course, upload a text PDF, and publish the course and the PDF once its status is Indexed. Log in as `student` / `student`, enroll, ask a question, and open flashcards or a quiz. An answer quotes the published page and cites it. A question the PDF does not contain is refused (`could not find`) and is not answered from a nearby but unrelated page. No Gemini key is required (`local,fake`). CI runs `mvn test` and `npm test`.

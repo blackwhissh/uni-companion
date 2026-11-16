@@ -296,8 +296,8 @@ export function AdminMaterialsPage() {
                     className="absolute inset-0 cursor-pointer rounded-2xl"
                   />
                   <div className="pointer-events-none relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="font-medium text-ink">{material.title}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-ink">{material.title}</p>
                       <p className="mt-1 text-sm text-muted">
                         {material.fileName} · {labelFor(material.processingStatus)} ·{' '}
                         {material.visibility === 'PUBLISHED' ? 'Published' : 'Unpublished'}
@@ -332,10 +332,11 @@ export function AdminMaterialsPage() {
                         <p className="mt-2 text-sm text-danger">{material.failureReason}</p>
                       ) : null}
                     </div>
-                    <div className="pointer-events-auto flex flex-wrap gap-2">
+                    <div className="pointer-events-auto flex shrink-0 flex-nowrap gap-2">
                       <Button
                         type="button"
                         variant="secondary"
+                        className="shrink-0"
                         onClick={() =>
                           downloadMaterial(material).catch((err) => {
                             setError(err instanceof ApiError ? err.message : 'Could not download the PDF.')
@@ -348,6 +349,7 @@ export function AdminMaterialsPage() {
                         <Button
                           type="button"
                           variant={material.visibility === 'PUBLISHED' ? 'warn' : 'success'}
+                          className="shrink-0"
                           disabled={rowBusy || visibility.isPending || (!indexed && material.visibility !== 'PUBLISHED')}
                           title={
                             !indexed && material.visibility !== 'PUBLISHED'

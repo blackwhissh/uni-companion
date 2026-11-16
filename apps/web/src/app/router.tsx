@@ -1,4 +1,5 @@
-import { BrowserRouter, Route, Routes } from 'react-router'
+import type { ComponentType } from 'react'
+import { BrowserRouter, Route, Routes, useParams } from 'react-router'
 import { AdminCoursesPage } from '../features/admin-courses/AdminCoursesPage.tsx'
 import { AdminMaterialsPage } from '../features/admin-courses/AdminMaterialsPage.tsx'
 import { LoginPage } from '../features/auth/LoginPage.tsx'
@@ -12,6 +13,12 @@ import { ProfilePage } from '../features/profile/ProfilePage.tsx'
 import { AppShell } from './AppShell.tsx'
 import { HomePage } from './HomePage.tsx'
 import { RequireAuth, RequireRole } from './guards.tsx'
+
+/** Remount course-scoped pages when :courseId changes so stale local/UI state cannot flash. */
+function CourseScoped({ Page }: { Page: ComponentType }) {
+  const { courseId = '' } = useParams()
+  return <Page key={courseId} />
+}
 
 export function AppRouter() {
   return (
@@ -33,7 +40,7 @@ export function AppRouter() {
             path="/courses/:courseId"
             element={
               <RequireAuth>
-                <CourseHomePage />
+                <CourseScoped Page={CourseHomePage} />
               </RequireAuth>
             }
           />
@@ -41,7 +48,7 @@ export function AppRouter() {
             path="/courses/:courseId/qa"
             element={
               <RequireAuth>
-                <CourseQaPage />
+                <CourseScoped Page={CourseQaPage} />
               </RequireAuth>
             }
           />
@@ -49,7 +56,7 @@ export function AppRouter() {
             path="/courses/:courseId/flashcards"
             element={
               <RequireAuth>
-                <CourseFlashcardsPage />
+                <CourseScoped Page={CourseFlashcardsPage} />
               </RequireAuth>
             }
           />
@@ -57,7 +64,7 @@ export function AppRouter() {
             path="/courses/:courseId/quiz"
             element={
               <RequireAuth>
-                <CourseQuizPage />
+                <CourseScoped Page={CourseQuizPage} />
               </RequireAuth>
             }
           />
@@ -73,7 +80,7 @@ export function AppRouter() {
             path="/admin/courses/:courseId/materials"
             element={
               <RequireRole role="COURSE_ADMIN">
-                <AdminMaterialsPage />
+                <CourseScoped Page={AdminMaterialsPage} />
               </RequireRole>
             }
           />

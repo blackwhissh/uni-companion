@@ -282,8 +282,9 @@ export function CourseQuizPage() {
 
       {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
 
-      {course.data && !enrolled && !unavailable ? (
+      {course.isSuccess && course.data && !enrolled && !unavailable ? (
         <EmptyState
+          animate={false}
           title="Enroll to take quizzes"
           description="Practice quizzes are only available after you join this course."
         />

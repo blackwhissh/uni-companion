@@ -65,8 +65,8 @@ export function QaSources({
           const n = index + 1
           const isActive = active === n
           const isOpen = expanded[n] === true
-          const long = citation.excerpt.length > 220
-          const shown = !long || isOpen ? citation.excerpt : `${citation.excerpt.slice(0, 200).trim()}…`
+          const long = citation.excerpt.length > 420
+          const shown = !long || isOpen ? citation.excerpt : `${citation.excerpt.slice(0, 400).trim()}…`
           const mentions = mentionCounts[n] ?? 0
           const opening = openingId === citation.materialId
 

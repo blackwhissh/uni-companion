@@ -15,6 +15,9 @@ describe('study UI copy', () => {
   })
 
   it('keeps the server message for other API errors', () => {
+    expect(
+      studyActionError(new ApiError('TOO_MANY_REQUESTS', 'Too many questions in a short time. Wait a minute and try again.', 429), 'fallback'),
+    ).toBe('Too many questions in a short time. Wait a minute and try again.')
     expect(studyActionError(new ApiError('BAD_GATEWAY', 'The model returned no usable quiz.', 502), 'fallback')).toBe(
       'The model returned no usable quiz.',
     )

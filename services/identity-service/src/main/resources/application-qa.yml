@@ -1,0 +1,7 @@
+# Activated only for Grok/Cloudflare QA tunnels (e.g. local,fake,qa or local,vertex,qa).
+# Not used in production or ordinary local runs.
+unicompanion:
+  cors-allowed-origins:
+    - http://localhost:5173
+    - http://127.0.0.1:5173
+    - https://*.trycloudflare.com

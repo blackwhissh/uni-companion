@@ -3,3 +3,5 @@
 unicompanion:
   gemini:
     enabled: false
+  rag:
+    allow-model-down-header: true

@@ -1,12 +1,12 @@
 package com.unicompanion.learning.rag;
 
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -26,18 +26,20 @@ final class CitedSources {
                     + "could not find|cannot find|can't find|not (?:covered|found|present|available)|"
                     + "no (?:relevant|supporting|matching)|insufficient|"
                     + "not (?:in|among) the (?:published |course )?materials|"
-                    + "do not appear in|doesn't appear in|does not appear in"
+                    + "do not appear in|doesn't appear in|does not appear in|"
+                    // German
+                    + "konnte(?:\\s+\\w+){0,4}\\s+nicht(?:s)?\\s+finden|kann(?:\\s+\\w+){0,4}\\s+nicht(?:s)?\\s+finden|"
+                    + "nichts\\s+(?:gefunden|finden|in\\s+den)|"
+                    + "nicht\\s+(?:gefunden|abgedeckt|enthalten|vorhanden|verfügbar)|"
+                    + "keine\\s+(?:relevanten|passenden|unterstützenden)|"
+                    + "unzureichend|"
+                    + "nicht\\s+in\\s+den\\s+(?:veröffentlichten\\s+|kurs-?)?materialien|"
+                    + "erscheint\\s+nicht\\s+in|kommen\\s+nicht\\s+vor|kommt\\s+nicht\\s+vor|"
+                    + "lassen\\s+sich\\s+nicht\\s+(?:finden|belegen)"
                     + ")\\b"
     );
     private static final Pattern DIRECT_ANSWER_HEADING = Pattern.compile(
             "(?m)^##\\s+(?:Direct answer|Direkte Antwort|Antwort)\\s*$"
-    );
-    private static final Set<String> STOP = Set.of(
-            "a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "is", "are", "was", "were",
-            "be", "as", "by", "with", "from", "that", "this", "it", "its", "you", "your", "what",
-            "how", "why", "when", "which", "about", "into", "than", "then", "also", "can", "do",
-            "does", "did", "will", "would", "should", "could", "not", "no", "yes", "direct", "answer",
-            "explanation", "key", "terms"
     );
 
     private CitedSources() {
@@ -65,6 +67,10 @@ final class CitedSources {
             return new Result(stripAllCitationGroups(normalized), List.of());
         }
 
+        normalized = rebindMismatchedCitations(normalized, retrieved);
+        // When some claims already have chips, still attach missing Direct-answer cites
+        // (recoverFromOverlap only runs when every marker was stripped).
+        normalized = addMissingDirectAnswerCitations(normalized, retrieved);
         Set<Integer> cited = firstMentionOrder(normalized, retrieved.size());
         if (cited.isEmpty()) {
             return recoverFromOverlap(normalized, retrieved);
@@ -84,75 +90,163 @@ final class CitedSources {
 
     /**
      * When the model omitted excerpt citations (or only used page numbers), attach chunks whose
-     * content clearly overlaps the answer — and only then place a [n] chip.
+     * content clearly overlaps each Direct-answer claim sentence — one chip per grounded claim.
      */
     private static Result recoverFromOverlap(String answer, List<ChatModel.RetrievedChunk> retrieved) {
-        Set<String> answerTerms = significantTerms(answer);
-        if (answerTerms.size() < 3) {
-            return new Result(stripAllCitationGroups(answer), List.of());
+        String stripped = stripAllCitationGroups(answer);
+        List<SentenceSpan> claims = directAnswerSentences(stripped);
+        if (claims.isEmpty()) {
+            claims = List.of(new SentenceSpan(0, stripped.length(), stripped.trim()));
         }
 
-        List<OverlapHit> overlapping = new ArrayList<>();
+        Map<Integer, Integer> claimToChunk = new LinkedHashMap<>();
+        LinkedHashSet<Integer> selectedIndexes = new LinkedHashSet<>();
+        for (int i = 0; i < claims.size(); i++) {
+            int best = bestMatchingChunk(claims.get(i).text(), retrieved, 2, 0.28);
+            if (best > 0) {
+                claimToChunk.put(i, best);
+                selectedIndexes.add(best);
+            }
+        }
+        if (selectedIndexes.isEmpty()) {
+            return new Result(stripped, List.of());
+        }
+
+        List<Integer> indexOrder = new ArrayList<>(selectedIndexes);
+        int[] chunkToNew = new int[retrieved.size() + 1];
+        List<ChatModel.RetrievedChunk> selected = new ArrayList<>();
+        int next = 1;
+        for (int oldIndex : indexOrder) {
+            chunkToNew[oldIndex] = next++;
+            selected.add(retrieved.get(oldIndex - 1));
+        }
+
+        String withChips = placeClaimCitations(stripped, claims, claimToChunk, chunkToNew);
+        return new Result(withChips, List.copyOf(selected));
+    }
+
+    /**
+     * Rebind [n] markers whose surrounding claim does not overlap the cited chunk onto a better
+     * retrieved passage (or strip them) so chips cannot point at unrelated quotes.
+     */
+    private static String rebindMismatchedCitations(String answer, List<ChatModel.RetrievedChunk> retrieved) {
+        Matcher matcher = CITATION_GROUP.matcher(answer);
+        StringBuilder out = new StringBuilder();
+        while (matcher.find()) {
+            List<Integer> numbers = parseGroup(matcher.group(1));
+            String claim = sentenceAround(answer, matcher.start(), matcher.end());
+            StringBuilder replacement = new StringBuilder();
+            Set<Integer> seen = new LinkedHashSet<>();
+            for (int number : numbers) {
+                int bound = number;
+                if (number >= 1 && number <= retrieved.size()) {
+                    // Only rebind when the cited chunk clearly fails and another chunk fits better.
+                    // Never strip a in-range model cite just because lexical overlap is weak —
+                    // short chunks like "delta" will not match the surrounding prose.
+                    if (!supportsClaim(claim, retrieved.get(number - 1).content())) {
+                        int rebound = bestMatchingChunk(claim, retrieved, 2, 0.22);
+                        if (rebound > 0 && rebound != number) {
+                            bound = rebound;
+                        }
+                    }
+                } else {
+                    bound = 0;
+                }
+                if (bound > 0 && seen.add(bound)) {
+                    if (!replacement.isEmpty()) {
+                        replacement.append(' ');
+                    }
+                    replacement.append('[').append(bound).append(']');
+                }
+            }
+            matcher.appendReplacement(out, Matcher.quoteReplacement(replacement.toString()));
+        }
+        matcher.appendTail(out);
+        return tidyCitationGaps(out.toString());
+    }
+
+    /**
+     * Adds [n] chips to Direct-answer sentences that are grounded in a retrieved passage but
+     * were left uncited (e.g. second claim in a two-part sorting question).
+     */
+    private static String addMissingDirectAnswerCitations(String answer, List<ChatModel.RetrievedChunk> retrieved) {
+        List<SentenceSpan> claims = directAnswerSentences(answer);
+        if (claims.isEmpty()) {
+            return answer;
+        }
+        StringBuilder out = new StringBuilder();
+        int cursor = 0;
+        for (SentenceSpan claim : claims) {
+            out.append(answer, cursor, claim.end());
+            if (firstMentionOrder(claim.text(), retrieved.size()).isEmpty()) {
+                int best = bestMatchingChunk(claim.text(), retrieved, 2, 0.22);
+                if (best > 0) {
+                    out.append(" [").append(best).append(']');
+                }
+            }
+            cursor = claim.end();
+        }
+        if (cursor < answer.length()) {
+            out.append(answer.substring(cursor));
+        }
+        return tidyCitationGaps(out.toString());
+    }
+
+    private static String placeClaimCitations(
+            String answer,
+            List<SentenceSpan> claims,
+            Map<Integer, Integer> claimToChunk,
+            int[] chunkToNew
+    ) {
+        StringBuilder out = new StringBuilder();
+        int cursor = 0;
+        for (int i = 0; i < claims.size(); i++) {
+            SentenceSpan claim = claims.get(i);
+            out.append(answer, cursor, claim.end());
+            Integer oldIndex = claimToChunk.get(i);
+            if (oldIndex != null) {
+                int mapped = chunkToNew[oldIndex];
+                if (mapped > 0 && firstMentionOrder(claim.text(), mapped).isEmpty()) {
+                    out.append(" [").append(mapped).append(']');
+                }
+            }
+            cursor = claim.end();
+        }
+        if (cursor < answer.length()) {
+            out.append(answer.substring(cursor));
+        }
+        return tidyCitationGaps(out.toString());
+    }
+
+    private static int bestMatchingChunk(
+            String claim,
+            List<ChatModel.RetrievedChunk> retrieved,
+            int minShared,
+            double minOverlap
+    ) {
+        Set<String> claimTerms = significantTerms(claim);
+        if (claimTerms.size() < 2) {
+            return 0;
+        }
+        int bestIndex = 0;
+        double bestScore = 0;
         for (int i = 0; i < retrieved.size(); i++) {
             Set<String> chunkTerms = significantTerms(retrieved.get(i).content());
             if (chunkTerms.isEmpty()) {
                 continue;
             }
-            long shared = answerTerms.stream().filter(chunkTerms::contains).count();
-            double overlap = (double) shared / Math.min(answerTerms.size(), chunkTerms.size());
-            if (shared >= 2 && (overlap >= 0.22 || shared >= 4)) {
-                overlapping.add(new OverlapHit(i + 1, shared, overlap));
+            long shared = claimTerms.stream().filter(chunkTerms::contains).count();
+            double overlap = (double) shared / Math.min(claimTerms.size(), chunkTerms.size());
+            if (shared < minShared || overlap < minOverlap) {
+                continue;
+            }
+            double score = shared + overlap;
+            if (score > bestScore) {
+                bestScore = score;
+                bestIndex = i + 1;
             }
         }
-        overlapping.sort(Comparator.comparingDouble(OverlapHit::overlap).reversed().thenComparingLong(OverlapHit::shared).reversed());
-        if (overlapping.isEmpty()) {
-            return new Result(stripAllCitationGroups(answer), List.of());
-        }
-
-        overlapping.sort((a, b) -> Integer.compare(
-                overlapScore(answer, retrieved.get(b.index() - 1).content()),
-                overlapScore(answer, retrieved.get(a.index() - 1).content())
-        ));
-
-        List<ChatModel.RetrievedChunk> selected = overlapping.stream()
-                .map(hit -> retrieved.get(hit.index() - 1))
-                .toList();
-        List<ChatModel.RetrievedChunk> trimmed = selected.size() > 3 ? selected.subList(0, 3) : selected;
-        String stripped = stripAllCitationGroups(answer);
-        String withChips = placeVerifiedCitations(stripped, trimmed.size());
-        return new Result(withChips, List.copyOf(trimmed));
-    }
-
-    private static String placeVerifiedCitations(String answer, int count) {
-        if (count <= 0) {
-            return answer;
-        }
-        String withFirst = placeVerifiedCitation(answer, 1);
-        if (count == 1) {
-            return withFirst;
-        }
-        Matcher heading = DIRECT_ANSWER_HEADING.matcher(withFirst);
-        if (!heading.find()) {
-            StringBuilder suffix = new StringBuilder();
-            for (int i = 1; i <= count; i++) {
-                suffix.append(" [").append(i).append(']');
-            }
-            return withFirst.stripTrailing() + suffix;
-        }
-        int afterHeading = heading.end();
-        int contentStart = afterHeading;
-        while (contentStart < withFirst.length() && withFirst.charAt(contentStart) == '\n') {
-            contentStart++;
-        }
-        int sentenceEnd = findFirstSentenceEnd(withFirst, contentStart);
-        StringBuilder markers = new StringBuilder();
-        for (int i = 1; i <= count; i++) {
-            markers.append(" [").append(i).append(']');
-        }
-        if (sentenceEnd > contentStart) {
-            return withFirst.substring(0, sentenceEnd) + markers + withFirst.substring(sentenceEnd);
-        }
-        return withFirst.substring(0, contentStart) + markers + " " + withFirst.substring(contentStart);
+        return bestIndex;
     }
 
     private static LinkedHashSet<Integer> alignCitations(
@@ -160,18 +254,27 @@ final class CitedSources {
             List<ChatModel.RetrievedChunk> retrieved,
             Set<Integer> cited
     ) {
-        String claim = directAnswerSection(answer);
+        // Judge each chip against the sentence that contains it. The whole Direct answer
+        // often states two facts, and one page cannot contain both.
         LinkedHashSet<Integer> aligned = new LinkedHashSet<>();
-        for (int index : cited) {
-            ChatModel.RetrievedChunk chunk = retrieved.get(index - 1);
-            if (chunkSupportsClaim(chunk.content(), claim)) {
-                aligned.add(index);
-            } else {
-                int replacement = bestSupportingChunk(retrieved, claim, aligned);
-                aligned.add(replacement > 0 ? replacement : index);
+        Matcher matcher = CITATION_GROUP.matcher(answer);
+        while (matcher.find()) {
+            String claim = sentenceAround(answer, matcher.start(), matcher.end());
+            for (int index : parseGroup(matcher.group(1))) {
+                if (!cited.contains(index) || index < 1 || index > retrieved.size()) {
+                    continue;
+                }
+                int chosen = index;
+                if (!chunkSupportsClaim(retrieved.get(index - 1).content(), claim)) {
+                    int replacement = bestSupportingChunk(retrieved, claim, aligned);
+                    if (replacement > 0) {
+                        chosen = replacement;
+                    }
+                }
+                aligned.add(chosen);
             }
         }
-        return aligned;
+        return aligned.isEmpty() ? new LinkedHashSet<>(cited) : aligned;
     }
 
     private static String remapCitationIndexes(String answer, Set<Integer> cited, LinkedHashSet<Integer> aligned) {
@@ -185,8 +288,11 @@ final class CitedSources {
             int oldIndex = from.get(i);
             int newIndex = to.get(i);
             if (oldIndex != newIndex) {
-                updated = updated.replace("[" + oldIndex + "]", "[" + newIndex + "]");
+                updated = updated.replace("[" + oldIndex + "]", "«" + newIndex + "»");
             }
+        }
+        for (int newIndex : to) {
+            updated = updated.replace("«" + newIndex + "»", "[" + newIndex + "]");
         }
         return updated;
     }
@@ -207,6 +313,10 @@ final class CitedSources {
         next.region(start, answer.length());
         int end = next.find() ? next.start() : answer.length();
         return answer.substring(start, end).trim();
+    }
+
+    private static boolean supportsClaim(String claim, String chunkContent) {
+        return chunkSupportsClaim(chunkContent, claim);
     }
 
     private static boolean chunkSupportsClaim(String chunkContent, String claim) {
@@ -265,29 +375,51 @@ final class CitedSources {
         return (int) shared;
     }
 
-    private static String placeVerifiedCitation(String answer, int index) {
-        if (answer == null || answer.isBlank()) {
-            return answer;
-        }
-        if (!firstMentionOrder(answer, index).isEmpty()) {
-            return answer;
-        }
+    private static List<SentenceSpan> directAnswerSentences(String answer) {
         Matcher heading = DIRECT_ANSWER_HEADING.matcher(answer);
-        if (heading.find()) {
-            int afterHeading = heading.end();
-            int contentStart = afterHeading;
-            while (contentStart < answer.length() && answer.charAt(contentStart) == '\n') {
-                contentStart++;
-            }
-            int sentenceEnd = findFirstSentenceEnd(answer, contentStart);
-            if (sentenceEnd > contentStart) {
-                return answer.substring(0, sentenceEnd)
-                        + " [" + index + "]"
-                        + answer.substring(sentenceEnd);
-            }
-            return answer.substring(0, contentStart) + "[" + index + "] " + answer.substring(contentStart);
+        if (!heading.find()) {
+            return List.of();
         }
-        return answer.stripTrailing() + " [" + index + "]";
+        int contentStart = heading.end();
+        while (contentStart < answer.length() && answer.charAt(contentStart) == '\n') {
+            contentStart++;
+        }
+        int contentEnd = answer.length();
+        Matcher nextHeading = Pattern.compile("(?m)^##\\s+").matcher(answer);
+        if (nextHeading.find(contentStart)) {
+            contentEnd = nextHeading.start();
+        }
+        String body = answer.substring(contentStart, contentEnd);
+        List<SentenceSpan> spans = new ArrayList<>();
+        int local = 0;
+        while (local < body.length()) {
+            while (local < body.length() && Character.isWhitespace(body.charAt(local))) {
+                local++;
+            }
+            if (local >= body.length()) {
+                break;
+            }
+            int endLocal = findFirstSentenceEnd(body, local);
+            String text = body.substring(local, endLocal).trim();
+            if (!text.isEmpty()) {
+                spans.add(new SentenceSpan(contentStart + local, contentStart + endLocal, text));
+            }
+            local = endLocal;
+        }
+        return spans;
+    }
+
+    private static String sentenceAround(String answer, int markerStart, int markerEnd) {
+        int start = markerStart;
+        while (start > 0 && answer.charAt(start - 1) != '\n') {
+            start--;
+        }
+        int end = markerEnd;
+        while (end < answer.length() && answer.charAt(end) != '\n') {
+            end++;
+        }
+        String line = answer.substring(start, end);
+        return CITATION_GROUP.matcher(line).replaceAll("").trim();
     }
 
     private static int findFirstSentenceEnd(String text, int from) {
@@ -419,35 +551,7 @@ final class CitedSources {
     }
 
     private static Set<String> significantTerms(String text) {
-        Set<String> out = new HashSet<>();
-        if (text == null || text.isBlank()) {
-            return out;
-        }
-        String lowered = text.toLowerCase(Locale.ROOT);
-        Matcher compounds = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)+").matcher(lowered);
-        while (compounds.find()) {
-            String compound = compounds.group();
-            out.add(compound);
-            for (String part : compound.split("-")) {
-                if (part.length() >= 3 && !STOP.contains(part)) {
-                    out.add(part);
-                }
-            }
-        }
-        for (String raw : lowered.split("[^a-z0-9-]+")) {
-            if (raw.isEmpty()) {
-                continue;
-            }
-            if (raw.chars().allMatch(Character::isDigit)) {
-                out.add(raw);
-                continue;
-            }
-            if (raw.length() < 3 || STOP.contains(raw)) {
-                continue;
-            }
-            out.add(raw);
-        }
-        return out;
+        return LexicalTerms.significant(text);
     }
 
     private static String tidyCitationGaps(String value) {
@@ -461,9 +565,9 @@ final class CitedSources {
                 .trim();
     }
 
-    record Result(String answer, List<ChatModel.RetrievedChunk> chunks) {
+    private record SentenceSpan(int start, int end, String text) {
     }
 
-    private record OverlapHit(int index, long shared, double overlap) {
+    record Result(String answer, List<ChatModel.RetrievedChunk> chunks) {
     }
 }

@@ -109,6 +109,79 @@ class CitedSourcesTest {
     }
 
     @Test
+    void recoversPerClaimWhenPageNumbersStripLeavesDualFactsUncited() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("Quicksort overview", 10, "Quicksort average case is O(n log n) and is often used for large inputs."),
+                chunk("Course rules", 12,
+                        "In this course we always use insertion sort when n < 17. "
+                                + "In the exercises we always use the median-of-three pivot rule.")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        We use insertion sort for n < 17 [17]. We use the median-of-three pivot rule.
+
+                        ## Explanation
+                        Quicksort is O(n log n) on average.
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).extracting(ChatModel.RetrievedChunk::title)
+                .containsExactly("Course rules");
+        assertThat(result.answer()).doesNotContain("[17]");
+        assertThat(result.answer()).containsPattern("n < 17\\.?\\s*\\[1]");
+        assertThat(result.answer()).containsPattern("median-of-three pivot rule\\.?\\s*\\[1]");
+    }
+
+    @Test
+    void addsMissingDirectAnswerCitationWhenSiblingClaimAlreadyCited() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("Complexity", 8, "Quicksort has average-case complexity O(n log n)."),
+                chunk("Course rules", 12,
+                        "In this course we always use insertion sort when n < 17. "
+                                + "In the exercises we always use the median-of-three pivot rule.")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        Insertion sort is used when n < 17 [2]. We always use the median-of-three pivot rule.
+
+                        ## Explanation
+                        Both rules appear in the lecture.
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).extracting(ChatModel.RetrievedChunk::title)
+                .containsExactly("Course rules");
+        assertThat(result.answer()).containsPattern("n < 17\\.?\\s*\\[1]");
+        assertThat(result.answer()).containsPattern("median-of-three pivot rule\\.?\\s*\\[1]");
+    }
+
+    @Test
+    void rebindsCitationWhenMarkerPointsAtUnrelatedChunk() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("Complexity", 8, "Quicksort has average-case complexity O(n log n)."),
+                chunk("Threshold", 12, "Insertion sort is always used when n < 17 in this course.")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direct answer
+                        Insertion sort is used when n < 17 [1].
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).extracting(ChatModel.RetrievedChunk::title)
+                .containsExactly("Threshold");
+        assertThat(result.answer()).contains("n < 17 [1]");
+    }
+
+    @Test
     void expandsListCitationsAndDropsOutOfRangeIndexes() {
         List<ChatModel.RetrievedChunk> retrieved = List.of(chunk("Only", 1, "heapsort is not discussed here"));
 
@@ -210,6 +283,56 @@ class CitedSourcesTest {
 
         assertThat(result.chunks()).hasSize(2);
         assertThat(result.answer()).isEqualTo("Consensus needs a majority [1] [2].");
+    }
+
+    @Test
+    void stripsGermanInsufficientAnswersAndDropsSources() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk("Vorlesung 1", 3, "Verfügbarkeit beschreibt die Wahrscheinlichkeit, dass ein System nutzbar ist.")
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direkte Antwort
+                        Zu diesem Thema konnte ich nichts in den Materialien finden [1].
+
+                        ## Erklärung
+                        Bitte eine andere Vorlesung wählen.
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).isEmpty();
+        assertThat(result.answer()).doesNotContain("[");
+        assertThat(result.answer()).contains("nichts in den Materialien finden");
+    }
+
+    @Test
+    void recoversGermanOverlapUsingUmlautTokens() {
+        List<ChatModel.RetrievedChunk> retrieved = List.of(
+                chunk(
+                        "Vorlesung 2",
+                        5,
+                        "Die Verfügbarkeit eines verteilten Systems beschreibt die Wahrscheinlichkeit, "
+                                + "dass das System für Nutzer erreichbar und nutzbar bleibt."
+                )
+        );
+
+        CitedSources.Result result = CitedSources.select(
+                """
+                        ## Direkte Antwort
+                        Verfügbarkeit beschreibt die Wahrscheinlichkeit, dass das System nutzbar bleibt.
+
+                        ## Erklärung
+                        Der Begriff kommt in der Vorlesung vor.
+                        """,
+                retrieved
+        );
+
+        assertThat(result.chunks()).hasSize(1);
+        assertThat(result.chunks().getFirst().title()).isEqualTo("Vorlesung 2");
+        assertThat(result.answer()).contains("[1]");
+        assertThat(result.answer()).contains("Verfügbarkeit");
     }
 
     private static ChatModel.RetrievedChunk chunk(String title, int page, String content) {

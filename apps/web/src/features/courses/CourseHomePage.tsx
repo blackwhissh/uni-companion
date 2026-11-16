@@ -184,18 +184,21 @@ export function CourseHomePage() {
             <SectionLabel>Study modes</SectionLabel>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <StudyMode
+                key="qa"
                 title="Q&A"
                 body="Ask questions grounded in published lecture PDFs."
                 state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/qa` : undefined}
               />
               <StudyMode
+                key="flashcards"
                 title="Flashcards"
                 body="Drill key ideas extracted from your course pack."
                 state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
                 to={canOpenStudy ? `/courses/${courseId}/flashcards` : undefined}
               />
               <StudyMode
+                key="quiz"
                 title="Quiz"
                 body="Check understanding with generated practice questions."
                 state={canOpenStudy ? 'Open' : ownerPreview ? 'Enroll to try' : 'Needs materials'}
@@ -218,6 +221,7 @@ export function CourseHomePage() {
 
             {!materials.isLoading && visibleMaterials.length === 0 ? (
               <EmptyState
+                animate={false}
                 title="No published materials yet."
                 description={
                   owned
@@ -332,8 +336,15 @@ export function CourseHomePage() {
         }}
       />
 
-      {course.data && !enrolled && !owned && !unavailable && !courseLoading && !enroll.isPending ? (
+      {course.isSuccess &&
+      course.data &&
+      !enrolled &&
+      !owned &&
+      !unavailable &&
+      !courseLoading &&
+      !enroll.isPending ? (
         <EmptyState
+          animate={false}
           title="You are not enrolled yet"
           description="Join this course to see published materials and unlock study modes. Use Enroll above to get started."
         />
@@ -353,30 +364,29 @@ function StudyMode({
   state: string
   to?: string
 }) {
-  const content = (
-    <>
+  // Always the same element type so enabling `to` after materials load does not remount
+  // under an in-flight click (Quiz → Flashcards race).
+  return (
+    <Link
+      to={to ?? '#'}
+      aria-disabled={!to}
+      tabIndex={to ? undefined : -1}
+      onClick={(event) => {
+        if (!to) {
+          event.preventDefault()
+        }
+      }}
+      className={`surface-panel block rounded-2xl p-4 transition duration-300 ${
+        to
+          ? 'hover:-translate-y-0.5 hover:border-accent/35'
+          : 'pointer-events-none cursor-default opacity-80'
+      }`}
+    >
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-display text-lg font-semibold text-ink">{title}</h3>
         <StatusPill tone={to ? 'ok' : 'neutral'}>{state}</StatusPill>
       </div>
       <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
-    </>
-  )
-
-  if (to) {
-    return (
-      <Link
-        to={to}
-        className="surface-panel block rounded-2xl p-4 transition duration-300 hover:-translate-y-0.5 hover:border-accent/35"
-      >
-        {content}
-      </Link>
-    )
-  }
-
-  return (
-    <article className="surface-panel rounded-2xl p-4 transition duration-300 hover:-translate-y-0.5 hover:border-accent/35">
-      {content}
-    </article>
+    </Link>
   )
 }

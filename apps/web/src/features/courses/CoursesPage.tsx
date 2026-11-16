@@ -29,13 +29,8 @@ export function CoursesPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [unenrollTarget, setUnenrollTarget] = useState<Course | null>(null)
-  /** Keeps the row in place briefly so a double-click does not hit another course's Enroll after the list reflows. */
-  const [pinnedEnrolledId, setPinnedEnrolledId] = useState<string | null>(null)
   const enroll = useMutation({
     mutationFn: enrollInCourse,
-    onMutate: (courseId) => {
-      setPinnedEnrolledId(courseId)
-    },
     onSuccess: async (_data, courseId) => {
       setError(null)
       setNotice('Enrolled.')
@@ -43,10 +38,6 @@ export function CoursesPage() {
         current?.map((course) => (course.id === courseId ? { ...course, enrolled: true } : course)),
       )
       await queryClient.invalidateQueries({ queryKey: ['courses'] })
-      window.setTimeout(() => setPinnedEnrolledId((current) => (current === courseId ? null : current)), 1500)
-    },
-    onError: () => {
-      setPinnedEnrolledId(null)
     },
     onError: (err) => {
       setNotice(null)
@@ -66,10 +57,22 @@ export function CoursesPage() {
     },
   })
 
+  // Freeze section membership while a row mutation is in flight so the list does not
+  // jump under the cursor (enroll → Joined mid-click opens the wrong course).
+  const pendingEnrollId = enroll.isPending ? enroll.variables : undefined
+  const pendingUnenrollId = unenroll.isPending ? unenroll.variables : undefined
   const enrolled =
-    courses.data?.filter((course) => course.enrolled && course.id !== pinnedEnrolledId) ?? []
+    courses.data?.filter((course) => {
+      if (pendingEnrollId === course.id) return false
+      if (pendingUnenrollId === course.id) return true
+      return course.enrolled
+    }) ?? []
   const available =
-    courses.data?.filter((course) => !course.enrolled || course.id === pinnedEnrolledId) ?? []
+    courses.data?.filter((course) => {
+      if (pendingEnrollId === course.id) return true
+      if (pendingUnenrollId === course.id) return false
+      return !course.enrolled
+    }) ?? []
 
   return (
     <Page>

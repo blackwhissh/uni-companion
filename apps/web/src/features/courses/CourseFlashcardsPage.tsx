@@ -227,8 +227,9 @@ export function CourseFlashcardsPage() {
 
       {unavailable ? <p className="mt-6 text-muted">This course is not available.</p> : null}
 
-      {course.data && !enrolled && !unavailable ? (
+      {course.isSuccess && course.data && !enrolled && !unavailable ? (
         <EmptyState
+          animate={false}
           title="Enroll to study flashcards"
           description="Flashcards are only available after you join this course."
         />

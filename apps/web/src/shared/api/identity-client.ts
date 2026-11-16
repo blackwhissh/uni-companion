@@ -90,11 +90,38 @@ export async function identityFetch<T>(path: string, init: RequestInit = {}, all
   if (!response.ok) {
     const body = await response.json().catch(() => null)
     const code = body?.code ?? 'REQUEST_FAILED'
-    const message = body?.message ?? 'Request failed'
+    const message =
+      (typeof body?.message === 'string' && body.message.trim()) ||
+      fallbackIdentityError(response.status, path, code)
     throw new ApiError(code, message, response.status, body?.details ?? null)
   }
   if (response.status === 204) {
     return undefined as T
   }
   return response.json() as Promise<T>
+}
+
+function fallbackIdentityError(status: number, path: string, code: string): string {
+  if (code === 'INVALID_CREDENTIALS' || (status === 401 && path.startsWith('/api/auth/login'))) {
+    return 'Invalid email or password.'
+  }
+  if (status === 0) {
+    return 'Could not reach the server. Check your connection and try again.'
+  }
+  if (status === 401) {
+    return 'Your session expired. Please log in again.'
+  }
+  if (status === 403) {
+    return 'You do not have permission to do that.'
+  }
+  if (status === 404) {
+    return 'The requested resource was not found.'
+  }
+  if (status >= 500) {
+    return 'The server had a problem. Please try again in a moment.'
+  }
+  if (status === 400) {
+    return 'Please check your input and try again.'
+  }
+  return `Request failed (${status}).`
 }

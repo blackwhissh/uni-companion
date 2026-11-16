@@ -7,6 +7,15 @@ public interface ChatModel {
 
     String answer(String question, List<RetrievedChunk> chunks);
 
+    default String answer(
+            String question,
+            List<RetrievedChunk> chunks,
+            String priorQuestion,
+            String priorAnswer
+    ) {
+        return answer(question, chunks);
+    }
+
     default List<FlashcardDraft> generateFlashcards(List<RetrievedChunk> chunks, int count) {
         return generateFlashcards(chunks, count, List.of());
     }

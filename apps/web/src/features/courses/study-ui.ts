@@ -11,6 +11,9 @@ export function studyActionError(err: unknown, fallback: string) {
   if (!(err instanceof ApiError)) {
     return fallback
   }
+  if (err.status === 429) {
+    return err.message || 'Too many questions right now. Wait a moment and try again.'
+  }
   if (err.status === 503) {
     return 'Generation is still running. Wait a moment, then try again.'
   }

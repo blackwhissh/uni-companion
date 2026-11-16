@@ -42,9 +42,11 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource(JwtProperties properties) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(properties.corsAllowedOrigins());
+        // Patterns support wildcards (e.g. https://*.trycloudflare.com) for QA tunnels.
+        config.setAllowedOriginPatterns(properties.corsAllowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id"));
+        config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
         return source;

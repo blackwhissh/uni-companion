@@ -50,6 +50,11 @@ public class VertexChatModel implements ChatModel {
 
     @Override
     public String answer(String question, List<RetrievedChunk> chunks) {
+        return answer(question, chunks, null, null);
+    }
+
+    @Override
+    public String answer(String question, List<RetrievedChunk> chunks, String priorQuestion, String priorAnswer) {
         if (chunks.isEmpty()) {
             return """
                     ## Direct answer
@@ -60,7 +65,7 @@ public class VertexChatModel implements ChatModel {
                     """;
         }
         long started = System.nanoTime();
-        String prompt = AnswerPrompt.build(question, chunks);
+        String prompt = AnswerPrompt.build(question, chunks, priorQuestion, priorAnswer);
         try {
             String text = generateContent(prompt, 0.25, 2048);
             log.debug(

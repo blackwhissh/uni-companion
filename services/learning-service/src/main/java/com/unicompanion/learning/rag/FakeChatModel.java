@@ -14,6 +14,11 @@ public class FakeChatModel implements ChatModel {
 
     @Override
     public String answer(String question, List<RetrievedChunk> chunks) {
+        return answer(question, chunks, null, null);
+    }
+
+    @Override
+    public String answer(String question, List<RetrievedChunk> chunks, String priorQuestion, String priorAnswer) {
         if (chunks.isEmpty()) {
             return """
                     ## Direct answer
@@ -28,24 +33,15 @@ public class FakeChatModel implements ChatModel {
         boolean german = QuestionLanguage.isLikelyGerman(question);
         String directHeading = german ? "## Direkte Antwort" : "## Direct answer";
         String explanationHeading = german ? "## Erklärung" : "## Explanation";
-        String termsHeading = german ? "## Schlüsselbegriffe" : "## Key terms";
-        StringBuilder terms = new StringBuilder();
-        for (int i = 0; i < chunks.size(); i++) {
-            RetrievedChunk chunk = chunks.get(i);
-            String snippet = truncate(chunk.content(), 80);
-            terms.append("- **From %s (p.%d)** — %s [%d]%n".formatted(
-                    chunk.title(),
-                    chunk.pageNumber(),
-                    snippet,
-                    i + 1
-            ));
-        }
+        String followUpNote = priorQuestion != null && !priorQuestion.isBlank()
+                ? " This continues from: \"%s\".".formatted(truncate(priorQuestion, 80))
+                : "";
+        String walkthrough = german
+                ? "So lässt sich die Stelle lesen: %s [%d]%s".formatted(body, 1, followUpNote)
+                : "Here is that idea in the order the page gives it: %s [%d]%s".formatted(body, 1, followUpNote);
         return """
                 %s
-                From your course materials: %s [%d]
-
-                %s
-                The published materials support this answer. Source [%d] (%s, page %d) is the closest match to your question: "%s".
+                %s [%d]
 
                 %s
                 %s
@@ -54,12 +50,7 @@ public class FakeChatModel implements ChatModel {
                 body,
                 1,
                 explanationHeading,
-                1,
-                primary.title(),
-                primary.pageNumber(),
-                question == null ? "" : question.trim(),
-                termsHeading,
-                terms.toString().trim()
+                walkthrough
         );
     }
 

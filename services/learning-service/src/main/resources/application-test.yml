@@ -13,5 +13,11 @@ unicompanion:
     secret: test-secret-test-secret-test-secret
   storage:
     path: target/test-materials
+  rag:
+    top-k: 6
+    requests-per-minute: 1000
+    requests-per-day: 10000
+    allow-model-down-header: true
+    max-cosine-distance: 0
   gemini:
     enabled: false

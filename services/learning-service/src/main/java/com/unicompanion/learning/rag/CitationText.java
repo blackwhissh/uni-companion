@@ -2,7 +2,6 @@ package com.unicompanion.learning.rag;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -48,12 +47,6 @@ final class CitationText {
             "Scaling",
             "State"
     };
-    private static final Set<String> STOP = Set.of(
-            "a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "is", "are", "was", "were",
-            "be", "as", "by", "with", "from", "that", "this", "it", "its", "you", "your", "what",
-            "how", "why", "when", "which", "about", "into", "than", "then", "also", "can", "do",
-            "does", "did", "will", "would", "should", "could", "not", "no", "yes"
-    );
     private static final int EXCERPT_MAX = 420;
 
     private CitationText() {
@@ -78,15 +71,27 @@ final class CitationText {
      * Prefers concrete prose sentences; reformats flattened PDF comparison tables into readable rows.
      */
     static String excerpt(String content, String question, String answer) {
+        return excerpt(content, question, answer, 0);
+    }
+
+    /**
+     * When {@code citationIndex} is 1-based, scoring prefers terms from answer sentences that cite that index.
+     */
+    static String excerpt(String content, String question, String answer, int citationIndex) {
         String body = cleanBody(content);
         if (body.isEmpty()) {
             return body;
         }
 
         Set<String> focus = tokens(question);
-        // Prefer overlap with the Direct answer claim so the quote matches what the student sees first.
-        focus.addAll(tokens(directAnswerBody(answer)));
-        focus.addAll(tokens(answer));
+        String claim = citationIndex >= 1 ? claimForCitation(answer, citationIndex) : "";
+        if (!claim.isBlank()) {
+            focus.addAll(tokens(claim));
+        } else {
+            // Prefer overlap with the Direct answer claim so the quote matches what the student sees first.
+            focus.addAll(tokens(directAnswerBody(answer)));
+            focus.addAll(tokens(answer));
+        }
 
         String prose = pickProse(body, focus);
         if (prose != null) {
@@ -116,6 +121,37 @@ final class CitationText {
         return answer;
     }
 
+    /** Text of answer lines that mention {@code [citationIndex]}, with citation markers stripped. */
+    static String claimForCitation(String answer, int citationIndex) {
+        if (answer == null || answer.isBlank() || citationIndex < 1) {
+            return "";
+        }
+        String marker = "[" + citationIndex + "]";
+        StringBuilder claims = new StringBuilder();
+        for (String line : answer.split("\\n")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || !trimmed.contains(marker)) {
+                continue;
+            }
+            String without = trimmed
+                    .replaceAll("\\[\\d+(?:\\s*[,;]\\s*\\d+|\\s*-\\s*\\d+)*]", " ")
+                    .replaceAll("\\s+", " ")
+                    .trim();
+            if (!without.isEmpty()) {
+                if (!claims.isEmpty()) {
+                    claims.append(' ');
+                }
+                claims.append(without);
+            }
+        }
+        if (!claims.isEmpty()) {
+            return claims.toString();
+        }
+        return answer.contains(marker)
+                ? answer.replaceAll("\\[\\d+(?:\\s*[,;]\\s*\\d+|\\s*-\\s*\\d+)*]", " ").replaceAll("\\s+", " ").trim()
+                : "";
+    }
+
     private static String pickProse(String body, Set<String> focus) {
         List<String> sentences = splitSentences(body).stream()
                 .filter(sentence -> !looksLikeTableDump(sentence))
@@ -136,16 +172,24 @@ final class CitationText {
             return null;
         }
 
-        StringBuilder out = new StringBuilder(best.text());
-        int bestIndex = best.index();
-        if (bestIndex + 1 < sentences.size()) {
-            String next = sentences.get(bestIndex + 1);
-            if (!looksLikeTableDump(next)
-                    && !CHECKLIST.matcher(next).find()
-                    && score(next, focus) >= 2
-                    && out.length() + 1 + next.length() <= EXCERPT_MAX) {
-                out.append(' ').append(next);
+        // Keep every sufficiently relevant sentence (document order) so dual claims in one
+        // chunk — e.g. n < 17 and median-of-three — both appear in the Sources quote.
+        List<Scored> keep = ranked.stream()
+                .filter(scored -> scored.score() >= Math.max(2, best.score() - 3))
+                .sorted(Comparator.comparingInt(Scored::index))
+                .toList();
+        if (keep.isEmpty()) {
+            keep = List.of(best);
+        }
+        StringBuilder out = new StringBuilder();
+        for (Scored scored : keep) {
+            if (out.length() + 1 + scored.text().length() > EXCERPT_MAX) {
+                break;
             }
+            if (!out.isEmpty()) {
+                out.append(' ');
+            }
+            out.append(scored.text());
         }
         return trimToMax(out.toString());
     }
@@ -290,36 +334,7 @@ final class CitationText {
     }
 
     private static Set<String> tokens(String text) {
-        Set<String> out = new HashSet<>();
-        if (text == null || text.isBlank()) {
-            return out;
-        }
-        String lowered = text.toLowerCase(Locale.ROOT);
-        Matcher compounds = HYPHENATED.matcher(lowered);
-        while (compounds.find()) {
-            String compound = compounds.group();
-            out.add(compound);
-            for (String part : compound.split("-")) {
-                if (part.length() >= 3 && !STOP.contains(part)) {
-                    out.add(part);
-                }
-            }
-        }
-        for (String raw : lowered.split("[^a-z0-9-]+")) {
-            if (raw.isEmpty()) {
-                continue;
-            }
-            // Keep numbers (e.g. 17) and short technical tokens so excerpts match the claim.
-            if (raw.chars().allMatch(Character::isDigit)) {
-                out.add(raw);
-                continue;
-            }
-            if (raw.length() < 3 || STOP.contains(raw)) {
-                continue;
-            }
-            out.add(raw);
-        }
-        return out;
+        return LexicalTerms.significant(text);
     }
 
     private static String trimToMax(String value) {

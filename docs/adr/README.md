@@ -23,3 +23,4 @@
 | [0004](0004-progressive-decomposition.md) | Progressive service decomposition | Accepted |
 | [0005](0005-gemini-llm-provider.md) | Google Gemini as Phase A LLM | Accepted |
 | [0006](0006-tdd-approach.md) | Test-Driven Development approach | Accepted |
+| [0007](0007-page-chunks-and-support-cutoff.md) | Page chunks and the support cutoff | Accepted |

@@ -267,9 +267,9 @@ export function AdminCoursesPage() {
                     className="absolute inset-0 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
                   />
                   <div className="pointer-events-none relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-display text-lg font-semibold text-ink">{course.title}</p>
+                        <p className="truncate font-display text-lg font-semibold text-ink">{course.title}</p>
                         <StatusPill tone={published ? 'ok' : 'warn'}>
                           {published ? 'Published' : 'Unpublished'}
                         </StatusPill>
@@ -278,10 +278,10 @@ export function AdminCoursesPage() {
                         {course.code} · {course.term} · {published ? 'Published' : 'Unpublished'}
                       </p>
                     </div>
-                    <div className="pointer-events-auto flex flex-wrap gap-2">
+                    <div className="pointer-events-auto flex shrink-0 flex-nowrap gap-2">
                       <Link
                         to={materialsTo}
-                        className="inline-flex min-w-[5.5rem] cursor-pointer items-center justify-center rounded-lg border border-ink/20 bg-white/70 px-3.5 py-2 text-sm font-medium text-ink transition hover:border-ink/40 hover:bg-white"
+                        className="inline-flex min-w-[5.5rem] shrink-0 cursor-pointer items-center justify-center rounded-lg border border-ink/20 bg-white/70 px-3.5 py-2 text-sm font-medium text-ink transition hover:border-ink/40 hover:bg-white"
                       >
                         Materials
                       </Link>
@@ -289,7 +289,7 @@ export function AdminCoursesPage() {
                         <Button
                           type="button"
                           variant="success"
-                          className="min-w-[5.5rem]"
+                          className="min-w-[5.5rem] shrink-0"
                           disabled={visibilityPending}
                           onClick={() => requestPublish(course)}
                         >
@@ -300,7 +300,7 @@ export function AdminCoursesPage() {
                         <Button
                           type="button"
                           variant="warn"
-                          className="min-w-[5.5rem]"
+                          className="min-w-[5.5rem] shrink-0"
                           disabled={visibilityPending}
                           onClick={() => requestUnpublish(course)}
                         >

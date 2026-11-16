@@ -17,5 +17,55 @@ services:
       timeout: 5s
       retries: 12
 
+  identity:
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+    container_name: uni-companion-identity
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      IDENTITY_DATABASE_URL: jdbc:postgresql://postgres:5432/identity
+      DATABASE_USERNAME: unicompanion
+      DATABASE_PASSWORD: unicompanion
+      JWT_SECRET: local-dev-jwt-secret-change-me-32
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  learning:
+    build:
+      context: .
+      dockerfile: services/learning-service/Dockerfile
+    container_name: uni-companion-learning
+    environment:
+      SPRING_PROFILES_ACTIVE: local,fake
+      LEARNING_DATABASE_URL: jdbc:postgresql://postgres:5432/learning
+      DATABASE_USERNAME: unicompanion
+      DATABASE_PASSWORD: unicompanion
+      JWT_SECRET: local-dev-jwt-secret-change-me-32
+      STORAGE_LOCAL_PATH: /data/materials
+    ports:
+      - "8082:8082"
+    volumes:
+      - learning_materials:/data/materials
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
 volumes:
   uni_companion_pg:
+  learning_materials:

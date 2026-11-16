@@ -27,17 +27,72 @@ public class ChunkRetrievalRepository {
             float[] queryEmbedding,
             int limit
     ) {
+        return findTopK(courseId, materialIds, queryEmbedding, limit, false, null, 0);
+    }
+
+    /**
+     * @param ownerPreview when true, course/material may be unpublished (owner admin preview);
+     *                     materials must still be READY and belong to the course.
+     */
+    public List<ChatModel.RetrievedChunk> findTopK(
+            UUID courseId,
+            List<UUID> materialIds,
+            float[] queryEmbedding,
+            int limit,
+            boolean ownerPreview
+    ) {
+        return findTopK(courseId, materialIds, queryEmbedding, limit, ownerPreview, null, 0);
+    }
+
+    /**
+     * Hybrid retrieval: vector nearest neighbours fused with lexical (Postgres simple FTS) via RRF.
+     *
+     * @param question used for lexical retrieval; when blank, falls back to vector-only.
+     * @param maxCosineDistance drop vector neighbours farther than this. {@code 0} keeps the distance gate off.
+     */
+    public List<ChatModel.RetrievedChunk> findTopK(
+            UUID courseId,
+            List<UUID> materialIds,
+            float[] queryEmbedding,
+            int limit,
+            boolean ownerPreview,
+            String question,
+            double maxCosineDistance
+    ) {
+        if (materialIds == null || materialIds.isEmpty() || limit < 1) {
+            return List.of();
+        }
+        int candidateLimit = Math.min(48, Math.max(limit * 4, limit));
+        List<ChatModel.RetrievedChunk> vectorHits = findByVector(
+                courseId, materialIds, queryEmbedding, candidateLimit, ownerPreview, maxCosineDistance
+        );
+        List<ChatModel.RetrievedChunk> lexicalHits = findByLexical(
+                courseId, materialIds, question, candidateLimit, ownerPreview
+        );
+        if (lexicalHits.isEmpty()) {
+            return vectorHits.size() <= limit ? vectorHits : List.copyOf(vectorHits.subList(0, limit));
+        }
+        return HybridRanker.fuse(limit, vectorHits, lexicalHits);
+    }
+
+    /**
+     * Every ready page of the selected materials, in reading order.
+     * Used to group a long PDF into topics without a second upload.
+     */
+    public List<ChatModel.RetrievedChunk> listReadyPages(
+            UUID courseId,
+            List<UUID> materialIds,
+            boolean ownerPreview
+    ) {
         if (materialIds == null || materialIds.isEmpty()) {
             return List.of();
         }
-        String vector = toVectorLiteral(queryEmbedding);
         List<UUID> distinctIds = materialIds.stream().distinct().toList();
         String placeholders = distinctIds.stream().map(id -> "?").collect(Collectors.joining(","));
         List<Object> args = new ArrayList<>();
         args.add(courseId);
         args.addAll(distinctIds);
-        args.add(vector);
-        args.add(limit);
+        String visibility = visibilityClause(ownerPreview);
         return jdbc.query(
                 """
                         SELECT c.id, c.material_id, m.title, c.page_number, c.content
@@ -46,15 +101,119 @@ public class ChunkRetrievalRepository {
                         INNER JOIN courses co ON co.id = m.course_id
                         WHERE m.course_id = ?
                           AND m.id IN (%s)
-                          AND m.visibility = 'PUBLISHED'
                           AND m.processing_status = 'READY'
-                          AND co.visibility = 'PUBLISHED'
-                        ORDER BY c.embedding <=> CAST(? AS vector)
-                        LIMIT ?
-                        """.formatted(placeholders),
+                        %s
+                        ORDER BY m.title ASC, c.page_number ASC, c.chunk_index ASC
+                        """.formatted(placeholders, visibility),
                 (rs, rowNum) -> mapChunk(rs),
                 args.toArray()
         );
+    }
+
+    public List<ChatModel.RetrievedChunk> findLexicalOnly(
+            UUID courseId,
+            List<UUID> materialIds,
+            String question,
+            int limit,
+            boolean ownerPreview
+    ) {
+        return findByLexical(courseId, materialIds, question, limit, ownerPreview);
+    }
+
+    private List<ChatModel.RetrievedChunk> findByVector(
+            UUID courseId,
+            List<UUID> materialIds,
+            float[] queryEmbedding,
+            int limit,
+            boolean ownerPreview,
+            double maxCosineDistance
+    ) {
+        String vector = toVectorLiteral(queryEmbedding);
+        List<UUID> distinctIds = materialIds.stream().distinct().toList();
+        String placeholders = distinctIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        List<Object> args = new ArrayList<>();
+        args.add(courseId);
+        args.addAll(distinctIds);
+        args.add(maxCosineDistance);
+        args.add(vector);
+        args.add(maxCosineDistance);
+        args.add(vector);
+        args.add(limit);
+        String visibility = visibilityClause(ownerPreview);
+        return jdbc.query(
+                """
+                        SELECT c.id, c.material_id, m.title, c.page_number, c.content
+                        FROM material_chunks c
+                        INNER JOIN materials m ON m.id = c.material_id
+                        INNER JOIN courses co ON co.id = m.course_id
+                        WHERE m.course_id = ?
+                          AND m.id IN (%s)
+                          AND m.processing_status = 'READY'
+                        %s
+                          AND (? <= 0 OR c.embedding <=> CAST(? AS vector) <= ?)
+                        ORDER BY c.embedding <=> CAST(? AS vector)
+                        LIMIT ?
+                        """.formatted(placeholders, visibility),
+                (rs, rowNum) -> mapChunk(rs),
+                args.toArray()
+        );
+    }
+
+    private List<ChatModel.RetrievedChunk> findByLexical(
+            UUID courseId,
+            List<UUID> materialIds,
+            String question,
+            int limit,
+            boolean ownerPreview
+    ) {
+        String ftsQuery = LexicalTerms.toSimpleFtsQuery(question);
+        if (ftsQuery == null || ftsQuery.isBlank()) {
+            return List.of();
+        }
+        List<UUID> distinctIds = materialIds.stream().distinct().toList();
+        String placeholders = distinctIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        String visibility = visibilityClause(ownerPreview);
+        try {
+            return jdbc.query(
+                    """
+                            SELECT c.id, c.material_id, m.title, c.page_number, c.content
+                            FROM material_chunks c
+                            INNER JOIN materials m ON m.id = c.material_id
+                            INNER JOIN courses co ON co.id = m.course_id
+                            WHERE m.course_id = ?
+                              AND m.id IN (%s)
+                              AND m.processing_status = 'READY'
+                            %s
+                              AND to_tsvector('simple', c.content) @@ to_tsquery('simple', ?)
+                            ORDER BY ts_rank_cd(to_tsvector('simple', c.content), to_tsquery('simple', ?)) DESC
+                            LIMIT ?
+                            """.formatted(placeholders, visibility),
+                    (rs, rowNum) -> mapChunk(rs),
+                    rebuildLexicalArgs(courseId, distinctIds, ftsQuery, limit)
+            );
+        } catch (RuntimeException ex) {
+            // Lexical is a boost — never fail the whole query if FTS parsing rejects the question.
+            return List.of();
+        }
+    }
+
+    private static Object[] rebuildLexicalArgs(UUID courseId, List<UUID> materialIds, String ftsQuery, int limit) {
+        List<Object> args = new ArrayList<>();
+        args.add(courseId);
+        args.addAll(materialIds);
+        args.add(ftsQuery);
+        args.add(ftsQuery);
+        args.add(limit);
+        return args.toArray();
+    }
+
+    private static String visibilityClause(boolean ownerPreview) {
+        return ownerPreview
+                ? ""
+                : """
+                          AND m.visibility = 'PUBLISHED'
+                          AND co.visibility = 'PUBLISHED'
+                        """;
     }
 
     public List<ChatModel.RetrievedChunk> samplePublished(UUID courseId, int limit) {
@@ -122,6 +281,13 @@ public class ChunkRetrievalRepository {
     }
 
     public int countPublishedReadyMaterials(UUID courseId, List<UUID> materialIds) {
+        return countReadyMaterials(courseId, materialIds, false);
+    }
+
+    /**
+     * @param ownerPreview when true, skips published filters so course owners can preview drafts.
+     */
+    public int countReadyMaterials(UUID courseId, List<UUID> materialIds, boolean ownerPreview) {
         if (materialIds == null || materialIds.isEmpty()) {
             return 0;
         }
@@ -130,6 +296,12 @@ public class ChunkRetrievalRepository {
         List<Object> args = new ArrayList<>();
         args.add(courseId);
         args.addAll(distinctIds);
+        String visibility = ownerPreview
+                ? ""
+                : """
+                          AND m.visibility = 'PUBLISHED'
+                          AND c.visibility = 'PUBLISHED'
+                        """;
         Integer count = jdbc.queryForObject(
                 """
                         SELECT count(*)
@@ -137,10 +309,9 @@ public class ChunkRetrievalRepository {
                         INNER JOIN courses c ON c.id = m.course_id
                         WHERE m.course_id = ?
                           AND m.id IN (%s)
-                          AND m.visibility = 'PUBLISHED'
                           AND m.processing_status = 'READY'
-                          AND c.visibility = 'PUBLISHED'
-                        """.formatted(placeholders),
+                        %s
+                        """.formatted(placeholders, visibility),
                 Integer.class,
                 args.toArray()
         );

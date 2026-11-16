@@ -1,6 +1,9 @@
 <#
 .SYNOPSIS
-  Stop local Uni Companion processes started via dev.ps1 (ports + Postgres container).
+  Stop local Uni Companion app processes started via dev.ps1
+  (app ports + Postgres container).
+
+  QA orchestrator / tunnels: use ..\uni-companion-qa\stop-qa.ps1
 #>
 [CmdletBinding()]
 param(
@@ -28,9 +31,10 @@ function Stop-PortListeners([int[]]$Ports) {
 Write-Host '==> Stopping identity / learning / Vite (8081, 8082, 5173)' -ForegroundColor Cyan
 Stop-PortListeners -Ports @(8081, 8082, 5173)
 
-# Maven may leave a child Java process; also close titled helper windows if still empty shells.
 Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -match 'uni-companion (identity|learning|web)' } |
+    Where-Object {
+        $_.CommandLine -match 'uni-companion (identity|learning|web)'
+    } |
     ForEach-Object {
         Write-Host "Stopping helper shell PID $($_.ProcessId)"
         Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
@@ -48,4 +52,4 @@ if (-not $KeepPostgres) {
     Write-Host 'Keeping Postgres running (-KeepPostgres).'
 }
 
-Write-Host 'Done.' -ForegroundColor Green
+Write-Host 'Done. (QA orch/tunnels: ..\uni-companion-qa\stop-qa.ps1)' -ForegroundColor Green

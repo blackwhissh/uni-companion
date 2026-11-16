@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation } from 'react-router'
 import { useAuth } from './use-auth.ts'
 import { AuthForm, Field } from './AuthForm.tsx'
 import { consumeSkipReturnPath, shouldSkipReturnPath } from './auth-session-sync.ts'
@@ -20,14 +20,12 @@ function resolvePostLoginTarget(state: unknown, roles: string[]) {
 
 export function LoginPage() {
   const { login, user, ready } = useAuth()
-  const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [submittedLogin, setSubmittedLogin] = useState(false)
 
-  // Already signed in (e.g. opened /login with a live session) — honor skip-return from logout.
-  if (ready && user && !submittedLogin) {
+  // Session already live (refresh or post-login) — never keep the form mounted beside the next page.
+  if (ready && user) {
     const target = resolvePostLoginTarget(location.state, user.roles)
     consumeSkipReturnPath()
     return <Navigate to={target} replace state={{}} />
@@ -39,11 +37,7 @@ export function LoginPage() {
       subtitle="Pick up where you left off — courses, materials, and matching stay with your account."
       submitLabel="Log in"
       onSubmit={async (values) => {
-        setSubmittedLogin(true)
-        const next = await login(values.email ?? email, values.password ?? password)
-        const target = resolvePostLoginTarget(location.state, next.roles)
-        consumeSkipReturnPath()
-        navigate(target, { replace: true, state: {} })
+        await login(values.email ?? email, values.password ?? password)
       }}
       footer={
         <>

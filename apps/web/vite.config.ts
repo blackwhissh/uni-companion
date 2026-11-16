@@ -1,7 +1,25 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import type { ProxyOptions } from 'vite'
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import type { Plugin, ProxyOptions } from 'vite'
 import { defineConfig } from 'vitest/config'
+
+const vitestEntry = resolve(fileURLToPath(new URL('.', import.meta.url)), 'node_modules/vitest/dist/index.js')
+
+/** One Vitest module on Windows. Two drive-letter spellings otherwise leave describe() with no runner. */
+function singleVitestModule(): Plugin {
+  return {
+    name: 'single-vitest-module',
+    enforce: 'pre',
+    resolveId(source) {
+      if (source === 'vitest') {
+        return vitestEntry
+      }
+      return null
+    },
+  }
+}
 
 function serviceProxy(target: string): ProxyOptions {
   return {
@@ -22,7 +40,8 @@ export default defineConfig(({ mode }) => {
   const qa = mode === 'qa'
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), ...(process.env.VITEST ? [singleVitestModule()] : [])],
+    resolve: process.env.VITEST ? { alias: { vitest: vitestEntry } } : undefined,
     server: {
       port: 5173,
       ...(qa

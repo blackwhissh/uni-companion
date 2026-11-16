@@ -110,4 +110,45 @@ class CitationTextTest {
                 .contains("median-of-three")
                 .doesNotContain("Insertion sort builds");
     }
+
+    @Test
+    void excerptForCitationIndexPrefersClaimThatMentionsThatChip() {
+        String content = """
+                Chapter 4 — Sorting. Quicksort often uses a random pivot in textbooks. \
+                In these exercises, Quicksort always uses median-of-three pivoting when n >= 17. \
+                Insertion sort is preferred when n < 17 because the overhead of Quicksort dominates.
+                """;
+        String answer = """
+                ## Direct answer
+                Insertion sort is used when n < 17 [1]. Median-of-three is the pivot rule [1].
+                """;
+
+        String excerpt = CitationText.excerpt(content, "sorting rules", answer, 1);
+
+        assertThat(excerpt)
+                .contains("n < 17")
+                .contains("median-of-three");
+        assertThat(CitationText.claimForCitation(answer, 1))
+                .contains("Insertion sort")
+                .contains("Median-of-three");
+    }
+
+    @Test
+    void matchesGermanUmlautQuestionTermsForExcerpt() {
+        String content = """
+                Kapitel 2 — Grundlagen. Netzwerke transportieren Pakete zwischen Hosts. \
+                Die Verfügbarkeit eines Systems beschreibt die Wahrscheinlichkeit, dass es nutzbar bleibt. \
+                Geografische Verteilung platziert Dienste näher bei Nutzern.
+                """;
+
+        String excerpt = CitationText.excerpt(
+                content,
+                "Was ist Verfügbarkeit?",
+                "Verfügbarkeit beschreibt die Wahrscheinlichkeit, dass es nutzbar bleibt."
+        );
+
+        assertThat(excerpt)
+                .contains("Verfügbarkeit")
+                .doesNotContain("Geografische Verteilung");
+    }
 }

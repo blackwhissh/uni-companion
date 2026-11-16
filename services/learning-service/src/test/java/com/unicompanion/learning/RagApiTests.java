@@ -26,6 +26,8 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -84,6 +86,21 @@ class RagApiTests {
                 .andExpect(jsonPath("$.citations[0].title").value("Lecture 1"))
                 .andExpect(jsonPath("$.citations[0].pageNumber").value(1))
                 .andExpect(jsonPath("$.citations[0].excerpt", containsString("Consensus")));
+
+        mockMvc.perform(get("/api/rag/courses/" + courseId + "/history")
+                        .header("Authorization", STUDENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.turns", hasSize(1)))
+                .andExpect(jsonPath("$.turns[0].question", containsString("consensus")))
+                .andExpect(jsonPath("$.turns[0].citedCount").value(1))
+                .andExpect(jsonPath("$.turns[0].insufficient").value(false))
+                .andExpect(jsonPath("$.turns[0].latencyMs", greaterThanOrEqualTo(0)));
+
+        mockMvc.perform(get("/api/rag/courses/" + courseId + "/stats")
+                        .header("Authorization", ADMIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalTurns").value(1))
+                .andExpect(jsonPath("$.citeRate").value(1.0));
     }
 
     @Test
@@ -99,6 +116,15 @@ class RagApiTests {
                         .header("Authorization", STUDENT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(query(courseId, "What is the secret draft topic?", publishedId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", containsString("could not find")))
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.not(containsString("sharding"))))
+                .andExpect(jsonPath("$.citations", hasSize(0)));
+
+        mockMvc.perform(post("/api/rag/query")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(query(courseId, "What is replication?", publishedId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.answer", containsString("replication")))
                 .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.not(containsString("sharding"))))
@@ -120,9 +146,38 @@ class RagApiTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(query(courseId, "What is sharding?", consensusId)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", containsString("could not find")))
+                .andExpect(jsonPath("$.citations", hasSize(0)))
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.not(containsString("partitions"))))
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.not(containsString("replicas"))));
+
+        mockMvc.perform(post("/api/rag/query")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(query(courseId, "What is consensus?", consensusId)))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.citations", hasSize(1)))
                 .andExpect(jsonPath("$.citations[0].materialId").value(consensusId))
-                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.not(containsString("partitions data"))));
+                .andExpect(jsonPath("$.answer", containsString("Consensus")))
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.not(containsString("partitions"))));
+    }
+
+    @Test
+    void questionMissingFromThePdfIsRefused() throws Exception {
+        String courseId = createCourse("RAG-REFUSE");
+        publishCourse(courseId);
+        String materialId = upload(courseId, "Lecture 1", "lecture.pdf", pdfBytes("Consensus algorithms keep replicas consistent."));
+        publishMaterial(materialId);
+        enroll(courseId);
+
+        mockMvc.perform(post("/api/rag/query")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(query(courseId, "What is the capital of France?", materialId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer", containsString("could not find")))
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.not(containsString("Paris"))))
+                .andExpect(jsonPath("$.citations", hasSize(0)));
     }
 
     private String createCourse(String code) throws Exception {

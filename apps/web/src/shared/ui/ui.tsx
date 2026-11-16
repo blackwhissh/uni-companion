@@ -94,13 +94,18 @@ export function EmptyState({
   title,
   description,
   action,
+  animate = true,
 }: {
   title: string
   description: string
   action?: ReactNode
+  /** Set false for placeholders that must appear immediately (no fade-in flash). */
+  animate?: boolean
 }) {
   return (
-    <div className="surface-panel animate-rise-delay mt-8 rounded-2xl px-6 py-10 text-center">
+    <div
+      className={`surface-panel mt-8 rounded-2xl px-6 py-10 text-center ${animate ? 'animate-rise-delay' : ''}`}
+    >
       <p className="font-display text-xl font-semibold text-ink">{title}</p>
       <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">{description}</p>
       {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
