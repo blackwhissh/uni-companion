@@ -6,9 +6,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.MediaType;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -38,9 +38,9 @@ public class VertexChatModel implements ChatModel {
     private final GeminiProperties properties;
     private final RestClient http;
     private final GoogleCredentials credentials;
-    private final ObjectMapper json;
+    private final JsonMapper json;
 
-    public VertexChatModel(GeminiProperties properties, RestClient.Builder restClientBuilder, ObjectMapper json) {
+    public VertexChatModel(GeminiProperties properties, RestClient.Builder restClientBuilder, JsonMapper json) {
         this.properties = properties;
         this.http = restClientBuilder.build();
         this.json = json;

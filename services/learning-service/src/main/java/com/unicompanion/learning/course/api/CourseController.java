@@ -1,8 +1,11 @@
 package com.unicompanion.learning.course.api;
 
+import com.unicompanion.learning.config.AuditService;
+import com.unicompanion.learning.config.CorrelationIdFilter;
 import com.unicompanion.learning.course.application.CourseService;
 import com.unicompanion.learning.course.domain.Visibility;
 import com.unicompanion.learning.course.infrastructure.CourseEntity;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -29,9 +33,11 @@ import java.util.UUID;
 public class CourseController {
 
     private final CourseService courses;
+    private final AuditService audit;
 
-    public CourseController(CourseService courses) {
+    public CourseController(CourseService courses, AuditService audit) {
         this.courses = courses;
+        this.audit = audit;
     }
 
     @PostMapping
@@ -54,13 +60,22 @@ public class CourseController {
     public CourseResponse changeVisibility(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt,
-            @Valid @RequestBody VisibilityRequest request
+            @Valid @RequestBody VisibilityRequest request,
+            HttpServletRequest httpRequest
     ) {
         CourseService.CourseDetails updated = courses.changeVisibility(
                 id,
                 request.visibility(),
                 userId(jwt),
                 isPlatformAdmin(jwt)
+        );
+        audit.record(
+                userId(jwt),
+                "COURSE_VISIBILITY_CHANGED",
+                "course",
+                id.toString(),
+                Map.of("visibility", request.visibility().name()),
+                CorrelationIdFilter.correlationId(httpRequest)
         );
         return CourseResponse.from(updated);
     }
@@ -69,13 +84,22 @@ public class CourseController {
     public CourseResponse changeOwner(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt,
-            @Valid @RequestBody OwnerRequest request
+            @Valid @RequestBody OwnerRequest request,
+            HttpServletRequest httpRequest
     ) {
         CourseService.CourseDetails updated = courses.changeOwner(
                 id,
                 request.ownerId(),
                 userId(jwt),
                 isPlatformAdmin(jwt)
+        );
+        audit.record(
+                userId(jwt),
+                "COURSE_OWNER_CHANGED",
+                "course",
+                id.toString(),
+                Map.of("ownerId", request.ownerId().toString()),
+                CorrelationIdFilter.correlationId(httpRequest)
         );
         return CourseResponse.from(updated);
     }
@@ -95,8 +119,16 @@ public class CourseController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+    public void delete(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt, HttpServletRequest httpRequest) {
         courses.delete(id, userId(jwt), isPlatformAdmin(jwt));
+        audit.record(
+                userId(jwt),
+                "COURSE_DELETED",
+                "course",
+                id.toString(),
+                Map.of(),
+                CorrelationIdFilter.correlationId(httpRequest)
+        );
     }
 
     private static UUID userId(Jwt jwt) {

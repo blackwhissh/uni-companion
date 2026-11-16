@@ -64,6 +64,13 @@ management:
     health:
       probes:
         enabled: true
+      group:
+        # Process alive — do not require DB (orchestrators must not kill pods during DB blips).
+        liveness:
+          include: livenessState
+        # Safe to receive traffic — DB must be reachable.
+        readiness:
+          include: readinessState,db
   tracing:
     sampling:
       probability: ${OTEL_TRACES_SAMPLER_ARG:1.0}
