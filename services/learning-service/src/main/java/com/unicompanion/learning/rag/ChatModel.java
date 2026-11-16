@@ -2,6 +2,7 @@ package com.unicompanion.learning.rag;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public interface ChatModel {
 
@@ -18,6 +19,31 @@ public interface ChatModel {
             List<Turn> history
     ) {
         return answer(question, chunks, language);
+    }
+
+    /**
+     * Stream a multi-turn answer as text deltas. Default generates the full answer then emits it
+     * in small chunks so clients can render progressively even without provider streaming.
+     */
+    default void streamAnswerWithHistory(
+            String question,
+            List<RetrievedChunk> chunks,
+            ExplanationLanguage language,
+            List<Turn> history,
+            Consumer<String> onDelta
+    ) {
+        String answer = answerWithHistory(question, chunks, language, history);
+        emitChunks(answer, onDelta);
+    }
+
+    static void emitChunks(String text, Consumer<String> onDelta) {
+        if (text == null || text.isEmpty() || onDelta == null) {
+            return;
+        }
+        int size = 28;
+        for (int i = 0; i < text.length(); i += size) {
+            onDelta.accept(text.substring(i, Math.min(i + size, text.length())));
+        }
     }
 
     String summarize(String title, List<RetrievedChunk> chunks, ExplanationLanguage language);

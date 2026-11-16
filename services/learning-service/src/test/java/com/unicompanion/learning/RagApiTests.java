@@ -27,11 +27,13 @@ import java.util.UUID;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -350,6 +352,40 @@ class RagApiTests {
                         .header("Authorization", STUDENT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.messages", hasSize(4)));
+    }
+
+    @Test
+    void enrolledStudentCanStreamAStudyChatReply() throws Exception {
+        String courseId = createCourse("RAG-STREAM");
+        publishCourse(courseId);
+        String materialId = upload(courseId, "Lecture 1", "lecture.pdf", pdfBytes("Consensus algorithms keep replicas consistent."));
+        publishMaterial(materialId);
+        enroll(courseId);
+
+        MvcResult started = mockMvc.perform(post("/api/rag/chat/sessions")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"courseId":"%s","materialIds":["%s"],"language":"EN"}
+                                """.formatted(courseId, materialId)))
+                .andExpect(status().isOk())
+                .andReturn();
+        String sessionId = JsonPath.read(started.getResponse().getContentAsString(), "$.id");
+
+        MvcResult streaming = mockMvc.perform(post("/api/rag/chat/sessions/" + sessionId + "/messages/stream")
+                        .header("Authorization", STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.TEXT_EVENT_STREAM)
+                        .content("{\"question\":\"What do consensus algorithms do?\"}"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(streaming))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(content().string(containsString("event:token")))
+                .andExpect(content().string(containsString("event:done")))
+                .andExpect(content().string(containsString("Consensus")));
     }
 
     private String createCourse(String code) throws Exception {

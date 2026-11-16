@@ -5,6 +5,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,19 +16,30 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @RestController
 @RequestMapping("/api/rag/chat")
 public class StudyChatController {
 
-    private final StudyChatService chats;
+    private static final long STREAM_TIMEOUT_MS = 180_000L;
 
-    public StudyChatController(StudyChatService chats) {
+    private final StudyChatService chats;
+    private final TaskExecutor chatStreamExecutor;
+
+    public StudyChatController(
+            StudyChatService chats,
+            @Qualifier("chatStreamExecutor") TaskExecutor chatStreamExecutor
+    ) {
         this.chats = chats;
+        this.chatStreamExecutor = chatStreamExecutor;
     }
 
     @PostMapping("/sessions")
@@ -50,6 +64,66 @@ public class StudyChatController {
             @Valid @RequestBody MessageRequest request
     ) {
         return SessionResponse.from(chats.ask(sessionId, userId(jwt), request.question()));
+    }
+
+    @PostMapping(value = "/sessions/{sessionId}/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter askStream(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId,
+            @Valid @RequestBody MessageRequest request
+    ) {
+        UUID uid = userId(jwt);
+        SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
+        AtomicBoolean completed = new AtomicBoolean(false);
+        chatStreamExecutor.execute(() -> {
+            try {
+                chats.askStreaming(sessionId, uid, request.question(), new StudyChatService.StreamListener() {
+                    @Override
+                    public void onToken(String delta) {
+                        send(emitter, completed, "token", Map.of("delta", delta));
+                    }
+
+                    @Override
+                    public void onDone(StudyChatService.SessionView session) {
+                        send(emitter, completed, "done", SessionResponse.from(session));
+                        complete(emitter, completed);
+                    }
+
+                    @Override
+                    public void onError(String message, int status) {
+                        send(emitter, completed, "error", Map.of("message", message, "status", status));
+                        complete(emitter, completed);
+                    }
+                });
+            } catch (RuntimeException ex) {
+                send(emitter, completed, "error", Map.of(
+                        "message", "Could not draft an answer from the published materials. Try again shortly.",
+                        "status", 502
+                ));
+                complete(emitter, completed);
+            }
+        });
+        emitter.onTimeout(() -> complete(emitter, completed));
+        emitter.onCompletion(() -> completed.set(true));
+        return emitter;
+    }
+
+    private static void send(SseEmitter emitter, AtomicBoolean completed, String event, Object data) {
+        if (completed.get()) {
+            return;
+        }
+        try {
+            emitter.send(SseEmitter.event().name(event).data(data));
+        } catch (IOException ex) {
+            completed.set(true);
+            emitter.completeWithError(ex);
+        }
+    }
+
+    private static void complete(SseEmitter emitter, AtomicBoolean completed) {
+        if (completed.compareAndSet(false, true)) {
+            emitter.complete();
+        }
     }
 
     private static UUID userId(Jwt jwt) {
