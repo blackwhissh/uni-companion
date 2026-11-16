@@ -44,6 +44,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/courses").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/courses/*/materials").hasAnyRole("COURSE_ADMIN", "ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/courses/*/lms").hasAnyRole("COURSE_ADMIN", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/courses/*/lms/sync").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/courses/*/visibility").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/courses/*/owner").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/materials/*/visibility").hasAnyRole("COURSE_ADMIN", "ADMIN")
@@ -61,7 +63,7 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(properties.corsAllowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id", "Idempotency-Key"));
         config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);

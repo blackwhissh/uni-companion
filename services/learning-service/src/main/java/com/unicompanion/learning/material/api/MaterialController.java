@@ -258,7 +258,9 @@ public class MaterialController {
             String fileName,
             Visibility visibility,
             ProcessingStatus processingStatus,
-            String failureReason
+            String failureReason,
+            String sourceProvider,
+            String sourceExternalId
     ) {
         static MaterialResponse from(MaterialEntity material) {
             return new MaterialResponse(
@@ -268,7 +270,9 @@ public class MaterialController {
                     material.getFileName(),
                     material.getVisibility(),
                     material.getProcessingStatus(),
-                    material.getFailureReason()
+                    material.getFailureReason(),
+                    material.getSourceProvider(),
+                    material.getSourceExternalId()
             );
         }
     }

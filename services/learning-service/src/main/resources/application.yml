@@ -37,6 +37,9 @@ unicompanion:
     location: ${GOOGLE_CLOUD_LOCATION:global}
     embedding-model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
     chat-model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}
+  lms:
+    # fake = in-memory demo catalog (demo-moodle-course). Real Moodle/ILIAS adapters come later.
+    provider: ${LMS_PROVIDER:fake}
 
 springdoc:
   api-docs:

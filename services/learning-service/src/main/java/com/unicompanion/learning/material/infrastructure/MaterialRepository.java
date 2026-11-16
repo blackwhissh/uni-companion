@@ -5,6 +5,7 @@ import com.unicompanion.learning.material.domain.ProcessingStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface MaterialRepository extends JpaRepository<MaterialEntity, UUID> {
@@ -15,5 +16,11 @@ public interface MaterialRepository extends JpaRepository<MaterialEntity, UUID> 
             UUID courseId,
             Visibility visibility,
             ProcessingStatus processingStatus
+    );
+
+    Optional<MaterialEntity> findByCourseIdAndSourceProviderAndSourceExternalId(
+            UUID courseId,
+            String sourceProvider,
+            String sourceExternalId
     );
 }
