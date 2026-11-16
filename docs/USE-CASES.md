@@ -430,7 +430,7 @@ Opt-in discoverability and field visibility.
 | **Main flow** | 1. Verified university user is granted `COURSE_ADMIN` for a course.<br>2. They take over UC-010/UC-012.<br>3. Project owner may retain operator access. |
 | **Postconditions** | Official materials managed by institution-side admin. |
 
-#### UC-060 — Sync materials from LMS — Could · Future (Phase C)
+#### UC-060 — Sync materials from LMS — Could · In progress (Phase C started)
 
 | Field | Content |
 |---|---|
@@ -438,6 +438,7 @@ Opt-in discoverability and field visibility.
 | **Goal** | Reduce manual re-upload of slides |
 | **Main flow** | With permission, system imports/links course files from Moodle/ILIAS into canonical materials and runs ingestion. |
 | **Postconditions** | Canonical KB stays aligned with LMS without student uploads. |
+| **Current slice** | Fake + Moodle `LmsClient`, admin Sync now, optional scheduled sync. Campus Moodle token / ILIAS still outstanding (see ADR-0007). |
 
 ---
 

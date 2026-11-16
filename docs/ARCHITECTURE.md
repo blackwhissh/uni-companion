@@ -131,6 +131,7 @@ Student question
 | Progressive decomposition | [ADR-0004](adr/0004-progressive-decomposition.md) |
 | Gemini provider | [ADR-0005](adr/0005-gemini-llm-provider.md) |
 | TDD approach | [ADR-0006](adr/0006-tdd-approach.md) |
+| LMS sync (Fake then Moodle) | [ADR-0007](adr/0007-lms-sync-fake-then-moodle.md) |
 
 ## 9. References
 

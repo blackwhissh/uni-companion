@@ -3,29 +3,35 @@
 | Field | Value |
 |---|---|
 | Document ID | DOC-NEXT |
-| Version | 1.12.0 |
+| Version | 1.13.0 |
 | Status | Draft |
 | Last updated | 2026-11-16 |
 | Owner | Project owner |
-| Based on | Load smoke script (NFR-021 baseline) |
+| Based on | Mid-senior path complete pending campus-dependent items |
 
 ## 1. Where the product is
 
-Mid-senior path through LMS, CSP, Moodle deploy wiring, plus a load-smoke helper:
+Mid-senior hardening and LMS path on this stack branch:
 
-- `scripts/load-smoke.sh` — concurrent authenticated `GET /api/courses` with p50/p95 reporting
-- Documented in TESTING.md for NFR-021 baselines
-
-## 2. After this increment
-
-| Order | Capability |
+| Area | Status |
 |---|---|
-| 1 | University-email verification (deferred — revisit for campus rollout) |
-| — | ILIAS `LmsClient` if needed |
-| — | Heavier load/CI gates (k6) if capacity targets are set |
-| — | Turn on Moodle in prod once campus token exists |
+| P1 operability (probes, audit, idempotency, FE errors) | Done |
+| Streaming study chat + Playwright smoke | Done |
+| LMS Fake sync + Moodle client + schedule + deploy env | Done |
+| CSP / security headers | Done |
+| Load-smoke baseline (NFR-021) | Done |
 
-## 3. Done when
+## 2. Blocked / deferred (need campus or product input)
 
-- `scripts/load-smoke.sh` is executable and documents CONCURRENCY/REQUESTS
-- TESTING.md points at it for NFR-021
+| Item | Needs |
+|---|---|
+| Turn on Moodle in prod | Campus webservice token (`LMS_MOODLE_*`) |
+| University-email verification | Explicitly deferred earlier; revisit for campus rollout |
+| ILIAS `LmsClient` | Only if campus uses ILIAS instead of/in addition to Moodle |
+| k6 CI gates | Capacity targets / SLOs |
+
+## 3. Suggested next when unblocked
+
+1. Enable Moodle in a staging `.env.prod` and sync one real course  
+2. Or pick university-email verification for campus rollout  
+3. Or set latency budgets from `scripts/load-smoke.sh` and add k6  
