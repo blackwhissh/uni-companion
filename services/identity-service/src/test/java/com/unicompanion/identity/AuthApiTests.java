@@ -471,10 +471,11 @@ class AuthApiTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.emailVerified").value(true));
 
+        String userId = JsonPath.read(registered.getResponse().getContentAsString(), "$.user.id");
         Integer verified = jdbc.queryForObject(
                 "select count(*) from audit_events where action = 'EMAIL_VERIFIED' and resource_id = ?",
                 Integer.class,
-                JsonPath.read(registered.getResponse().getContentAsString(), "$.user.id")
+                userId
         );
         assertThat(verified).isEqualTo(1);
         mockMvc.perform(get("/api/me").header("Authorization", "Bearer " + access))
