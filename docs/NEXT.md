@@ -3,29 +3,29 @@
 | Field | Value |
 |---|---|
 | Document ID | DOC-NEXT |
-| Version | 1.10.0 |
+| Version | 1.11.0 |
 | Status | Draft |
 | Last updated | 2026-11-16 |
 | Owner | Project owner |
-| Based on | CSP / security headers (P3) |
+| Based on | Moodle deploy env wiring |
 
 ## 1. Where the product is
 
-LMS sync path complete through scheduled pulls, plus browser/API security headers:
+Mid-senior path through LMS + CSP, with prod compose ready for campus Moodle secrets:
 
-- Caddy SPA: CSP allowing self + Google Fonts + `blob:` PDF previews
-- Identity + learning APIs: `default-src 'none'` CSP, nosniff, deny framing, referrer + permissions policy
+- `docker-compose.prod.yml` + `.env.prod.example` expose `LMS_MOODLE_*` and `LMS_SYNC_*`
+- Defaults keep Moodle and scheduled sync **off** until a token is supplied
 
 ## 2. After this increment
 
 | Order | Capability |
 |---|---|
-| 1 | Wire campus Moodle secrets in deploy |
-| — | Load test / ADR hygiene as needed |
+| 1 | Load test / remaining ADR hygiene |
 | — | University-email verification (deferred) |
 | — | ILIAS `LmsClient` if needed |
+| — | Turn on Moodle in prod once campus token exists |
 
 ## 3. Done when
 
-- Caddyfile sets CSP / nosniff / frame deny for the SPA
-- Actuator health responses include API CSP + X-Frame-Options DENY in tests
+- Prod learning service receives `LMS_MOODLE_*` / `LMS_SYNC_*` from compose
+- Example env documents how to enable without committing secrets
