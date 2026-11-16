@@ -79,6 +79,29 @@ export function getStudyChat(sessionId: string) {
   return withRetry(() => learningFetch<StudyChatSession>(`/api/rag/chat/sessions/${sessionId}`))
 }
 
+export type LatestStudyChat = {
+  id: string
+  courseId: string
+  materialIds: string[]
+  updatedAt: string
+  preview: string
+}
+
+export async function latestStudyChat(courseId: string): Promise<LatestStudyChat | null> {
+  try {
+    const body = await learningFetch<LatestStudyChat>(`/api/rag/chat/courses/${courseId}/latest`)
+    if (!body || typeof body.id !== 'string' || typeof body.preview !== 'string') {
+      return null
+    }
+    return body
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return null
+    }
+    throw err
+  }
+}
+
 export function sendStudyChatMessage(sessionId: string, question: string) {
   return withRetry(() =>
     learningFetch<StudyChatSession>(`/api/rag/chat/sessions/${sessionId}/messages`, {

@@ -45,43 +45,42 @@ export function QaSources({
   }
 
   return (
-    <div className="mt-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <SectionLabel>Sources used</SectionLabel>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-            Supporting passages from the lecture PDFs. Tap a numbered chip in the answer to jump here, then open the page to verify.
-          </p>
-        </div>
-        <Link to={`/courses/${courseId}`} className="text-sm font-medium text-accent-deep hover:underline">
+    <div className="rounded-xl border border-line/80 bg-mist/40 px-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <SectionLabel>Sources used</SectionLabel>
+        <Link to={`/courses/${courseId}`} className="text-xs font-medium text-accent-deep hover:underline">
           Open course materials
         </Link>
       </div>
 
       {openError ? <p className="mt-3 text-sm text-danger">{openError}</p> : null}
 
-      <ol className="mt-5 flex flex-col gap-4">
+      <ol className="mt-3 flex flex-col gap-2">
         {citations.map((citation, index) => {
           const n = index + 1
           const isActive = active === n
-          const isOpen = expanded[n] === true
+          const isOpen = expanded[n] === true || isActive
           const long = citation.excerpt.length > 220
-          const shown = !long || isOpen ? citation.excerpt : `${citation.excerpt.slice(0, 200).trim()}…`
+          const shown = !isOpen
+            ? null
+            : !long || expanded[n] === true
+              ? citation.excerpt
+              : `${citation.excerpt.slice(0, 200).trim()}…`
           const mentions = mentionCounts[n] ?? 0
           const opening = openingId === citation.materialId
 
           return (
             <li key={`${citation.materialId}-${citation.pageNumber}-${n}`} id={`qa-source-${n}`}>
               <article
-                className={`scroll-mt-24 overflow-hidden rounded-2xl border transition ${
+                className={`scroll-mt-24 overflow-hidden rounded-xl border transition ${
                   isActive
                     ? 'border-accent bg-accent/5 shadow-[0_0_0_3px_rgb(47_158_138_/_0.18)]'
-                    : 'border-line bg-white/75 hover:border-accent/35'
+                    : 'border-line bg-white/80 hover:border-accent/35'
                 }`}
               >
                 <div className="flex items-stretch gap-0">
-                  <div className="w-1.5 shrink-0 bg-accent/70" aria-hidden />
-                  <div className="min-w-0 flex-1 px-5 py-4">
+                  <div className="w-1 shrink-0 bg-accent/70" aria-hidden />
+                  <div className="min-w-0 flex-1 px-3 py-2.5">
                     <div className="flex flex-wrap items-start gap-3">
                       <span className="inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-sm font-semibold text-accent-deep">
                         {n}
@@ -104,20 +103,20 @@ export function QaSources({
                       </div>
                     </div>
 
-                    <blockquote className="mt-3 border-l-2 border-accent/40 bg-accent/[0.04] py-2 pl-3 pr-2 text-sm leading-relaxed text-ink">
-                      “{highlightPassage(shown, focusTerms, isActive)}”
-                    </blockquote>
+                    {shown ? (
+                      <blockquote className="mt-2 border-l-2 border-accent/40 bg-accent/[0.04] py-2 pl-3 pr-2 text-sm leading-relaxed text-ink">
+                        “{highlightPassage(shown, focusTerms, isActive)}”
+                      </blockquote>
+                    ) : null}
 
-                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                      {long ? (
-                        <button
-                          type="button"
-                          className="text-sm font-medium text-accent-deep hover:underline"
-                          onClick={() => setExpanded((prev) => ({ ...prev, [n]: !isOpen }))}
-                        >
-                          {isOpen ? 'Show less' : 'Show more'}
-                        </button>
-                      ) : null}
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        className="text-sm font-medium text-accent-deep hover:underline"
+                        onClick={() => setExpanded((prev) => ({ ...prev, [n]: !isOpen }))}
+                      >
+                        {isOpen ? (long && expanded[n] === true ? 'Show less' : 'Hide passage') : 'Show passage'}
+                      </button>
                       <button
                         type="button"
                         className="text-sm font-medium text-accent-deep hover:underline disabled:opacity-60"

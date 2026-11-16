@@ -12,18 +12,18 @@ public enum ExplanationLanguage {
         if (this == DE) {
             return """
                     ## Direkte Antwort
-                    Ich konnte in den veröffentlichten Materialien nichts Passendes zu dieser Frage finden.
+                    Ich konnte das in den Vorlesungen, die du ausgewählt hast, nicht finden.
 
                     ## Erklärung
-                    Formuliere die Frage anders, oder frage nach einem Thema aus einer veröffentlichten Vorlesung.
+                    Frag nach etwas, das diese Vorlesungen erklären, oder wähle eine andere Vorlesung.
                     """;
         }
         return """
                 ## Direct answer
-                I could not find relevant published material for that question.
+                I could not find that in the lectures you picked.
 
                 ## Explanation
-                Try rephrasing, or ask about a topic that appears in a published lecture PDF for this course.
+                Ask about something those lectures explain, or pick a different lecture.
                 """;
     }
 
@@ -32,12 +32,16 @@ public enum ExplanationLanguage {
             return """
                     Write the entire answer in German, including every heading and sentence.
                     Use these headings: ## Direkte Antwort / ## Erklärung / ## Schlüsselbegriffe.
-                    The question may be in another language. Keep every fact grounded in the excerpts.""";
+                    Direkte Antwort is the result the student should be able to repeat.
+                    Erklärung walks through why that result is true. Its last line starts with **Ergebnis:** and restates the result.
+                    The question may be in another language. Keep every fact grounded in the pages.""";
         }
         return """
                 Write the entire answer in English, including every heading and sentence.
                 Use these headings: ## Direct answer / ## Explanation / ## Key terms.
-                The question may be in another language. Keep every fact grounded in the excerpts.""";
+                Direct answer is the result the student should be able to repeat.
+                Explanation walks through why that result is true. Its last line starts with **Result:** and restates the result.
+                The question may be in another language. Keep every fact grounded in the pages.""";
     }
 
     public String summaryPromptLine() {

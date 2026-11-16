@@ -78,6 +78,7 @@ public class StudyService {
     private final QuizAttemptRepository attempts;
     private final QuizAttemptItemRepository attemptItems;
     private final JdbcTemplate jdbc;
+    private final ProgressService progress;
     private final TransactionTemplate transactions;
     private final ObservationRegistry observations;
     private final int maxSharedVersions;
@@ -98,6 +99,7 @@ public class StudyService {
             QuizAttemptRepository attempts,
             QuizAttemptItemRepository attemptItems,
             JdbcTemplate jdbc,
+            ProgressService progress,
             org.springframework.transaction.PlatformTransactionManager transactionManager,
             GeminiProperties gemini,
             ObservationRegistry observations,
@@ -118,6 +120,7 @@ public class StudyService {
         this.attempts = attempts;
         this.attemptItems = attemptItems;
         this.jdbc = jdbc;
+        this.progress = progress;
         this.transactions = new TransactionTemplate(transactionManager);
         this.observations = observations;
         this.maxSharedVersions = Math.max(1, maxSharedVersions);
@@ -305,6 +308,12 @@ public class StudyService {
         if (!quiz.isActive()) {
             throw notFound();
         }
+        if (quiz.isPracticeQuiz()) {
+            if (!quiz.getUserId().equals(userId)) {
+                throw notFound();
+            }
+            return toQuizView(quiz, Delivery.RESUMED);
+        }
         List<UUID> materialIds = jdbc.query(
                 "SELECT material_id FROM quiz_materials WHERE quiz_id = ? ORDER BY material_id",
                 (rs, rowNum) -> UUID.fromString(rs.getString("material_id")),
@@ -320,6 +329,60 @@ public class StudyService {
         saveQuizProgress(new StudyProgressKey(quiz.getCourseId(), userId, materialsKey), quizId);
         recordDelivery("QUIZ", quiz.getCourseId(), userId, materialsKey, quizId, Delivery.RESUMED);
         return toQuizView(quiz, Delivery.RESUMED);
+    }
+
+    @Transactional
+    public QuizView practiceMissed(UUID courseId, UUID userId) {
+        requireEnrollment(courseId, userId);
+        ProgressSummary.Result summary = progress.view(courseId, userId);
+        List<PracticeQuestions.StoredQuestion> stored = jdbc.query(
+                """
+                SELECT q.prompt, q.options_json, q.correct_index, q.explanation
+                FROM quiz_questions q
+                JOIN quizzes z ON z.id = q.quiz_id
+                JOIN quiz_attempts a ON a.quiz_id = z.id AND a.user_id = ?
+                WHERE z.course_id = ? AND z.practice_quiz = false
+                ORDER BY z.created_at DESC, a.created_at DESC, q.sort_order ASC
+                """,
+                (rs, rowNum) -> new PracticeQuestions.StoredQuestion(
+                        rs.getString("prompt"),
+                        rs.getString("options_json"),
+                        rs.getInt("correct_index"),
+                        rs.getString("explanation")
+                ),
+                userId,
+                courseId
+        );
+        List<PracticeQuestions.StoredQuestion> picked = PracticeQuestions.pick(
+                summary.weakTopics().stream().map(ProgressSummary.WeakTopic::prompt).toList(),
+                stored
+        );
+        if (picked.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "You don’t have missed questions to practice yet. Take a quiz first, or ask about a gap in study chat."
+            );
+        }
+        UUID quizId = UUID.randomUUID();
+        QuizEntity quiz = QuizEntity.create(quizId, courseId, userId, "practice:" + quizId, Instant.now());
+        quiz.markPractice();
+        quizzes.save(quiz);
+        List<QuizQuestionEntity> copies = new ArrayList<>();
+        int order = 0;
+        for (PracticeQuestions.StoredQuestion source : picked) {
+            QuizQuestionEntity copy = QuizQuestionEntity.create(
+                    UUID.randomUUID(),
+                    quizId,
+                    source.prompt(),
+                    source.optionsJson(),
+                    source.correctIndex(),
+                    source.explanation(),
+                    order++
+            );
+            copies.add(questions.save(copy));
+        }
+        log.info("Practice quiz course={} user={} quiz={} questions={}", courseId, userId, quizId, copies.size());
+        return toQuizView(quiz, copies, Delivery.CREATED);
     }
 
     @Transactional(readOnly = true)

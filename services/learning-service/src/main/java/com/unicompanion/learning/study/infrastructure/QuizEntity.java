@@ -27,6 +27,9 @@ public class QuizEntity {
     @Column(nullable = false)
     private boolean active;
 
+    @Column(name = "practice_quiz", nullable = false)
+    private boolean practiceQuiz;
+
     @Column(name = "retired_at")
     private Instant retiredAt;
 
@@ -52,8 +55,13 @@ public class QuizEntity {
         quiz.userId = userId;
         quiz.materialsKey = materialsKey;
         quiz.active = true;
+        quiz.practiceQuiz = false;
         quiz.createdAt = createdAt;
         return quiz;
+    }
+
+    public void markPractice() {
+        this.practiceQuiz = true;
     }
 
     public UUID getId() {
@@ -78,6 +86,10 @@ public class QuizEntity {
 
     public boolean isActive() {
         return active;
+    }
+
+    public boolean isPracticeQuiz() {
+        return practiceQuiz;
     }
 
     public void retire(String reason, Instant now) {

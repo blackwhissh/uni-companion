@@ -52,6 +52,18 @@ public class StudyChatController {
         ));
     }
 
+    @GetMapping("/courses/{courseId}/latest")
+    public LatestResponse latest(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID courseId) {
+        StudyChatService.LatestChat latest = chats.latest(courseId, userId(jwt));
+        if (latest == null) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.NOT_FOUND,
+                    "No study chat yet."
+            );
+        }
+        return LatestResponse.from(latest);
+    }
+
     @GetMapping("/sessions/{sessionId}")
     public SessionResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID sessionId) {
         return SessionResponse.from(chats.get(sessionId, userId(jwt)));
@@ -140,6 +152,24 @@ public class StudyChatController {
     public record MessageRequest(
             @NotBlank @Size(max = 2000, message = "Keep your message to 2000 characters.") String question
     ) {
+    }
+
+    public record LatestResponse(
+            UUID id,
+            UUID courseId,
+            List<UUID> materialIds,
+            Instant updatedAt,
+            String preview
+    ) {
+        static LatestResponse from(StudyChatService.LatestChat latest) {
+            return new LatestResponse(
+                    latest.id(),
+                    latest.courseId(),
+                    latest.materialIds(),
+                    latest.updatedAt(),
+                    latest.preview()
+            );
+        }
     }
 
     public record SessionResponse(

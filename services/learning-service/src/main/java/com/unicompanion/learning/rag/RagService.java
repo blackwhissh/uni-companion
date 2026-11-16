@@ -7,6 +7,7 @@ import com.unicompanion.learning.course.infrastructure.EnrollmentRepository;
 import com.unicompanion.learning.config.ObservabilitySupport;
 import com.unicompanion.learning.ingestion.EmbeddingException;
 import com.unicompanion.learning.ingestion.EmbeddingModel;
+import com.unicompanion.learning.study.application.StudyActivityService;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ public class RagService {
     private final EmbeddingModel embeddings;
     private final ChunkRetrievalRepository chunks;
     private final ChatModel chat;
+    private final StudyActivityService activity;
     private final ObservationRegistry observations;
 
     public RagService(
@@ -41,6 +43,7 @@ public class RagService {
             EmbeddingModel embeddings,
             ChunkRetrievalRepository chunks,
             ChatModel chat,
+            StudyActivityService activity,
             ObservationRegistry observations
     ) {
         this.courses = courses;
@@ -48,6 +51,7 @@ public class RagService {
         this.embeddings = embeddings;
         this.chunks = chunks;
         this.chat = chat;
+        this.activity = activity;
         this.observations = observations;
     }
 
@@ -214,6 +218,7 @@ public class RagService {
             );
         }
         CitedSources.Result grounded = CitedSources.select(raw, pages);
+        activity.record(userId, courseId, List.of(materialId), StudyActivityService.SUMMARY);
         log.info(
                 "RAG summary course={} user={} material={} language={} pages={} cited={} answerChars={}",
                 courseId,

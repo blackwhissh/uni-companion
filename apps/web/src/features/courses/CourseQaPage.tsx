@@ -15,14 +15,18 @@ import {
 } from '../../shared/ui/ui.tsx'
 import { GroundedNote } from '../../shared/ui/GroundedNote.tsx'
 import { StudyMarkdown } from '../../shared/ui/StudyMarkdown.tsx'
+import type { CitationMeta } from '../../shared/ui/StudyMarkdown.tsx'
 import { getCourse } from './course-api.ts'
 import { listMaterials } from './material-api.ts'
 import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
 import { QaSources } from './QaSources.tsx'
+import { createCourseNote } from './notes-api.ts'
 import { QA_FOLLOW_UP_PROMPTS, QA_SUGGESTED_PROMPTS } from './qa-prompts.ts'
+import { noteFromAnswer, sectionLabel, splitStudyAnswer } from './study-answer-sections.ts'
 import { ExplainLanguageField } from './ExplainLanguageField.tsx'
 import type { ExplainLanguage } from './ExplainLanguageField.tsx'
 import {
+  getStudyChat,
   streamStudyChatMessage,
   startStudyChat,
 } from './rag-api.ts'
@@ -37,7 +41,7 @@ const MATERIALS_GONE =
 
 export function CourseQaPage() {
   const { courseId = '' } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { ready: authReady } = useAuth()
   const course = useQuery({
     queryKey: ['courses', courseId],
@@ -64,10 +68,40 @@ export function CourseQaPage() {
   const [pickingMaterials, setPickingMaterials] = useState(true)
   const [streamingDraft, setStreamingDraft] = useState<string | null>(null)
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null)
+  const [savedNotes, setSavedNotes] = useState<Record<string, 'saving' | 'saved' | 'error'>>({})
+  const resumeId = searchParams.get('session')
   const selectedRef = useRef(selectedMaterialIds)
   selectedRef.current = selectedMaterialIds
   const threadEndRef = useRef<HTMLDivElement | null>(null)
   const pendingStarter = useRef<string | null>(searchParams.get('question'))
+
+  useEffect(() => {
+    if (!resumeId || !courseId) {
+      return
+    }
+    let cancelled = false
+    getStudyChat(resumeId)
+      .then((next) => {
+        if (cancelled) {
+          return
+        }
+        setSession(next)
+        setSelectedMaterialIds(next.materialIds)
+        saveMaterialSelection('qa', courseId, next.materialIds)
+        setPickingMaterials(false)
+        setError(null)
+      })
+      .catch((err) => {
+        if (cancelled) {
+          return
+        }
+        setError(err instanceof ApiError ? err.message : 'Could not open that chat.')
+        setPickingMaterials(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [resumeId, courseId])
 
   useEffect(() => {
     if (!courseId) {
@@ -211,6 +245,11 @@ export function CourseQaPage() {
   }, [readyIdsKey, materials.data])
 
   function beginChat(materialIds: string[]) {
+    if (searchParams.has('session') || searchParams.has('question')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('session')
+      setSearchParams(next, { replace: true })
+    }
     setSelectedMaterialIds(materialIds)
     saveMaterialSelection('qa', courseId, materialIds)
     setPickingMaterials(false)
@@ -242,7 +281,7 @@ export function CourseQaPage() {
     submitQuestion(draft)
   }
 
-  function usePrompt(prompt: string, sendImmediately: boolean) {
+  function applyPrompt(prompt: string, sendImmediately: boolean) {
     setError(null)
     setPasteWarning(null)
     if (sendImmediately && session) {
@@ -250,6 +289,17 @@ export function CourseQaPage() {
       return
     }
     setDraft(prompt.slice(0, QUESTION_MAX))
+  }
+
+  function saveResult(messageId: string, question: string, markdown: string) {
+    const draft = noteFromAnswer(question, markdown)
+    if (!draft) {
+      return
+    }
+    setSavedNotes((current) => ({ ...current, [messageId]: 'saving' }))
+    createCourseNote(courseId, draft)
+      .then(() => setSavedNotes((current) => ({ ...current, [messageId]: 'saved' })))
+      .catch(() => setSavedNotes((current) => ({ ...current, [messageId]: 'error' })))
   }
 
   function startFreshChat() {
@@ -291,7 +341,7 @@ export function CourseQaPage() {
         <PageHeader
           eyebrow={course.data ? `${course.data.code} · ${course.data.term}` : 'Study chat'}
           title="Study chat"
-          description="Talk through topics the way you would with a tutor — ask follow-ups, request analogies, or get quizzed. Answers stay grounded in the lectures you pick."
+          description="Ask about the lectures you picked. You get the result first, then a short walkthrough you can follow."
           actions={
             enrolled && readyCount > 0 && !pickingMaterials ? (
               <div className="flex flex-wrap gap-2">
@@ -347,8 +397,8 @@ export function CourseQaPage() {
             <div className="mt-8 flex flex-col gap-4">
               <p className="text-sm text-muted">
                 Studying from {selectedMaterialIds.length}{' '}
-                {selectedMaterialIds.length === 1 ? 'lecture' : 'lectures'}. Ask anything — then keep going with
-                follow-ups.
+                {selectedMaterialIds.length === 1 ? 'lecture' : 'lectures'}. The reply starts with the result, then
+                the steps.
               </p>
 
               <Panel className="flex min-h-[28rem] flex-col overflow-hidden !p-0">
@@ -356,9 +406,10 @@ export function CourseQaPage() {
                   {!hasMessages && !busy ? (
                     <div className="flex h-full flex-col justify-center gap-4">
                       <div>
-                        <SectionLabel>Start anywhere</SectionLabel>
+                        <SectionLabel>Ask for a result</SectionLabel>
                         <p className="mt-2 text-sm leading-relaxed text-muted">
-                          Pick a starter, or type your own question about a topic, definition, or process.
+                          Pick a starter or type your own question. The reply leads with the answer, then walks
+                          through why.
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2" role="group" aria-label="Suggested starters">
@@ -367,7 +418,7 @@ export function CourseQaPage() {
                             key={prompt.id}
                             type="button"
                             disabled={busy || !session}
-                            onClick={() => usePrompt(prompt.question, true)}
+                            onClick={() => applyPrompt(prompt.question, true)}
                             className="rounded-lg border border-line bg-mist/70 px-3 py-1.5 text-left text-sm text-ink-soft transition hover:border-accent/40 hover:bg-white hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {prompt.label}
@@ -378,9 +429,29 @@ export function CourseQaPage() {
                     </div>
                   ) : null}
 
-                  {(session?.messages ?? []).map((message) => (
-                    <ChatBubble key={message.id} courseId={courseId} message={message} />
-                  ))}
+                  {(session?.messages ?? []).map((message, index, all) => {
+                    const previousQuestion = [...all.slice(0, index)].reverse().find((item) => item.role === 'USER')
+                    const canSave = message.role === 'ASSISTANT' && noteFromAnswer(previousQuestion?.content ?? '', message.content)
+                    return (
+                      <ChatBubble
+                        key={message.id}
+                        courseId={courseId}
+                        message={message}
+                        saveLabel={
+                          !canSave
+                            ? null
+                            : savedNotes[message.id] === 'saved'
+                              ? 'Saved to your notes'
+                              : savedNotes[message.id] === 'saving'
+                                ? 'Saving…'
+                                : savedNotes[message.id] === 'error'
+                                  ? 'Could not save. Try again'
+                                  : 'Save result as note'
+                        }
+                        onSave={canSave ? () => saveResult(message.id, previousQuestion?.content ?? '', message.content) : undefined}
+                      />
+                    )
+                  })}
 
                   {pendingUserMessage && !(session?.messages ?? []).some((m) => m.role === 'USER' && m.content === pendingUserMessage) ? (
                     <ChatBubble
@@ -419,14 +490,14 @@ export function CourseQaPage() {
 
                 {hasMessages && !busy ? (
                   <div className="border-t border-line/70 px-5 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Keep going</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Make the result clearer</p>
                     <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Follow-up prompts">
                       {QA_FOLLOW_UP_PROMPTS.map((prompt) => (
                         <button
                           key={prompt.id}
                           type="button"
                           disabled={!session}
-                          onClick={() => usePrompt(prompt.question, true)}
+                          onClick={() => applyPrompt(prompt.question, true)}
                           className="rounded-lg border border-line bg-white px-3 py-1.5 text-left text-sm text-ink-soft transition hover:border-accent/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {prompt.label}
@@ -438,6 +509,7 @@ export function CourseQaPage() {
 
                 <form className="border-t border-line/70 px-5 py-4" onSubmit={onSubmit}>
                   <ExplainLanguageField name="qa-language" value={language} onChange={setLanguage} matchQuestion />
+                  <p className="mt-1 text-xs text-muted">Used the next time you start a new chat.</p>
                   <label htmlFor="qa-draft" className="mt-3 block text-sm font-medium text-ink-soft">
                     Your message
                   </label>
@@ -476,7 +548,7 @@ export function CourseQaPage() {
                       }
                     }}
                     className="mt-1.5 w-full rounded-lg border border-line bg-white/80 px-3 py-2.5 text-base font-normal text-ink shadow-[inset_0_1px_0_rgb(7_52_60_/_0.03)] outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
-                    placeholder="Ask about a topic, or say “explain that simpler”…"
+                    placeholder="Ask what the result is, or say “walk through the steps”…"
                   />
                   <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                     <span className={`text-xs font-normal ${overLimit || pasteWarning ? 'text-danger' : 'text-muted'}`}>
@@ -518,14 +590,70 @@ export function CourseQaPage() {
   )
 }
 
+function StudyAnswer({ markdown, citations }: { markdown: string; citations: CitationMeta[] }) {
+  const sections = splitStudyAnswer(markdown)
+  const structured = sections.some((section) => section.kind !== 'plain')
+  if (!structured) {
+    return <StudyMarkdown markdown={markdown} citations={citations} />
+  }
+  return (
+    <div className="space-y-4">
+      {sections.map((section, index) => {
+        const label = sectionLabel(section)
+        if (!section.body && !label) {
+          return null
+        }
+        if (section.kind === 'result') {
+          return (
+            <div key={index} className="rounded-xl border border-accent/30 bg-accent/[0.07] px-4 py-3">
+              {label ? (
+                <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-deep">{label}</h2>
+              ) : null}
+              {section.body ? (
+                <div className="mt-1.5">
+                  <StudyMarkdown markdown={section.body} citations={citations} />
+                </div>
+              ) : null}
+            </div>
+          )
+        }
+        return (
+          <section key={index}>
+            {label ? (
+              <h2
+                className={
+                  section.kind === 'terms'
+                    ? 'text-xs font-semibold uppercase tracking-[0.14em] text-muted'
+                    : 'font-display text-lg font-semibold tracking-tight text-ink'
+                }
+              >
+                {label}
+              </h2>
+            ) : null}
+            {section.body ? (
+              <div className={label ? 'mt-2' : undefined}>
+                <StudyMarkdown markdown={section.body} citations={citations} />
+              </div>
+            ) : null}
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
 function ChatBubble({
   courseId,
   message,
   streaming = false,
+  saveLabel = null,
+  onSave,
 }: {
   courseId: string
   message: StudyChatMessage
   streaming?: boolean
+  saveLabel?: string | null
+  onSave?: () => void
 }) {
   const isUser = message.role === 'USER'
   if (isUser) {
@@ -545,7 +673,7 @@ function ChatBubble({
           {streaming ? 'Tutor · writing' : 'Tutor'}
         </p>
         <div className="mt-2">
-          <StudyMarkdown
+          <StudyAnswer
             markdown={message.content}
             citations={message.citations.map((citation, index) => ({
               index: index + 1,
@@ -560,6 +688,16 @@ function ChatBubble({
             No supporting passage was found in the selected lectures for this answer. Treat it as unverified until you
             open the PDF yourself.
           </p>
+        ) : null}
+        {saveLabel && onSave ? (
+          <button
+            type="button"
+            className="mt-3 text-sm font-medium text-accent-deep hover:underline disabled:opacity-60"
+            disabled={saveLabel === 'Saving…' || saveLabel === 'Saved to your notes'}
+            onClick={onSave}
+          >
+            {saveLabel}
+          </button>
         ) : null}
       </div>
       {!streaming ? <QaSources courseId={courseId} citations={message.citations} answer={message.content} /> : null}

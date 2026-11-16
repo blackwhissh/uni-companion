@@ -166,6 +166,43 @@ export function reportQuizVersion(quizId: string) {
   })
 }
 
+export function practiceMissedQuiz(courseId: string) {
+  return learningFetch<Quiz>(`/api/study/courses/${courseId}/quizzes/practice`, { method: 'POST' })
+}
+
+export function reviewFlashcard(courseId: string, cardId: string, front: string, status: 'AGAIN' | 'KNOWN') {
+  return learningFetch<{ status: string }>(`/api/study/courses/${courseId}/flashcards/${cardId}/review`, {
+    method: 'POST',
+    body: JSON.stringify({ front, status }),
+  })
+}
+
+export type MaterialActivity = {
+  materialId: string
+  kinds: string[]
+}
+
+export async function lectureActivity(courseId: string): Promise<MaterialActivity[]> {
+  try {
+    const body = await learningFetch<unknown>(`/api/study/courses/${courseId}/activity`)
+    if (!Array.isArray(body)) {
+      return []
+    }
+    return body.filter(
+      (item): item is MaterialActivity =>
+        !!item &&
+        typeof item === 'object' &&
+        typeof (item as MaterialActivity).materialId === 'string' &&
+        Array.isArray((item as MaterialActivity).kinds),
+    )
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return []
+    }
+    throw err
+  }
+}
+
 export function getCourseProgress(courseId: string) {
   return learningFetch<CourseProgress>(`/api/study/courses/${courseId}/progress`)
 }

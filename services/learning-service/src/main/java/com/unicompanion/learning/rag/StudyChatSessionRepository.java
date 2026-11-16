@@ -9,6 +9,8 @@ public interface StudyChatSessionRepository extends JpaRepository<StudyChatSessi
 
     Optional<StudyChatSessionEntity> findByIdAndUserId(UUID id, UUID userId);
 
+    Optional<StudyChatSessionEntity> findFirstByCourseIdAndUserIdOrderByUpdatedAtDesc(UUID courseId, UUID userId);
+
     void deleteByCourseIdAndUserId(UUID courseId, UUID userId);
 
     void deleteByUserId(UUID userId);

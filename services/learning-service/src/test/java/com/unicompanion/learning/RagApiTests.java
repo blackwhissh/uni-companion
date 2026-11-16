@@ -247,8 +247,10 @@ class RagApiTests {
                                 """.formatted(courseId, materialId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.answer", containsString("Direkte Antwort")))
+                .andExpect(jsonPath("$.answer", containsString("Ergebnis:")))
                 .andExpect(jsonPath("$.answer", containsString("Consensus algorithms keep replicas consistent.")))
                 .andExpect(jsonPath("$.answer", not(containsString("## Direct answer"))))
+                .andExpect(jsonPath("$.answer", not(containsString("Aus den veröffentlichten Materialien"))))
                 .andExpect(jsonPath("$.citations[0].excerpt", containsString("Consensus")));
 
         mockMvc.perform(post("/api/rag/summary")
@@ -297,8 +299,10 @@ class RagApiTests {
                                 """.formatted(courseId, materialId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.answer", containsString("## Direct answer")))
+                .andExpect(jsonPath("$.answer", containsString("Result:")))
                 .andExpect(jsonPath("$.answer", containsString("Consensus algorithms keep replicas consistent.")))
-                .andExpect(jsonPath("$.answer", not(containsString("Direkte Antwort"))));
+                .andExpect(jsonPath("$.answer", not(containsString("Direkte Antwort"))))
+                .andExpect(jsonPath("$.answer", not(containsString("From your course materials"))));
 
         mockMvc.perform(post("/api/rag/query")
                         .header("Authorization", STUDENT)
@@ -338,6 +342,8 @@ class RagApiTests {
                 .andExpect(jsonPath("$.messages[0].role").value("USER"))
                 .andExpect(jsonPath("$.messages[1].role").value("ASSISTANT"))
                 .andExpect(jsonPath("$.messages[1].content", containsString("Consensus")))
+                .andExpect(jsonPath("$.messages[1].content", containsString("Result:")))
+                .andExpect(jsonPath("$.messages[1].content", not(containsString("From your course materials"))))
                 .andExpect(jsonPath("$.messages[1].citations", hasSize(1)));
 
         mockMvc.perform(post("/api/rag/chat/sessions/" + sessionId + "/messages")
@@ -346,7 +352,8 @@ class RagApiTests {
                         .content("{\"question\":\"Explain that simpler.\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.messages", hasSize(4)))
-                .andExpect(jsonPath("$.messages[3].content", containsString("Follow-up")));
+                .andExpect(jsonPath("$.messages[3].content", containsString("Follow-up")))
+                .andExpect(jsonPath("$.messages[3].content", containsString("Result:")));
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/rag/chat/sessions/" + sessionId)
                         .header("Authorization", STUDENT))

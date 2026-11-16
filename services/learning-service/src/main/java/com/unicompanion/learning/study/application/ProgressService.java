@@ -4,6 +4,8 @@ import com.unicompanion.learning.course.infrastructure.CourseEntity;
 import com.unicompanion.learning.course.infrastructure.CourseRepository;
 import com.unicompanion.learning.course.infrastructure.EnrollmentKey;
 import com.unicompanion.learning.course.infrastructure.EnrollmentRepository;
+import com.unicompanion.learning.study.infrastructure.FlashcardReviewEntity;
+import com.unicompanion.learning.study.infrastructure.FlashcardReviewRepository;
 import com.unicompanion.learning.study.infrastructure.QuizAttemptEntity;
 import com.unicompanion.learning.study.infrastructure.QuizAttemptItemEntity;
 import com.unicompanion.learning.study.infrastructure.QuizAttemptItemRepository;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -30,29 +33,31 @@ public class ProgressService {
     private final EnrollmentRepository enrollments;
     private final QuizAttemptRepository attempts;
     private final QuizAttemptItemRepository items;
+    private final FlashcardReviewRepository cardReviews;
 
     public ProgressService(
             CourseRepository courses,
             EnrollmentRepository enrollments,
             QuizAttemptRepository attempts,
-            QuizAttemptItemRepository items
+            QuizAttemptItemRepository items,
+            FlashcardReviewRepository cardReviews
     ) {
         this.courses = courses;
         this.enrollments = enrollments;
         this.attempts = attempts;
         this.items = items;
+        this.cardReviews = cardReviews;
     }
 
     @Transactional(readOnly = true)
     public ProgressSummary.Result view(UUID courseId, UUID userId) {
         requireEnrollment(courseId, userId);
         List<QuizAttemptEntity> stored = attempts.findForUserInCourse(userId, courseId);
-        if (stored.isEmpty()) {
-            return ProgressSummary.summarize(List.of());
-        }
         List<UUID> attemptIds = stored.stream().map(QuizAttemptEntity::getId).toList();
-        Map<UUID, List<QuizAttemptItemEntity>> byAttempt = items.findByAttemptIdIn(attemptIds).stream()
-                .collect(Collectors.groupingBy(QuizAttemptItemEntity::getAttemptId));
+        Map<UUID, List<QuizAttemptItemEntity>> byAttempt = attemptIds.isEmpty()
+                ? Map.of()
+                : items.findByAttemptIdIn(attemptIds).stream()
+                        .collect(Collectors.groupingBy(QuizAttemptItemEntity::getAttemptId));
         List<ProgressSummary.Attempt> records = new ArrayList<>();
         for (QuizAttemptEntity attempt : stored) {
             List<ProgressSummary.Item> attemptItems = byAttempt.getOrDefault(attempt.getId(), List.of()).stream()
@@ -66,7 +71,26 @@ public class ProgressService {
                     attemptItems
             ));
         }
-        return ProgressSummary.summarize(records);
+        ProgressSummary.Result quiz = ProgressSummary.summarize(records);
+        List<FlashcardReviewEntity> again = cardReviews.findByCourseIdAndUserIdAndStatus(
+                courseId,
+                userId,
+                FlashcardReviewEntity.AGAIN
+        );
+        Instant latestMark = again.stream()
+                .map(FlashcardReviewEntity::getUpdatedAt)
+                .max(java.util.Comparator.naturalOrder())
+                .orElse(null);
+        List<String> fronts = again.stream().map(FlashcardReviewEntity::getFront).toList();
+        return new ProgressSummary.Result(
+                quiz.attemptCount(),
+                quiz.latestScore(),
+                quiz.latestTotal(),
+                quiz.bestScore(),
+                quiz.bestTotal(),
+                quiz.attempts(),
+                CardGaps.merge(quiz.weakTopics(), fronts, latestMark)
+        );
     }
 
     private void requireEnrollment(UUID courseId, UUID userId) {

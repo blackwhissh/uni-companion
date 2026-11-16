@@ -19,7 +19,7 @@ import { clearStudyGeneration, loadStudyGeneration, saveStudyGeneration } from '
 import { loadMaterialSelection, saveMaterialSelection } from './material-selection-storage.ts'
 import { StudyMaterialPicker } from './StudyMaterialPicker.tsx'
 import { StudyVersionControls } from './StudyVersionControls.tsx'
-import { generateFlashcards, reportFlashcardVersion, selectFlashcardVersion } from './study-api.ts'
+import { generateFlashcards, reportFlashcardVersion, reviewFlashcard, selectFlashcardVersion } from './study-api.ts'
 import type { FlashcardDeck } from './study-api.ts'
 import { studyActionError, studyWorkingCopy } from './study-ui.ts'
 
@@ -46,6 +46,7 @@ export function CourseFlashcardsPage() {
   )
   const [index, setIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
+  const [marks, setMarks] = useState<Record<string, 'AGAIN' | 'KNOWN'>>({})
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(() =>
     pendingAtMount.current ? 'Still putting your deck together…' : null,
@@ -54,6 +55,16 @@ export function CourseFlashcardsPage() {
   const [blockingForResume, setBlockingForResume] = useState(() => !!pendingAtMount.current)
   const [generateForce, setGenerateForce] = useState(() => pendingAtMount.current?.force === true)
   const resumedGeneration = useRef(false)
+
+  const review = useMutation({
+    mutationFn: ({ cardId, front, status }: { cardId: string; front: string; status: 'AGAIN' | 'KNOWN' }) =>
+      reviewFlashcard(courseId, cardId, front, status),
+    onSuccess: (_result, variables) => {
+      setMarks((current) => ({ ...current, [variables.cardId]: variables.status }))
+      setError(null)
+    },
+    onError: (err) => setError(studyActionError(err, 'Could not save that card.')),
+  })
 
   const generate = useMutation({
     mutationFn: ({ materialIds, force }: { materialIds: string[]; force: boolean }) => {
@@ -350,6 +361,25 @@ export function CourseFlashcardsPage() {
                 <Button type="button" variant="secondary" onClick={() => setRevealed((value) => !value)}>
                   {revealed ? 'Show prompt' : 'Show answer'}
                 </Button>
+                {revealed ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={review.isPending}
+                      onClick={() => review.mutate({ cardId: card.id, front: card.front, status: 'AGAIN' })}
+                    >
+                      {marks[card.id] === 'AGAIN' ? 'Marked to practice' : 'Again'}
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={review.isPending}
+                      onClick={() => review.mutate({ cardId: card.id, front: card.front, status: 'KNOWN' })}
+                    >
+                      {marks[card.id] === 'KNOWN' ? 'Remembered' : 'Got it'}
+                    </Button>
+                  </>
+                ) : null}
                 <Button type="button" variant="ghost" disabled={index === 0} onClick={() => go(index - 1)}>
                   Previous
                 </Button>

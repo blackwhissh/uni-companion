@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setAccessToken } from '../../shared/api/access-token.ts'
 import { AuthProvider } from '../auth/AuthProvider.tsx'
@@ -35,6 +35,7 @@ function renderAt(ui: ReactNode) {
         <AuthProvider initialUser={student} initialReady>
           <Routes>
             <Route path="/courses/:courseId/progress" element={ui} />
+            <Route path="/courses/:courseId/quiz" element={<OpenedQuiz />} />
           </Routes>
         </AuthProvider>
       </MemoryRouter>
@@ -116,7 +117,39 @@ describe('course progress page', () => {
     )
     expect(screen.getByRole('link', { name: 'Open quiz' })).toHaveAttribute('href', '/courses/course-1/quiz')
   })
+
+  it('starts a practice quiz from the missed questions', async () => {
+    setAccessToken('student-token')
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && String(url).includes('/quizzes/practice')) {
+        return json({ id: 'quiz-9' })
+      }
+      if (String(url).endsWith('/progress')) {
+        return json({
+          attemptCount: 1,
+          latestScore: 0,
+          latestTotal: 1,
+          bestScore: 0,
+          bestTotal: 1,
+          attempts: [{ id: 'attempt-1', score: 0, total: 1, createdAt: '2026-03-02T11:00:00Z' }],
+          weakTopics: [{ prompt: 'What is Raft?', missCount: 1, lastMissedAt: '2026-03-02T11:00:00Z' }],
+        })
+      }
+      return json(course)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAt(<CourseProgressPage />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Practice these questions' }))
+    expect(await screen.findByText('Opened quiz quiz-9')).toBeInTheDocument()
+  })
 })
+
+function OpenedQuiz() {
+  const [params] = useSearchParams()
+  return <p>Opened quiz {params.get('quiz')}</p>
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
