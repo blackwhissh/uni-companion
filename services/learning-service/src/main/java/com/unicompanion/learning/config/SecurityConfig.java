@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -20,13 +21,26 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    AiRateLimitFilter aiRateLimitFilter(AiRateLimitProperties properties) {
+        return new AiRateLimitFilter(properties);
+    }
+
+    @Bean
+    SecurityFilterChain securityFilterChain(HttpSecurity http, AiRateLimitFilter aiRateLimitFilter) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**", "/v3/api-docs").permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/actuator/health",
+                                "/actuator/health/**",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/courses").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/courses/*/materials").hasAnyRole("COURSE_ADMIN", "ADMIN")
@@ -37,7 +51,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/materials/*").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/courses/*").hasAnyRole("COURSE_ADMIN", "ADMIN")
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
+                .addFilterAfter(aiRateLimitFilter, BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 

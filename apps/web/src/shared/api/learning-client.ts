@@ -32,11 +32,51 @@ export async function learningFetch<T>(path: string, init: RequestInit = {}, all
   return response.json() as Promise<T>
 }
 
-export async function learningUpload<T>(path: string, body: FormData): Promise<T> {
+/** Opens a streaming response (SSE) with the same auth/refresh rules as {@link learningFetch}. */
+export async function learningFetchStream(
+  path: string,
+  init: RequestInit = {},
+  allowRefresh = true,
+): Promise<Response> {
+  const headers = new Headers(init.headers)
+  if (init.body) {
+    headers.set('Content-Type', 'application/json')
+  }
+  headers.set('Accept', 'text/event-stream')
+  const token = getAccessToken()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+  const response = await fetch(`${learningApiUrl}${path}`, {
+    ...init,
+    headers,
+    credentials: 'include',
+  })
+  if (response.status === 401 && allowRefresh) {
+    const refreshed = await tryRefreshAccessToken()
+    if (refreshed) {
+      return learningFetchStream(path, init, false)
+    }
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new ApiError(body?.code ?? 'REQUEST_FAILED', body?.message ?? 'Request failed', response.status, body?.details ?? null)
+  }
+  return response
+}
+
+export async function learningUpload<T>(
+  path: string,
+  body: FormData,
+  init: { idempotencyKey?: string } = {},
+): Promise<T> {
   const headers = new Headers()
   const token = getAccessToken()
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
+  }
+  if (init.idempotencyKey) {
+    headers.set('Idempotency-Key', init.idempotencyKey)
   }
   const response = await fetch(`${learningApiUrl}${path}`, {
     method: 'POST',

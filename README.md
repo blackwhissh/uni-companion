@@ -99,9 +99,10 @@ Copy [`.env.example`](.env.example) when you need to override defaults. Demo log
 ```text
 mvn test
 cd apps/web && npm test
+bash scripts/e2e-smoke.sh   # Playwright: Postgres + services + browser smoke
 ```
 
-`mvn test` starts Postgres with Testcontainers, so Docker must be running.
+`mvn test` starts Postgres with Testcontainers, so Docker must be running. E2E smoke also needs Docker Compose v2 (`docker compose`).
 
 ## Production (Google Cloud Ubuntu + GitHub Actions)
 

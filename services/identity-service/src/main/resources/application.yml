@@ -22,6 +22,12 @@ unicompanion:
   cors-allowed-origins:
     - http://localhost:5173
 
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
 server:
   port: 8081
 
@@ -31,7 +37,7 @@ logging:
     com.unicompanion: DEBUG
     org.springframework.security: INFO
   pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%15.15t] %-40.40logger{39} [cid=%X{correlationId:-}] : %m%n%wEx"
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%15.15t] %-40.40logger{39} [cid=%X{correlationId:-} trace=%X{traceId:-}] : %m%n%wEx"
 
 management:
   endpoints:
@@ -42,3 +48,30 @@ management:
     health:
       probes:
         enabled: true
+      group:
+        # Process alive — do not require DB (orchestrators must not kill pods during DB blips).
+        liveness:
+          include: livenessState
+        # Safe to receive traffic — DB must be reachable.
+        readiness:
+          include: readinessState,db
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACES_SAMPLER_ARG:1.0}
+    export:
+      otlp:
+        enabled: ${OTEL_EXPORT_ENABLED:false}
+  otlp:
+    metrics:
+      export:
+        enabled: ${OTEL_EXPORT_ENABLED:false}
+        url: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
+    tracing:
+      export:
+        enabled: ${OTEL_EXPORT_ENABLED:false}
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}

@@ -54,7 +54,7 @@ class PdfTextExtractionTest {
         when(reader.read(any())).thenReturn(List.of(new PdfTextReader.PageText(1, "Raft elects a leader.")));
         doThrow(EmbeddingException.quota(tooManyRequests())).when(embeddings).embedAll(any());
 
-        new PdfTextExtraction(materials, chunks, storage, reader, embeddings).extract(materialId);
+        extraction().extract(materialId);
 
         assertThat(material.getProcessingStatus().name()).isEqualTo("FAILED");
         assertThat(material.getFailureReason()).contains("quota");
@@ -82,7 +82,7 @@ class PdfTextExtractionTest {
         ));
         when(embeddings.embedAll(List.of("page one", "page two"))).thenReturn(List.of(vector, vector));
 
-        new PdfTextExtraction(materials, chunks, storage, reader, embeddings).extract(materialId);
+        extraction().extract(materialId);
 
         assertThat(material.getProcessingStatus().name()).isEqualTo("READY");
         verify(embeddings).embedAll(List.of("page one", "page two"));
@@ -94,6 +94,19 @@ class PdfTextExtractionTest {
         assertThat(PdfTextExtraction.failureReason(tooManyRequests())).contains("quota");
         assertThat(PdfTextExtraction.failureReason(new IllegalStateException("corrupt")))
                 .isEqualTo("The PDF could not be read.");
+    }
+
+    private PdfTextExtraction extraction() {
+        return new PdfTextExtraction(
+                materials,
+                chunks,
+                storage,
+                reader,
+                embeddings,
+                new com.unicompanion.learning.config.IngestProperties(false),
+                io.micrometer.observation.ObservationRegistry.NOOP,
+                null
+        );
     }
 
     private static HttpClientErrorException tooManyRequests() {

@@ -23,7 +23,7 @@ import { QA_FOLLOW_UP_PROMPTS, QA_SUGGESTED_PROMPTS } from './qa-prompts.ts'
 import { ExplainLanguageField } from './ExplainLanguageField.tsx'
 import type { ExplainLanguage } from './ExplainLanguageField.tsx'
 import {
-  sendStudyChatMessage,
+  streamStudyChatMessage,
   startStudyChat,
 } from './rag-api.ts'
 import type { StudyChatMessage, StudyChatSession } from './rag-api.ts'
@@ -62,6 +62,8 @@ export function CourseQaPage() {
     courseId ? loadMaterialSelection('qa', courseId) : [],
   )
   const [pickingMaterials, setPickingMaterials] = useState(true)
+  const [streamingDraft, setStreamingDraft] = useState<string | null>(null)
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null)
   const selectedRef = useRef(selectedMaterialIds)
   selectedRef.current = selectedMaterialIds
   const threadEndRef = useRef<HTMLDivElement | null>(null)
@@ -82,19 +84,35 @@ export function CourseQaPage() {
     if (node && typeof node.scrollIntoView === 'function') {
       node.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }
-  }, [session?.messages.length, session?.id])
+  }, [session?.messages.length, session?.id, streamingDraft, pendingUserMessage])
 
   const ask = useMutation({
-    mutationFn: ({ sessionId, question }: { sessionId: string; question: string }) =>
-      sendStudyChatMessage(sessionId, question),
+    mutationFn: ({ sessionId, question }: { sessionId: string; question: string }) => {
+      setPendingUserMessage(question)
+      setStreamingDraft('')
+      return streamStudyChatMessage(sessionId, question, {
+        onToken: (delta) => {
+          setStreamingDraft((prev) => (prev ?? '') + delta)
+        },
+        onDone: (next) => {
+          setSession(next)
+          setStreamingDraft(null)
+          setPendingUserMessage(null)
+        },
+      })
+    },
     onSuccess: (next) => {
       setError(null)
       setMaterialNotice(null)
       setSession(next)
+      setStreamingDraft(null)
+      setPendingUserMessage(null)
       setDraft('')
       setPasteWarning(null)
     },
     onError: async (err) => {
+      setStreamingDraft(null)
+      setPendingUserMessage(null)
       const message = studyActionError(err, 'Could not answer that.')
       if (message.includes(MATERIALS_GONE) || (err instanceof ApiError && err.message.includes(MATERIALS_GONE))) {
         const refreshed = await materials.refetch()
@@ -256,7 +274,8 @@ export function CourseQaPage() {
     draft.trim().length > 0 &&
     !overLimit &&
     !pasteWarning
-  const hasMessages = (session?.messages.length ?? 0) > 0
+  const hasMessages = (session?.messages.length ?? 0) > 0 || !!pendingUserMessage
+  const showStreamingBubble = ask.isPending && streamingDraft !== null
 
   return (
     <Page>
@@ -363,10 +382,37 @@ export function CourseQaPage() {
                     <ChatBubble key={message.id} courseId={courseId} message={message} />
                   ))}
 
-                  {busy ? (
-                    <div className="animate-pulse-soft rounded-2xl border border-line/70 bg-mist/50 px-4 py-3 text-sm text-muted">
-                      Looking through the lectures…
-                    </div>
+                  {pendingUserMessage && !(session?.messages ?? []).some((m) => m.role === 'USER' && m.content === pendingUserMessage) ? (
+                    <ChatBubble
+                      courseId={courseId}
+                      message={{
+                        id: 'pending-user',
+                        role: 'USER',
+                        content: pendingUserMessage,
+                        citations: [],
+                        createdAt: new Date().toISOString(),
+                      }}
+                    />
+                  ) : null}
+
+                  {showStreamingBubble ? (
+                    streamingDraft ? (
+                      <ChatBubble
+                        courseId={courseId}
+                        message={{
+                          id: 'streaming-assistant',
+                          role: 'ASSISTANT',
+                          content: streamingDraft,
+                          citations: [],
+                          createdAt: new Date().toISOString(),
+                        }}
+                        streaming
+                      />
+                    ) : (
+                      <div className="animate-pulse-soft rounded-2xl border border-line/70 bg-mist/50 px-4 py-3 text-sm text-muted">
+                        Looking through the lectures…
+                      </div>
+                    )
                   ) : null}
                   <div ref={threadEndRef} />
                 </div>
@@ -472,7 +518,15 @@ export function CourseQaPage() {
   )
 }
 
-function ChatBubble({ courseId, message }: { courseId: string; message: StudyChatMessage }) {
+function ChatBubble({
+  courseId,
+  message,
+  streaming = false,
+}: {
+  courseId: string
+  message: StudyChatMessage
+  streaming?: boolean
+}) {
   const isUser = message.role === 'USER'
   if (isUser) {
     return (
@@ -483,11 +537,13 @@ function ChatBubble({ courseId, message }: { courseId: string; message: StudyCha
     )
   }
 
-  const insufficient = message.citations.length === 0
+  const insufficient = !streaming && message.citations.length === 0
   return (
     <div className="max-w-[95%] space-y-3">
       <div className={`rounded-2xl border px-4 py-3 ${insufficient ? 'border-warn/30 bg-amber-50/50' : 'border-line/80 bg-white'}`}>
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Tutor</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+          {streaming ? 'Tutor · writing' : 'Tutor'}
+        </p>
         <div className="mt-2">
           <StudyMarkdown
             markdown={message.content}
@@ -506,7 +562,7 @@ function ChatBubble({ courseId, message }: { courseId: string; message: StudyCha
           </p>
         ) : null}
       </div>
-      <QaSources courseId={courseId} citations={message.citations} answer={message.content} />
+      {!streaming ? <QaSources courseId={courseId} citations={message.citations} answer={message.content} /> : null}
     </div>
   )
 }

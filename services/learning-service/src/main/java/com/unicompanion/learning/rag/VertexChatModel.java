@@ -7,14 +7,21 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -31,10 +38,12 @@ public class VertexChatModel implements ChatModel {
     private final GeminiProperties properties;
     private final RestClient http;
     private final GoogleCredentials credentials;
+    private final JsonMapper json;
 
-    public VertexChatModel(GeminiProperties properties, RestClient.Builder restClientBuilder) {
+    public VertexChatModel(GeminiProperties properties, RestClient.Builder restClientBuilder, JsonMapper json) {
         this.properties = properties;
         this.http = restClientBuilder.build();
+        this.json = json;
         try {
             this.credentials = GoogleCredentials.getApplicationDefault().createScoped(CLOUD_PLATFORM_SCOPE);
             log.info(
@@ -80,6 +89,28 @@ public class VertexChatModel implements ChatModel {
         } catch (RuntimeException ex) {
             log.error("Vertex chat failed questionChars={} chunks={}", question.length(), chunks.size(), ex);
             throw ex;
+        }
+    }
+
+    @Override
+    public void streamAnswerWithHistory(
+            String question,
+            List<RetrievedChunk> chunks,
+            ExplanationLanguage language,
+            List<Turn> history,
+            Consumer<String> onDelta
+    ) {
+        ExplanationLanguage resolved = language == null ? ExplanationLanguage.EN : language;
+        if (chunks.isEmpty()) {
+            ChatModel.emitChunks(resolved.noMaterialAnswer(), onDelta);
+            return;
+        }
+        String prompt = AnswerPrompt.build(question, chunks, resolved, history == null ? List.of() : history);
+        try {
+            streamGenerateContent(prompt, 0.25, 2048, onDelta);
+        } catch (RuntimeException ex) {
+            log.warn("Vertex stream failed; falling back to buffered generateContent", ex);
+            ChatModel.emitChunks(generateContent(prompt, 0.25, 2048), onDelta);
         }
     }
 
@@ -240,24 +271,12 @@ public class VertexChatModel implements ChatModel {
         return generateContent(prompt, temperature, maxOutputTokens, true);
     }
 
-    private String generateContent(String prompt, double temperature, int maxOutputTokens, boolean json) {
-        Map<String, Object> generationConfig = new HashMap<>();
-        generationConfig.put("temperature", temperature);
-        generationConfig.put("maxOutputTokens", maxOutputTokens);
-        if (json) {
-            generationConfig.put("responseMimeType", "application/json");
-        }
+    private String generateContent(String prompt, double temperature, int maxOutputTokens, boolean asJson) {
         GenerateResponse body = http.post()
                 .uri(generateUrl())
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Authorization", "Bearer " + accessToken())
-                .body(Map.of(
-                        "contents", List.of(Map.of(
-                                "role", "user",
-                                "parts", List.of(Map.of("text", prompt))
-                        )),
-                        "generationConfig", generationConfig
-                ))
+                .body(requestBody(prompt, temperature, maxOutputTokens, asJson))
                 .retrieve()
                 .body(GenerateResponse.class);
         String text = extractText(body);
@@ -265,6 +284,91 @@ public class VertexChatModel implements ChatModel {
             throw new IllegalStateException("Vertex chat returned an empty response.");
         }
         return text;
+    }
+
+    private void streamGenerateContent(
+            String prompt,
+            double temperature,
+            int maxOutputTokens,
+            Consumer<String> onDelta
+    ) {
+        InputStream stream = http.post()
+                .uri(streamUrl())
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.TEXT_EVENT_STREAM)
+                .header("Authorization", "Bearer " + accessToken())
+                .body(requestBody(prompt, temperature, maxOutputTokens, false))
+                .retrieve()
+                .body(InputStream.class);
+        if (stream == null) {
+            throw new IllegalStateException("Vertex stream returned an empty body.");
+        }
+        StringBuilder assembled = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith(":") || !trimmed.startsWith("data:")) {
+                    continue;
+                }
+                String payload = trimmed.substring("data:".length()).trim();
+                if (payload.isEmpty() || "[DONE]".equals(payload)) {
+                    continue;
+                }
+                String delta = extractStreamDelta(payload);
+                if (!delta.isEmpty()) {
+                    assembled.append(delta);
+                    onDelta.accept(delta);
+                }
+            }
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+        if (assembled.isEmpty()) {
+            throw new IllegalStateException("Vertex stream returned an empty response.");
+        }
+    }
+
+    private String extractStreamDelta(String payload) {
+        try {
+            JsonNode root = json.readTree(payload);
+            JsonNode parts = root.path("candidates").path(0).path("content").path("parts");
+            if (!parts.isArray()) {
+                return "";
+            }
+            StringBuilder text = new StringBuilder();
+            for (JsonNode part : parts) {
+                JsonNode value = part.get("text");
+                if (value != null && value.isTextual()) {
+                    text.append(value.asText());
+                }
+            }
+            return text.toString();
+        } catch (Exception ex) {
+            log.debug("Skipping unreadable Vertex stream chunk", ex);
+            return "";
+        }
+    }
+
+    private static Map<String, Object> requestBody(
+            String prompt,
+            double temperature,
+            int maxOutputTokens,
+            boolean asJson
+    ) {
+        Map<String, Object> generationConfig = new HashMap<>();
+        generationConfig.put("temperature", temperature);
+        generationConfig.put("maxOutputTokens", maxOutputTokens);
+        if (asJson) {
+            generationConfig.put("responseMimeType", "application/json");
+        }
+        return Map.of(
+                "contents", List.of(Map.of(
+                        "role", "user",
+                        "parts", List.of(Map.of("text", prompt))
+                )),
+                "generationConfig", generationConfig
+        );
     }
 
     private static String extractText(GenerateResponse body) {
@@ -283,6 +387,14 @@ public class VertexChatModel implements ChatModel {
     }
 
     private String generateUrl() {
+        return modelUrl(":generateContent");
+    }
+
+    private String streamUrl() {
+        return modelUrl(":streamGenerateContent") + "?alt=sse";
+    }
+
+    private String modelUrl(String method) {
         String location = properties.location() == null || properties.location().isBlank() ? "global" : properties.location();
         String host = "global".equalsIgnoreCase(location)
                 ? "https://aiplatform.googleapis.com"
@@ -290,7 +402,7 @@ public class VertexChatModel implements ChatModel {
         return host + "/v1/projects/" + properties.projectId()
                 + "/locations/" + location
                 + "/publishers/google/models/" + properties.chatModel()
-                + ":generateContent";
+                + method;
     }
 
     private String accessToken() {

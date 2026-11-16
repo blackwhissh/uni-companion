@@ -1,10 +1,12 @@
 package com.unicompanion.learning.config;
 
+import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,13 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     public static final String HEADER = "X-Correlation-Id";
     public static final String ATTRIBUTE = "correlationId";
     public static final String MDC_KEY = "correlationId";
+    public static final String TRACE_MDC_KEY = "traceId";
+
+    private final ObjectProvider<Tracer> tracer;
+
+    public CorrelationIdFilter(ObjectProvider<Tracer> tracer) {
+        this.tracer = tracer;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -28,11 +37,25 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         request.setAttribute(ATTRIBUTE, id);
         response.setHeader(HEADER, id);
         MDC.put(MDC_KEY, id);
+        String traceId = currentTraceId();
+        if (traceId != null) {
+            MDC.put(TRACE_MDC_KEY, traceId);
+        }
         try {
             filterChain.doFilter(request, response);
         } finally {
             MDC.remove(MDC_KEY);
+            MDC.remove(TRACE_MDC_KEY);
         }
+    }
+
+    private String currentTraceId() {
+        Tracer current = tracer.getIfAvailable();
+        if (current == null || current.currentSpan() == null || current.currentSpan().context() == null) {
+            return null;
+        }
+        String traceId = current.currentSpan().context().traceId();
+        return traceId == null || traceId.isBlank() ? null : traceId;
     }
 
     public static String correlationId(HttpServletRequest request) {

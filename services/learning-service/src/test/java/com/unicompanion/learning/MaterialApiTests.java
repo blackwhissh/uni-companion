@@ -93,7 +93,8 @@ class MaterialApiTests {
                 .andExpect(jsonPath("$.fileName").value("lecture.pdf"))
                 .andExpect(jsonPath("$.courseId").value(courseId))
                 .andExpect(jsonPath("$.visibility").value("UNPUBLISHED"))
-                .andExpect(jsonPath("$.processingStatus").value("UPLOADED"));
+                // Sync test profile finishes indexing before the response returns.
+                .andExpect(jsonPath("$.processingStatus").value("READY"));
     }
 
     @Test

@@ -4,13 +4,18 @@ import com.unicompanion.learning.course.infrastructure.CourseEntity;
 import com.unicompanion.learning.course.infrastructure.CourseRepository;
 import com.unicompanion.learning.course.infrastructure.EnrollmentKey;
 import com.unicompanion.learning.course.infrastructure.EnrollmentRepository;
+import com.unicompanion.learning.config.ObservabilitySupport;
 import com.unicompanion.learning.ingestion.EmbeddingException;
 import com.unicompanion.learning.ingestion.EmbeddingModel;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -18,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 @Service
 public class StudyChatService {
@@ -34,6 +40,8 @@ public class StudyChatService {
     private final EmbeddingModel embeddings;
     private final ChunkRetrievalRepository chunks;
     private final ChatModel chat;
+    private final ObservationRegistry observations;
+    private final TransactionTemplate transactions;
 
     public StudyChatService(
             CourseRepository courses,
@@ -42,7 +50,9 @@ public class StudyChatService {
             StudyChatMessageRepository messages,
             EmbeddingModel embeddings,
             ChunkRetrievalRepository chunks,
-            ChatModel chat
+            ChatModel chat,
+            ObservationRegistry observations,
+            PlatformTransactionManager transactionManager
     ) {
         this.courses = courses;
         this.enrollments = enrollments;
@@ -51,6 +61,8 @@ public class StudyChatService {
         this.embeddings = embeddings;
         this.chunks = chunks;
         this.chat = chat;
+        this.observations = observations;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -82,6 +94,95 @@ public class StudyChatService {
 
     @Transactional
     public SessionView ask(UUID sessionId, UUID userId, String question) {
+        Observation observation = ObservabilitySupport.start(observations, "learning.rag.chat.message");
+        try {
+            StringBuilder answer = new StringBuilder();
+            return askInternal(sessionId, userId, question, observation, answer::append);
+        } catch (RuntimeException ex) {
+            observation.error(ex);
+            throw ex;
+        } finally {
+            observation.stop();
+        }
+    }
+
+    /**
+     * Stream an assistant reply over SSE-friendly callbacks. Persistence uses short transactions
+     * so the stream is not held inside one long DB transaction.
+     */
+    public void askStreaming(UUID sessionId, UUID userId, String question, StreamListener listener) {
+        Observation observation = ObservabilitySupport.start(observations, "learning.rag.chat.message.stream");
+        try {
+            StringBuilder answer = new StringBuilder();
+            SessionView view = askInternal(sessionId, userId, question, observation, delta -> {
+                answer.append(delta);
+                listener.onToken(delta);
+            });
+            listener.onDone(view);
+        } catch (ResponseStatusException ex) {
+            observation.error(ex);
+            listener.onError(ex.getReason() == null ? "Could not answer that." : ex.getReason(), ex.getStatusCode().value());
+        } catch (RuntimeException ex) {
+            observation.error(ex);
+            listener.onError("Could not draft an answer from the published materials. Try again shortly.", 502);
+        } finally {
+            observation.stop();
+        }
+    }
+
+    private SessionView askInternal(
+            UUID sessionId,
+            UUID userId,
+            String question,
+            Observation observation,
+            Consumer<String> onDelta
+    ) {
+        PreparedAsk prepared = transactions.execute(status -> prepareAsk(sessionId, userId, question, observation));
+        if (prepared == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not prepare the study chat.");
+        }
+
+        List<ChatModel.RetrievedChunk> retrieved;
+        StringBuilder rawAnswer = new StringBuilder();
+        try {
+            float[] queryEmbedding = embeddings.embed(prepared.question());
+            retrieved = chunks.findTopK(prepared.courseId(), prepared.materialIds(), queryEmbedding, TOP_K);
+            chat.streamAnswerWithHistory(
+                    prepared.question(),
+                    retrieved,
+                    prepared.language(),
+                    prepared.history(),
+                    delta -> {
+                        if (delta != null && !delta.isEmpty()) {
+                            rawAnswer.append(delta);
+                            onDelta.accept(delta);
+                        }
+                    }
+            );
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (EmbeddingException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, ex.getMessage(), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Could not draft an answer from the published materials. Try again shortly.",
+                    ex
+            );
+        }
+
+        String fullAnswer = rawAnswer.toString();
+        List<ChatModel.RetrievedChunk> retrievedChunks = retrieved;
+        SessionView saved = transactions.execute(status ->
+                persistAssistant(prepared, fullAnswer, retrievedChunks, observation)
+        );
+        if (saved == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not save the study chat reply.");
+        }
+        return saved;
+    }
+
+    private PreparedAsk prepareAsk(UUID sessionId, UUID userId, String question, Observation observation) {
         String trimmed = question == null ? "" : question.trim();
         if (trimmed.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ask a question about the lectures.");
@@ -118,26 +219,28 @@ public class StudyChatService {
         if (history.size() > HISTORY_WINDOW) {
             history = history.subList(history.size() - HISTORY_WINDOW, history.size());
         }
+        observation.highCardinalityKeyValue("history.turns", String.valueOf(history.size()));
 
         ExplanationLanguage language = resolveLanguage(session.getLanguage(), trimmed);
-        List<ChatModel.RetrievedChunk> retrieved;
-        String rawAnswer;
-        try {
-            float[] queryEmbedding = embeddings.embed(trimmed);
-            retrieved = chunks.findTopK(session.getCourseId(), materialIds, queryEmbedding, TOP_K);
-            rawAnswer = chat.answerWithHistory(trimmed, retrieved, language, history);
-        } catch (ResponseStatusException ex) {
-            throw ex;
-        } catch (EmbeddingException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, ex.getMessage(), ex);
-        } catch (RuntimeException ex) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_GATEWAY,
-                    "Could not draft an answer from the published materials. Try again shortly.",
-                    ex
-            );
-        }
+        observation.lowCardinalityKeyValue("language", language.name());
+        return new PreparedAsk(
+                session.getId(),
+                session.getCourseId(),
+                userId,
+                materialIds,
+                trimmed,
+                language,
+                history,
+                userMessage.getId()
+        );
+    }
 
+    private SessionView persistAssistant(
+            PreparedAsk prepared,
+            String rawAnswer,
+            List<ChatModel.RetrievedChunk> retrieved,
+            Observation observation
+    ) {
         CitedSources.Result grounded = CitedSources.select(rawAnswer, retrieved);
         List<StudyChatMessageEntity.StoredCitation> citations = grounded.chunks().stream()
                 .map(chunk -> new StudyChatMessageEntity.StoredCitation(
@@ -145,32 +248,35 @@ public class StudyChatService {
                         chunk.title(),
                         CitationText.sectionHint(chunk.content()),
                         chunk.pageNumber(),
-                        CitationText.excerpt(chunk.content(), trimmed, grounded.answer())
+                        CitationText.excerpt(chunk.content(), prepared.question(), grounded.answer())
                 ))
                 .toList();
+        observation.lowCardinalityKeyValue("cited", String.valueOf(!citations.isEmpty()));
 
         StudyChatMessageEntity assistant = StudyChatMessageEntity.assistant(
                 UUID.randomUUID(),
-                sessionId,
+                prepared.sessionId(),
                 grounded.answer(),
                 citations,
                 Instant.now()
         );
         messages.save(assistant);
+        StudyChatSessionEntity session = sessions.findByIdAndUserId(prepared.sessionId(), prepared.userId())
+                .orElseThrow(StudyChatService::notFound);
         session.touch(Instant.now());
         sessions.save(session);
 
         log.info(
                 "Study chat message session={} course={} user={} history={} retrieved={} cited={} answerChars={}",
-                sessionId,
-                session.getCourseId(),
-                userId,
-                history.size(),
+                prepared.sessionId(),
+                prepared.courseId(),
+                prepared.userId(),
+                prepared.history().size(),
                 retrieved.size(),
                 citations.size(),
                 grounded.answer().length()
         );
-        return toView(session, messages.findBySessionIdOrderByCreatedAtAsc(sessionId));
+        return toView(session, messages.findBySessionIdOrderByCreatedAtAsc(prepared.sessionId()));
     }
 
     @Transactional
@@ -258,6 +364,26 @@ public class StudyChatService {
 
     private static ResponseStatusException forbidden() {
         return new ResponseStatusException(HttpStatus.FORBIDDEN, "Join this course first to study in chat.");
+    }
+
+    public interface StreamListener {
+        void onToken(String delta);
+
+        void onDone(SessionView session);
+
+        void onError(String message, int status);
+    }
+
+    private record PreparedAsk(
+            UUID sessionId,
+            UUID courseId,
+            UUID userId,
+            List<UUID> materialIds,
+            String question,
+            ExplanationLanguage language,
+            List<ChatModel.Turn> history,
+            UUID userMessageId
+    ) {
     }
 
     public record SessionView(
