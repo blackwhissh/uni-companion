@@ -242,8 +242,11 @@ public class MaterialService {
             log.warn("Retry denied: user={} material={}", userId, materialId);
             throw forbidden();
         }
-        if (material.getProcessingStatus() != ProcessingStatus.FAILED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a failed PDF can be retried.");
+        ProcessingStatus status = material.getProcessingStatus();
+        if (status != ProcessingStatus.FAILED
+                && status != ProcessingStatus.PROCESSING
+                && status != ProcessingStatus.UPLOADED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a PDF that is still processing or has failed can be retried.");
         }
         material.resetForRetry(Instant.now());
         materials.saveAndFlush(material);

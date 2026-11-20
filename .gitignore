@@ -20,3 +20,4 @@ secrets/*
 !secrets/.gitkeep
 tools/qa-orchestrator/state/
 tools/qa-orchestrator/.env
+.cursor/backups/

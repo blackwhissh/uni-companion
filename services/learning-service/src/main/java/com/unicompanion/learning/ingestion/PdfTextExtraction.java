@@ -73,7 +73,9 @@ public class PdfTextExtraction {
 
     @Async("ingestExecutor")
     public void extractAsync(UUID materialId) {
-        extract(materialId);
+        // Call through the proxy. A direct extract() call skips @Transactional, so Indexed/Failed
+        // never reach the database and the lecture stays on Processing.
+        self.extract(materialId);
     }
 
     @Transactional

@@ -19,6 +19,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -87,6 +88,26 @@ class PdfTextExtractionTest {
         assertThat(material.getProcessingStatus().name()).isEqualTo("READY");
         verify(embeddings).embedAll(List.of("page one", "page two"));
         verify(chunks, times(2)).save(any());
+    }
+
+    @Test
+    void asyncExtractGoesThroughTheProxySoStatusIsSaved() {
+        PdfTextExtraction proxy = mock(PdfTextExtraction.class);
+        UUID materialId = UUID.randomUUID();
+        PdfTextExtraction extraction = new PdfTextExtraction(
+                materials,
+                chunks,
+                storage,
+                reader,
+                embeddings,
+                new com.unicompanion.learning.config.IngestProperties(true),
+                io.micrometer.observation.ObservationRegistry.NOOP,
+                proxy
+        );
+
+        extraction.extractAsync(materialId);
+
+        verify(proxy).extract(materialId);
     }
 
     @Test

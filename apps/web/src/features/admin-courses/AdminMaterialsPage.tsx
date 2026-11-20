@@ -585,7 +585,7 @@ export function AdminMaterialsPage() {
                           {material.visibility === 'PUBLISHED' ? 'Unpublish' : 'Publish'}
                         </Button>
                       ) : null}
-                      {canManage && material.processingStatus === 'FAILED' ? (
+                      {canManage && canRetry(material.processingStatus) ? (
                         <Button
                           type="button"
                           variant="secondary"
@@ -654,6 +654,10 @@ function ButtonLinkish({ to, children }: { to: string; children: string }) {
       {children}
     </Link>
   )
+}
+
+function canRetry(status: Material['processingStatus']) {
+  return status === 'FAILED' || status === 'PROCESSING' || status === 'UPLOADED'
 }
 
 function labelFor(status: Material['processingStatus']) {
