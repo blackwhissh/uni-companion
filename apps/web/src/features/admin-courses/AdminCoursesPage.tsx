@@ -151,7 +151,7 @@ export function AdminCoursesPage() {
       kind: 'delete',
       course,
       title: 'Delete course?',
-      body: `Delete “${course.title}” permanently?\n\nThis removes the course and its materials. This cannot be undone.`,
+      body: `Delete “${course.title}” permanently?\n\nThis also removes its lecture PDFs, including ones that are still indexing. You do not need to delete those lectures first. This cannot be undone.`,
       confirmLabel: 'Delete permanently',
     })
   }
@@ -200,6 +200,12 @@ export function AdminCoursesPage() {
         <p className="mt-6 text-sm font-medium text-ok" role="status">
           {notice}
         </p>
+      ) : null}
+
+      {error && !formOpen ? (
+        <div className="mt-6">
+          <Alert>{error}</Alert>
+        </div>
       ) : null}
 
       {formOpen ? (
@@ -272,8 +278,8 @@ export function AdminCoursesPage() {
                     aria-label={`Open materials for ${course.title}`}
                     className="absolute inset-0 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
                   />
-                  <div className="pointer-events-none relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                  <div className="pointer-events-none relative z-10 flex flex-col gap-4">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-display text-lg font-semibold text-ink">{course.title}</p>
                         <StatusPill tone={published ? 'ok' : 'warn'}>

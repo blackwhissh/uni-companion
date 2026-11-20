@@ -1,12 +1,19 @@
 package com.unicompanion.learning;
 
 import com.jayway.jsonpath.JsonPath;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -15,10 +22,12 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import java.io.ByteArrayOutputStream;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -47,6 +56,9 @@ class CourseApiTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void courseAdminCreatesAnUnpublishedCourse() throws Exception {
@@ -177,6 +189,62 @@ class CourseApiTests {
 
         mockMvc.perform(get("/api/courses/" + courseId).header("Authorization", ADMIN))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deletingACourseRemovesItsLecturesAndStudyRows() throws Exception {
+        String courseId = createCourse("CISS-MAT");
+        publish(courseId);
+        mockMvc.perform(post("/api/courses/" + courseId + "/enroll").header("Authorization", STUDENT))
+                .andExpect(status().isCreated());
+        MvcResult uploaded = mockMvc.perform(multipart("/api/courses/" + courseId + "/materials")
+                        .file(pdf("lecture.pdf", "Threads share an address space."))
+                        .param("title", "Threads")
+                        .header("Authorization", ADMIN))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String materialId = JsonPath.read(uploaded.getResponse().getContentAsString(), "$.id");
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM material_chunks WHERE material_id = ?::uuid",
+                Integer.class,
+                UUID.fromString(materialId)
+        )).isPositive();
+
+        UUID quizId = UUID.randomUUID();
+        UUID deckId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO quizzes (id, course_id, user_id, created_at, materials_key, active, practice_quiz)
+                VALUES (?::uuid, ?::uuid, ?::uuid, now(), 'lecture', true, false)
+                """, quizId, UUID.fromString(courseId), STUDENT_ID);
+        jdbc.update("""
+                INSERT INTO flashcard_decks (id, course_id, user_id, created_at, materials_key, active)
+                VALUES (?::uuid, ?::uuid, ?::uuid, now(), 'lecture', true)
+                """, deckId, UUID.fromString(courseId), STUDENT_ID);
+        jdbc.update("""
+                INSERT INTO quiz_progress (course_id, user_id, materials_key, quiz_id, updated_at)
+                VALUES (?::uuid, ?::uuid, 'lecture', ?::uuid, now())
+                """, UUID.fromString(courseId), STUDENT_ID, quizId);
+        jdbc.update("""
+                INSERT INTO flashcard_deck_progress (course_id, user_id, materials_key, deck_id, updated_at)
+                VALUES (?::uuid, ?::uuid, 'lecture', ?::uuid, now())
+                """, UUID.fromString(courseId), STUDENT_ID, deckId);
+
+        mockMvc.perform(delete("/api/courses/" + courseId).header("Authorization", ADMIN))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/courses/" + courseId).header("Authorization", ADMIN))
+                .andExpect(status().isNotFound());
+        assertThat(count("materials", courseId)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM material_chunks WHERE material_id = ?::uuid",
+                Integer.class,
+                UUID.fromString(materialId)
+        )).isZero();
+        assertThat(count("quizzes", courseId)).isZero();
+        assertThat(count("flashcard_decks", courseId)).isZero();
+        assertThat(count("quiz_progress", courseId)).isZero();
+        assertThat(count("flashcard_deck_progress", courseId)).isZero();
+        assertThat(count("enrollments", courseId)).isZero();
     }
 
     @Test
@@ -373,6 +441,34 @@ class CourseApiTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"visibility\":\"PUBLISHED\"}"))
                 .andExpect(status().isOk());
+    }
+
+    private int count(String table, String courseId) {
+        String sql = "material_chunks".equals(table)
+                ? """
+                SELECT count(*) FROM material_chunks
+                WHERE material_id IN (SELECT id FROM materials WHERE course_id = ?::uuid)
+                """
+                : "SELECT count(*) FROM " + table + " WHERE course_id = ?::uuid";
+        Integer found = jdbc.queryForObject(sql, Integer.class, UUID.fromString(courseId));
+        return found == null ? 0 : found;
+    }
+
+    private static MockMultipartFile pdf(String fileName, String text) throws Exception {
+        try (PDDocument document = new PDDocument();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+                stream.beginText();
+                stream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                stream.newLineAtOffset(50, 700);
+                stream.showText(text);
+                stream.endText();
+            }
+            document.save(out);
+            return new MockMultipartFile("file", fileName, "application/pdf", out.toByteArray());
+        }
     }
 
     private static String course(String title, String code, String term) {

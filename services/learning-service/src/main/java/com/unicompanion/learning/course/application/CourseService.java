@@ -8,14 +8,15 @@ import com.unicompanion.learning.course.infrastructure.EnrollmentKey;
 import com.unicompanion.learning.course.infrastructure.EnrollmentRepository;
 import com.unicompanion.learning.matching.application.MatchingService;
 import com.unicompanion.learning.material.infrastructure.LocalPdfStorage;
-import com.unicompanion.learning.material.infrastructure.MaterialChunkRepository;
 import com.unicompanion.learning.material.infrastructure.MaterialEntity;
 import com.unicompanion.learning.material.infrastructure.MaterialRepository;
 import com.unicompanion.learning.notes.StudentNoteService;
 import com.unicompanion.learning.rag.StudyChatService;
+import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -33,30 +34,33 @@ public class CourseService {
     private final CourseRepository courses;
     private final EnrollmentRepository enrollments;
     private final MaterialRepository materials;
-    private final MaterialChunkRepository chunks;
     private final LocalPdfStorage storage;
     private final MatchingService matching;
     private final StudentNoteService notes;
     private final StudyChatService studyChats;
+    private final JdbcTemplate jdbc;
+    private final EntityManager entityManager;
 
     public CourseService(
             CourseRepository courses,
             EnrollmentRepository enrollments,
             MaterialRepository materials,
-            MaterialChunkRepository chunks,
             LocalPdfStorage storage,
             MatchingService matching,
             StudentNoteService notes,
-            StudyChatService studyChats
+            StudyChatService studyChats,
+            JdbcTemplate jdbc,
+            EntityManager entityManager
     ) {
         this.courses = courses;
         this.enrollments = enrollments;
         this.materials = materials;
-        this.chunks = chunks;
         this.storage = storage;
         this.matching = matching;
         this.notes = notes;
         this.studyChats = studyChats;
+        this.jdbc = jdbc;
+        this.entityManager = entityManager;
     }
 
     @Transactional
@@ -137,23 +141,48 @@ public class CourseService {
             log.warn("Delete denied: user={} course={}", userId, courseId);
             throw forbidden();
         }
-        List<MaterialEntity> courseMaterials = materials.findByCourseIdOrderByTitleAsc(courseId);
-        for (MaterialEntity material : courseMaterials) {
-            chunks.deleteByMaterialId(material.getId());
-            materials.delete(material);
-            storage.delete(material.getId());
+        List<UUID> materialIds = materials.findByCourseIdOrderByTitleAsc(courseId).stream()
+                .map(MaterialEntity::getId)
+                .toList();
+        String code = course.getCode();
+        // Detach loaded rows so the persistence context does not write them back after the SQL deletes.
+        entityManager.clear();
+        deleteCourseRows(courseId);
+        for (UUID materialId : materialIds) {
+            try {
+                storage.delete(materialId);
+            } catch (RuntimeException ex) {
+                log.warn("Course {} deleted but the PDF for material {} was left on disk", courseId, materialId, ex);
+            }
         }
-        enrollments.deleteByIdCourseId(courseId);
-        courses.delete(course);
         log.info(
                 "Deleted course id={} code={} materials={} by={} owner={} platformAdmin={}",
                 courseId,
-                course.getCode(),
-                courseMaterials.size(),
+                code,
+                materialIds.size(),
                 userId,
                 owner,
                 platformAdmin
         );
+    }
+
+    /**
+     * Quizzes, flashcard decks, and lectures reference the course without ON DELETE CASCADE.
+     * Remove those rows first so one course delete takes its lectures and study data with it.
+     */
+    private void deleteCourseRows(UUID courseId) {
+        jdbc.update("DELETE FROM flashcard_deck_progress WHERE course_id = ?", courseId);
+        jdbc.update("DELETE FROM quiz_progress WHERE course_id = ?", courseId);
+        jdbc.update("DELETE FROM flashcard_decks WHERE course_id = ?", courseId);
+        jdbc.update("DELETE FROM quizzes WHERE course_id = ?", courseId);
+        jdbc.update("""
+                DELETE FROM material_chunks
+                WHERE material_id IN (SELECT id FROM materials WHERE course_id = ?)
+                """, courseId);
+        jdbc.update("DELETE FROM materials WHERE course_id = ?", courseId);
+        jdbc.update("DELETE FROM enrollments WHERE course_id = ?", courseId);
+        jdbc.update("DELETE FROM contact_requests WHERE course_id = ?", courseId);
+        jdbc.update("DELETE FROM courses WHERE id = ?", courseId);
     }
 
     @Transactional

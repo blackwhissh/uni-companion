@@ -520,10 +520,10 @@ export function AdminMaterialsPage() {
                     }
                     className="absolute inset-0 cursor-pointer rounded-2xl"
                   />
-                  <div className="pointer-events-none relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="pointer-events-none relative z-10 flex flex-col gap-4">
                     <div className="min-w-0">
                       <p className="font-medium text-ink">{material.title}</p>
-                      <p className="mt-1 text-sm text-muted">
+                      <p className="mt-1 break-all text-sm text-muted">
                         {material.fileName} · {labelFor(material.processingStatus)} ·{' '}
                         {material.visibility === 'PUBLISHED' ? 'Published' : 'Unpublished'}
                         {material.sourceProvider ? ` · LMS (${material.sourceProvider})` : ''}
@@ -558,7 +558,7 @@ export function AdminMaterialsPage() {
                         <p className="mt-2 text-sm text-danger">{material.failureReason}</p>
                       ) : null}
                     </div>
-                    <div className="pointer-events-auto flex shrink-0 flex-wrap gap-2">
+                    <div className="pointer-events-auto flex flex-wrap gap-2">
                       <Button
                         type="button"
                         variant="secondary"
